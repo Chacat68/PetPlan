@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简化测试</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .game-container {
+            width: 100%;
+            max-width: 450px;
+            height: 750px;
+            background: #fff;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        .initial-fade {
+            opacity: 0;
+        }
+        .fade-in {
+            animation: mainFadeIn 0.6s ease-out forwards;
+        }
+        @keyframes mainFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .game-area {
+            flex: 1;
+            position: relative;
+            padding: 15px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 249, 250, 0.3) 100%);
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 435px;
+            border: 4px solid #333;
+            border-radius: 15px;
+            background: #87CEEB;
+        }
+        .debug {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-width: 300px;
+            z-index: 10000;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug" id="debug">初始化中...</div>
+    <div class="game-container initial-fade">
+        <div class="game-area">
+            <canvas id="gameCanvas" width="400" height="435"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const debug = document.getElementById('debug');
+        function log(msg) {
+            debug.innerHTML += '<br>' + msg;
+            console.log(msg);
+        }
+
+        log('页面加载完成');
+        
+        const canvas = document.getElementById('gameCanvas');
+        const container = document.querySelector('.game-container');
+        
+        log('Canvas: ' + (canvas ? '找到' : '未找到'));
+        log('Container: ' + (container ? '找到' : '未找到'));
+        
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            log('Context: ' + (ctx ? '获取成功' : '失败'));
+            
+            if (ctx) {
+                // 绘制天空
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#87CEEB');
+                gradient.addColorStop(1, '#E0F7FA');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制地面
+                ctx.fillStyle = '#90EE90';
+                ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+                
+                // 绘制文字
+                ctx.fillStyle = '#000';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Canvas 正在显示！', canvas.width / 2, canvas.height / 2);
+                
+                log('Canvas 渲染完成');
+                
+                // 动画循环
+                let x = 0;
+                function animate() {
+                    // 重绘背景
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = '#90EE90';
+                    ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+                    
+                    // 绘制移动的圆
+                    ctx.fillStyle = '#FF0000';
+                    ctx.beginPath();
+                    ctx.arc(x, 100, 20, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    x = (x + 2) % canvas.width;
+                    requestAnimationFrame(animate);
+                }
+                animate();
+                log('动画已启动');
+            }
+        }
+        
+        // 移除 initial-fade
+        setTimeout(() => {
+            log('移除 initial-fade 类');
+            if (container) {
+                const hadClass = container.classList.contains('initial-fade');
+                log('initial-fade 存在: ' + hadClass);
+                container.classList.remove('initial-fade');
+                container.classList.add('fade-in');
+                log('添加 fade-in 类');
+                log('Container opacity: ' + getComputedStyle(container).opacity);
+            }
+        }, 500);
+    </script>
+</body>
+</html>

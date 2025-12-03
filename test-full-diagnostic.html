@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>完整诊断</title>
+    <link rel="stylesheet" href="css/style.css?v=31">
+    <link rel="stylesheet" href="css/menu.css">
+    <link rel="stylesheet" href="css/character-management.css">
+    <link rel="stylesheet" href="css/save-system.css">
+    <link rel="stylesheet" href="css/pet-system.css">
+    <style>
+        .debug-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.95);
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            z-index: 100000;
+            max-height: 200px;
+            overflow-y: auto;
+            border-top: 2px solid #0f0;
+        }
+        .debug-panel .error { color: #f00; }
+        .debug-panel .success { color: #0f0; }
+        .debug-panel .info { color: #ff0; }
+        .debug-panel .warn { color: #f90; }
+    </style>
+</head>
+<body>
+    <div class="debug-panel" id="debugPanel">
+        <div><strong>诊断面板初始化...</strong></div>
+    </div>
+
+    <div class="game-container initial-fade">
+        <div class="game-area">
+            <canvas id="gameCanvas" width="400" height="435"></canvas>
+            <div class="game-ui-overlay">
+                <div class="game-top-status">
+                    <div class="game-status-left">
+                        <div class="currency-display">
+                            <div class="currency-item">
+                                <span class="currency-icon">💰</span>
+                                <span id="coins">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const debugPanel = document.getElementById('debugPanel');
+        const logs = [];
+        
+        function log(msg, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const entry = `<div class="${type}">[${time}] ${msg}</div>`;
+            logs.push(entry);
+            if (logs.length > 20) logs.shift();
+            debugPanel.innerHTML = logs.join('');
+            console.log(`[${type.toUpperCase()}] ${msg}`);
+        }
+
+        // 捕获所有错误
+        window.addEventListener('error', (e) => {
+            log(`全局错误: ${e.message} (${e.filename}:${e.lineno})`, 'error');
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            log(`Promise拒绝: ${e.reason}`, 'error');
+        });
+
+        log('开始初始化...', 'info');
+        
+        // 检查DOM元素
+        const canvas = document.getElementById('gameCanvas');
+        const container = document.querySelector('.game-container');
+        
+        log(`Canvas: ${canvas ? '✓' : '✗'}`, canvas ? 'success' : 'error');
+        log(`Container: ${container ? '✓' : '✗'}`, container ? 'success' : 'error');
+        log(`Container 类: ${container ? container.className : 'N/A'}`, 'info');
+        
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            log(`Canvas位置: x=${rect.x.toFixed(0)} y=${rect.y.toFixed(0)} w=${rect.width.toFixed(0)} h=${rect.height.toFixed(0)}`, 'info');
+            log(`Canvas可见性: ${getComputedStyle(canvas).visibility}`, 'info');
+            log(`Canvas透明度: ${getComputedStyle(canvas).opacity}`, 'info');
+        }
+        
+        if (container) {
+            log(`Container透明度: ${getComputedStyle(container).opacity}`, 'info');
+            log(`Container display: ${getComputedStyle(container).display}`, 'info');
+        }
+
+        // 尝试导入 main.js
+        log('开始加载 main.js...', 'info');
+        
+        try {
+            const startTime = performance.now();
+            await import('./js/main.js');
+            const loadTime = (performance.now() - startTime).toFixed(2);
+            log(`main.js 加载成功 (${loadTime}ms)`, 'success');
+            
+            // 等待一会检查游戏状态
+            setTimeout(() => {
+                log('检查游戏状态...', 'info');
+                log(`Window.game: ${window.game ? '✓' : '✗'}`, window.game ? 'success' : 'error');
+                
+                if (window.game) {
+                    const state = window.game.getGameState();
+                    log(`游戏已初始化: ${state.isInitialized ? '✓' : '✗'}`, state.isInitialized ? 'success' : 'error');
+                    log(`游戏运行中: ${state.isRunning ? '✓' : '✗'}`, state.isRunning ? 'success' : 'warn');
+                }
+                
+                if (container) {
+                    const hasInitialFade = container.classList.contains('initial-fade');
+                    const hasFadeIn = container.classList.contains('fade-in');
+                    log(`initial-fade 类: ${hasInitialFade ? '仍存在❌' : '已移除✓'}`, hasInitialFade ? 'error' : 'success');
+                    log(`fade-in 类: ${hasFadeIn ? '已添加✓' : '未添加❌'}`, hasFadeIn ? 'success' : 'error');
+                    log(`Container 最终透明度: ${getComputedStyle(container).opacity}`, 'info');
+                }
+                
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    const imageData = ctx.getImageData(100, 100, 10, 10);
+                    const hasContent = Array.from(imageData.data).some(v => v !== 0);
+                    log(`Canvas 有渲染内容: ${hasContent ? '✓' : '✗'}`, hasContent ? 'success' : 'error');
+                }
+            }, 2000);
+            
+        } catch (error) {
+            log(`main.js 加载失败: ${error.message}`, 'error');
+            log(`错误堆栈: ${error.stack}`, 'error');
+        }
+    </script>
+</body>
+</html>

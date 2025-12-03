@@ -1,0 +1,430 @@
+/* 角色管理界面样式 */
+.character-management-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    overflow-y: auto;
+    box-sizing: border-box;
+    transition: opacity 0.3s ease;
+}
+
+.character-management-content {
+    width: 100%;
+    height: calc(100vh - 130px); /* 减去底部导航栏的高度，确保导航栏可见 */
+    margin-top: 130px; /* 为底部导航栏留出空间 */
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 50%, #2c3e50 100%);
+    color: white;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
+    position: relative;
+    z-index: 1001;
+}
+
+/* 顶部资源栏 */
+.character-resources {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.resource-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.resource-icon {
+    font-size: 20px;
+}
+
+.resource-value {
+    color: #f39c12;
+}
+
+/* 角色面板 */
+.character-panel {
+    flex: 1;
+    padding: 20px;
+    padding-bottom: 20px; /* 调整底部内边距，子页签导航已删除 */
+    overflow-y: auto;
+    position: relative;
+}
+
+.character-panel-header {
+    margin-bottom: 20px;
+}
+
+/* 角色导航栏 */
+.character-nav-bar {
+    display: flex;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    padding: 8px;
+    gap: 4px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.character-nav-bar .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    color: #bdc3c7;
+    border-radius: 8px;
+    min-height: 60px;
+    background: transparent;
+}
+
+.character-nav-bar .nav-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ecf0f1;
+    transform: translateY(-2px);
+}
+
+.character-nav-bar .nav-item.active {
+    color: #3498db;
+    background: rgba(52, 152, 219, 0.2);
+    border: 1px solid rgba(52, 152, 219, 0.4);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.character-nav-bar .nav-item.active:hover {
+    background: rgba(52, 152, 219, 0.3);
+    box-shadow: 0 6px 16px rgba(52, 152, 219, 0.4);
+}
+
+.character-nav-bar .nav-icon {
+    font-size: 20px;
+    margin-bottom: 4px;
+    transition: all 0.3s ease;
+}
+
+.character-nav-bar .nav-item:hover .nav-icon {
+    transform: scale(1.1);
+}
+
+.character-nav-bar .nav-item.active .nav-icon {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 4px rgba(52, 152, 219, 0.6));
+}
+
+.character-nav-bar .nav-text {
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 1.2;
+    transition: all 0.3s ease;
+}
+
+.character-nav-bar .nav-item:hover .nav-text {
+    transform: translateY(-1px);
+}
+
+.character-nav-bar .nav-item.active .nav-text {
+    text-shadow: 0 0 4px rgba(52, 152, 219, 0.6);
+}
+
+
+/* 主要角色显示 */
+.main-character-display {
+    margin-bottom: 30px;
+}
+
+.character-card {
+    background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.character-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+    animation: shimmer 3s infinite;
+}
+
+.character-left {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.character-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 符石系统已删除 */
+
+.character-avatar-img {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    border-radius: 10px;
+    margin-left: 60px;
+    margin-right: 60px;
+}
+
+.weapon-slot {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(220, 20, 60, 0.6);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.weapon-icon {
+    font-size: 20px;
+    color: #dc143c;
+}
+
+.armor-slot {
+    position: absolute;
+    top: 50%;
+    right: 15px;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(70, 130, 180, 0.6);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.armor-icon {
+    font-size: 20px;
+    color: #4682b4;
+}
+
+.ring-slot {
+    position: absolute;
+    bottom: 15px;
+    left: 15px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 215, 0, 0.6);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.ring-icon {
+    font-size: 20px;
+    color: #ffd700;
+}
+
+.wing-slot {
+    position: absolute;
+    bottom: 15px;
+    right: 65px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(135, 206, 235, 0.6);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.wing-icon {
+    font-size: 20px;
+    color: #87ceeb;
+}
+
+.mount-slot {
+    position: absolute;
+    bottom: 15px;
+    right: 15px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(34, 139, 34, 0.6);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.mount-icon {
+    font-size: 20px;
+    color: #228b22;
+}
+
+.character-rank {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.character-image {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.character-avatar {
+    font-size: 60px;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.character-name {
+    font-size: 27px;
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    margin: 0;
+    margin-top: -30px;
+}
+
+.character-level {
+    font-size: 14px;
+    color: #f39c12;
+    font-weight: bold;
+    margin-top: 10px;
+    margin-bottom: 0;
+    text-align: center;
+}
+
+
+
+
+/* 底部按钮 */
+.character-actions {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    margin-top: -20px;
+}
+
+.action-btn {
+    flex: 1;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 15px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.action-btn.upgrade {
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+.action-btn:active {
+    transform: translateY(0);
+}
+
+/* 子页签导航已删除 */
+
+/* 动画效果 */
+@keyframes characterModalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.character-management-modal.show {
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+/* 隐藏过渡动画 */
+@keyframes modalFadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.character-management-modal.hiding {
+    animation: modalFadeOut 0.25s ease-out forwards;
+}
+
+.character-management-modal.show .character-management-content {
+    animation: characterModalSlideIn 0.4s ease-out;
+}
+
+/* 内容淡出（可选，用于未来扩展不同标签页切换） */
+.character-management-modal.hiding .character-management-content {
+    animation: modalFadeOut 0.25s ease-out forwards;
+}

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主游戏调试</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #333;
+            color: #fff;
+            font-family: monospace;
+        }
+        #gameCanvas {
+            border: 2px solid #0f0;
+            display: block;
+            margin: 20px 0;
+        }
+        .log {
+            background: #000;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #666;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .info { color: #ff0; }
+    </style>
+</head>
+<body>
+    <h1>Pet Plan 调试页面</h1>
+    <canvas id="gameCanvas" width="400" height="435"></canvas>
+    <div class="log" id="log"></div>
+
+    <script type="module">
+        const logDiv = document.getElementById('log');
+        
+        function log(msg, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${time}] ${msg}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(msg);
+        }
+
+        log('开始调试...', 'info');
+
+        // 检查 canvas
+        const canvas = document.getElementById('gameCanvas');
+        if (!canvas) {
+            log('Canvas 元素未找到！', 'error');
+        } else {
+            log('Canvas 元素已找到', 'success');
+            log(`Canvas 尺寸: ${canvas.width} x ${canvas.height}`, 'info');
+        }
+
+        // 尝试加载主模块
+        try {
+            log('尝试加载 main.js...', 'info');
+            
+            // 动态导入并捕获错误
+            import('./js/main.js').then(() => {
+                log('main.js 加载成功', 'success');
+            }).catch(error => {
+                log('main.js 加载失败: ' + error.message, 'error');
+                log('错误堆栈: ' + error.stack, 'error');
+            });
+
+            // 检查模块是否可以加载
+            import('./js/modules/game-core.js').then((module) => {
+                log('game-core.js 加载成功', 'success');
+                log('GameCore 类: ' + (module.default ? '存在' : '不存在'), 'info');
+                
+                // 尝试创建 GameCore 实例
+                try {
+                    const gameCore = new module.default(canvas);
+                    log('GameCore 实例创建成功', 'success');
+                    
+                    gameCore.init();
+                    log('GameCore 初始化成功', 'success');
+                    
+                    gameCore.start();
+                    log('GameCore 已启动', 'success');
+                    
+                    // 检查是否在渲染
+                    setTimeout(() => {
+                        log('检查渲染状态...', 'info');
+                        const ctx = canvas.getContext('2d');
+                        const imageData = ctx.getImageData(0, 0, 10, 10);
+                        const hasContent = imageData.data.some(val => val !== 0);
+                        log('Canvas 有内容: ' + (hasContent ? '是' : '否'), hasContent ? 'success' : 'error');
+                    }, 1000);
+                    
+                } catch (error) {
+                    log('GameCore 实例化/初始化失败: ' + error.message, 'error');
+                    log('错误堆栈: ' + error.stack, 'error');
+                }
+                
+            }).catch(error => {
+                log('game-core.js 加载失败: ' + error.message, 'error');
+                log('错误堆栈: ' + error.stack, 'error');
+            });
+
+        } catch (error) {
+            log('模块加载异常: ' + error.message, 'error');
+        }
+
+        // 监听所有错误
+        window.addEventListener('error', (e) => {
+            log('全局错误: ' + e.message, 'error');
+            log('来源: ' + e.filename + ':' + e.lineno, 'error');
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            log('未处理的 Promise 拒绝: ' + e.reason, 'error');
+        });
+    </script>
+</body>
+</html>

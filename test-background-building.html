@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台建造功能测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .test-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .test-section p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .info-box p {
+            color: #1976D2;
+            margin: 5px 0;
+        }
+
+        .success-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .success-box p {
+            color: #2E7D32;
+            margin: 5px 0;
+        }
+
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #FF9800;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .warning-box p {
+            color: #F57C00;
+            margin: 5px 0;
+        }
+
+        .status {
+            font-weight: bold;
+        }
+
+        .link-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #764ba2;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: all 0.3s;
+            margin: 10px 5px;
+        }
+
+        .link-button:hover {
+            background: #5a3779;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(118, 75, 162, 0.3);
+        }
+
+        .nav-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏗️ 领地系统后台建造功能测试</h1>
+
+        <div class="test-section">
+            <h2>📋 测试说明</h2>
+            <p>本页面用于测试领地系统的后台建造功能。建造过程基于真实时间戳，即使切换页面或关闭浏览器，建造也会在后台继续。</p>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 测试 1：基本建造功能</h2>
+            <p>1. 点击下方按钮跳转到领地页面</p>
+            <p>2. 点击任意空地块（带 + 号）</p>
+            <p>3. 选择一个建筑开始建造</p>
+            <p>4. 观察进度条增长直到完成</p>
+            <div class="button-group">
+                <a href="territory.html" class="link-button">前往领地页面</a>
+            </div>
+            <div class="success-box" style="display:none;" id="test1-result">
+                <p>✅ 如果建造进度正常增长并在5秒后完成，说明基本功能正常！</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔄 测试 2：页面刷新恢复建造</h2>
+            <p>1. 在领地页面开始建造</p>
+            <p>2. 等待约2-3秒（进度约50%）</p>
+            <p>3. 刷新页面（F5 或 Cmd+R）</p>
+            <p>4. 观察建造是否从正确进度继续</p>
+            <div class="info-box">
+                <p><strong>预期结果：</strong></p>
+                <p>• 未完成：显示"建造中..."和当前进度</p>
+                <p>• 已完成：直接显示完成的建筑</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>↔️ 测试 3：切换页面后台建造</h2>
+            <p>1. 在领地页面开始建造</p>
+            <p>2. 立即点击底部"角色"按钮返回主页</p>
+            <p>3. 等待 6 秒</p>
+            <p>4. 点击底部"领地"按钮返回</p>
+            <div class="button-group">
+                <button onclick="testPageSwitch()">开始测试（自动计时）</button>
+            </div>
+            <div id="test3-timer" class="warning-box" style="display:none;">
+                <p id="timer-text"></p>
+            </div>
+            <div class="success-box" style="display:none;" id="test3-result">
+                <p>✅ 如果返回时建筑已完成，说明后台建造功能正常！</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🌙 测试 4：离线建造</h2>
+            <p>1. 在领地页面开始建造</p>
+            <p>2. 立即关闭浏览器标签页</p>
+            <p>3. 等待 6 秒</p>
+            <p>4. 重新打开领地页面</p>
+            <div class="info-box">
+                <p><strong>预期结果：</strong>建筑显示为已完成状态</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 当前状态检查</h2>
+            <p>查看当前建造队列和已完成的建筑</p>
+            <div class="button-group">
+                <button onclick="checkStatus()">检查状态</button>
+                <button onclick="clearData()">清除所有数据</button>
+            </div>
+            <div id="status-display" class="info-box" style="display:none;">
+                <p id="status-text"></p>
+            </div>
+        </div>
+
+        <div class="nav-buttons">
+            <a href="territory.html" class="link-button">🏰 前往领地页面</a>
+            <a href="index.html" class="link-button">🏠 返回主页</a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { getTerritorySystemInstance } from './js/modules/territory-system.js?v=35';
+        import ResourceSystem from './js/modules/resource-system.js?v=35';
+
+        window.territorySystem = null;
+        window.resourceSystem = null;
+
+        function initSystems() {
+            if (!window.resourceSystem) {
+                window.resourceSystem = ResourceSystem.getInstance();
+                window.resourceSystem.loadFromLocalStorage();
+            }
+            if (!window.territorySystem) {
+                window.territorySystem = getTerritorySystemInstance(window.resourceSystem);
+                window.territorySystem.loadFromLocalStorage();
+            }
+        }
+
+        window.testPageSwitch = function() {
+            const timerBox = document.getElementById('test3-timer');
+            const timerText = document.getElementById('timer-text');
+            timerBox.style.display = 'block';
+            
+            let seconds = 6;
+            timerText.textContent = `⏱️ 请在领地页面开始建造，然后返回主页。${seconds} 秒后可以返回查看结果...`;
+            
+            const countdown = setInterval(() => {
+                seconds--;
+                if (seconds > 0) {
+                    timerText.textContent = `⏱️ 请在领地页面开始建造，然后返回主页。${seconds} 秒后可以返回查看结果...`;
+                } else {
+                    timerText.textContent = '✅ 时间到！现在可以返回领地页面查看建造是否完成。';
+                    clearInterval(countdown);
+                    document.getElementById('test3-result').style.display = 'block';
+                }
+            }, 1000);
+        };
+
+        window.checkStatus = function() {
+            initSystems();
+            
+            const buildQueue = window.territorySystem.territoryData.buildQueue || [];
+            const buildings = window.territorySystem.territoryData.buildings || [];
+            
+            let statusHTML = '<p><strong>📊 当前状态：</strong></p>';
+            statusHTML += `<p>• 已完成建筑数量: ${buildings.length}</p>`;
+            statusHTML += `<p>• 建造队列数量: ${buildQueue.length}</p>`;
+            
+            if (buildQueue.length > 0) {
+                statusHTML += '<p><strong>正在建造：</strong></p>';
+                buildQueue.forEach((task, index) => {
+                    const buildingInfo = window.territorySystem.buildingData[task.type];
+                    const progress = window.territorySystem.getBuildProgress(task);
+                    const remaining = window.territorySystem.getBuildRemainingTime(task);
+                    statusHTML += `<p>${index + 1}. ${buildingInfo.name} - 进度 ${progress}% - 剩余 ${remaining}秒</p>`;
+                });
+            }
+            
+            if (buildings.length > 0) {
+                statusHTML += `<p><strong>已完成建筑：</strong></p>`;
+                const buildingCount = {};
+                buildings.forEach(b => {
+                    buildingCount[b.type] = (buildingCount[b.type] || 0) + 1;
+                });
+                Object.keys(buildingCount).forEach(type => {
+                    const buildingInfo = window.territorySystem.buildingData[type];
+                    statusHTML += `<p>• ${buildingInfo.name} x${buildingCount[type]}</p>`;
+                });
+            }
+            
+            const statusDisplay = document.getElementById('status-display');
+            const statusText = document.getElementById('status-text');
+            statusText.innerHTML = statusHTML;
+            statusDisplay.style.display = 'block';
+        };
+
+        window.clearData = function() {
+            if (confirm('确定要清除所有领地数据吗？这将删除所有建筑和建造任务。')) {
+                localStorage.removeItem('pet-plan-territory');
+                localStorage.removeItem('pet-plan-resources');
+                alert('✅ 数据已清除！请刷新页面。');
+                location.reload();
+            }
+        };
+
+        // 页面加载时初始化系统
+        initSystems();
+    </script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>验证修复</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: monospace;
+            background: #222;
+            color: #0f0;
+        }
+        .status {
+            background: #000;
+            border: 2px solid #0f0;
+            padding: 20px;
+            margin: 10px 0;
+        }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .warning { color: #ff0; }
+        iframe {
+            width: 100%;
+            height: 800px;
+            border: 2px solid #0f0;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+    <h1>游戏显示修复验证</h1>
+    <div class="status" id="status">
+        <div>等待加载...</div>
+    </div>
+    
+    <h2>嵌入的游戏界面：</h2>
+    <iframe src="./index.html" id="gameFrame"></iframe>
+
+    <script>
+        const status = document.getElementById('status');
+        const gameFrame = document.getElementById('gameFrame');
+        
+        function log(msg, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            status.appendChild(div);
+        }
+
+        log('开始监控游戏加载...', 'info');
+        
+        setTimeout(() => {
+            try {
+                const frameDoc = gameFrame.contentDocument || gameFrame.contentWindow.document;
+                const container = frameDoc.querySelector('.game-container');
+                const canvas = frameDoc.querySelector('#gameCanvas');
+                
+                if (container) {
+                    const hasInitialFade = container.classList.contains('initial-fade');
+                    const opacity = getComputedStyle(container).opacity;
+                    
+                    log(`Container 类名: ${container.className}`, 'info');
+                    log(`initial-fade: ${hasInitialFade ? '仍存在 ❌' : '已移除 ✓'}`, hasInitialFade ? 'error' : 'success');
+                    log(`透明度: ${opacity}`, parseFloat(opacity) > 0.5 ? 'success' : 'warning');
+                    
+                    if (hasInitialFade || parseFloat(opacity) < 0.1) {
+                        log('⚠️ 检测到显示问题！', 'error');
+                    } else {
+                        log('✓ 界面显示正常！', 'success');
+                    }
+                } else {
+                    log('❌ 未找到 container 元素', 'error');
+                }
+                
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    const imageData = ctx.getImageData(100, 100, 10, 10);
+                    const hasContent = Array.from(imageData.data).some(v => v !== 0);
+                    log(`Canvas 渲染: ${hasContent ? '有内容 ✓' : '无内容 ❌'}`, hasContent ? 'success' : 'warning');
+                } else {
+                    log('❌ 未找到 canvas 元素', 'error');
+                }
+                
+                // 检查控制台日志
+                const game = frameDoc.defaultView.game;
+                log(`Game 实例: ${game ? '存在 ✓' : '不存在 ❌'}`, game ? 'success' : 'error');
+                
+            } catch (e) {
+                log(`检查失败: ${e.message}`, 'error');
+            }
+        }, 4000);
+    </script>
+</body>
+</html>

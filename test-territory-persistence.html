@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>建筑持久化测试 - Pet Plan</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #2c3e50;
+            color: white;
+        }
+        .test-section {
+            background: #34495e;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+        }
+        .test-button {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #357abd;
+        }
+        .test-result {
+            background: #27ae60;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .test-error {
+            background: #e74c3c;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .building-list {
+            background: #2c3e50;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .building-item {
+            background: #34495e;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>🏗️ 建筑持久化测试</h1>
+    
+    <div class="test-section">
+        <h2>测试说明</h2>
+        <p>这个页面用于测试建筑数据持久化功能。请按照以下步骤进行测试：</p>
+        <ol>
+            <li>点击"添加测试建筑"按钮，在领地中添加一些建筑</li>
+            <li>点击"查看当前建筑"按钮，确认建筑已添加</li>
+            <li>刷新页面（F5 或 Ctrl+R）</li>
+            <li>再次点击"查看当前建筑"按钮，确认建筑仍然存在</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>测试操作</h2>
+        <button class="test-button" onclick="addTestBuildings()">添加测试建筑</button>
+        <button class="test-button" onclick="viewCurrentBuildings()">查看当前建筑</button>
+        <button class="test-button" onclick="clearAllBuildings()">清除所有建筑</button>
+        <button class="test-button" onclick="testDataPersistence()">运行完整测试</button>
+    </div>
+
+    <div class="test-section">
+        <h2>测试结果</h2>
+        <div id="test-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>当前建筑列表</h2>
+        <div id="building-list" class="building-list">
+            <p>点击"查看当前建筑"按钮查看建筑列表</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { TerritorySystem } from './js/modules/territory-system.js';
+        import ResourceSystem from './js/modules/resource-system.js';
+
+        // 初始化系统
+        const resourceSystem = ResourceSystem.getInstance();
+        const territorySystem = new TerritorySystem(resourceSystem);
+
+        // 加载数据
+        resourceSystem.loadFromLocalStorage();
+        territorySystem.loadFromLocalStorage();
+
+        // 添加测试建筑
+        window.addTestBuildings = function() {
+            try {
+                // 确保有足够的资源
+                resourceSystem.setCoins(100000);
+                resourceSystem.setCrystals(10000);
+                resourceSystem.saveToLocalStorage();
+
+                // 添加一些测试建筑
+                const testBuildings = [
+                    { type: 'training_ground', position: { x: 0, y: 0 } },
+                    { type: 'temple', position: { x: 1, y: 0 } },
+                    { type: 'workshop', position: { x: 0, y: 1 } },
+                    { type: 'crystal_mine', position: { x: 1, y: 1 } }
+                ];
+
+                let successCount = 0;
+                testBuildings.forEach(building => {
+                    if (territorySystem.debugBuildBuilding(building.type, building.position)) {
+                        successCount++;
+                    }
+                });
+
+                showResult(`成功添加 ${successCount} 个测试建筑`, 'success');
+                viewCurrentBuildings();
+            } catch (error) {
+                showResult(`添加测试建筑失败: ${error.message}`, 'error');
+            }
+        };
+
+        // 查看当前建筑
+        window.viewCurrentBuildings = function() {
+            try {
+                const buildings = territorySystem.getBuildings();
+                const buildingList = document.getElementById('building-list');
+                
+                if (buildings.length === 0) {
+                    buildingList.innerHTML = '<p>当前没有建筑</p>';
+                } else {
+                    buildingList.innerHTML = buildings.map(building => {
+                        const buildingData = territorySystem.buildingData[building.type];
+                        return `
+                            <div class="building-item">
+                                <div>
+                                    <strong>${buildingData.name}</strong> (${building.type})
+                                    <br>
+                                    <small>位置: (${building.position.x}, ${building.position.y}) | 等级: ${building.level}</small>
+                                </div>
+                                <div>${getBuildingIcon(building.type)}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                showResult(`当前共有 ${buildings.length} 个建筑`, 'success');
+            } catch (error) {
+                showResult(`查看建筑失败: ${error.message}`, 'error');
+            }
+        };
+
+        // 清除所有建筑
+        window.clearAllBuildings = function() {
+            try {
+                territorySystem.clearTerritoryData();
+                resourceSystem.setCoins(100000);
+                resourceSystem.setCrystals(10000);
+                resourceSystem.saveToLocalStorage();
+                
+                showResult('所有建筑已清除，资源已重置', 'success');
+                viewCurrentBuildings();
+            } catch (error) {
+                showResult(`清除建筑失败: ${error.message}`, 'error');
+            }
+        };
+
+        // 运行完整测试
+        window.testDataPersistence = function() {
+            try {
+                showResult('开始运行完整测试...', 'info');
+                
+                // 1. 清除现有数据
+                territorySystem.clearTerritoryData();
+                showResult('步骤1: 清除现有数据 ✓', 'success');
+                
+                // 2. 添加测试建筑
+                resourceSystem.setCoins(100000);
+                resourceSystem.setCrystals(10000);
+                resourceSystem.saveToLocalStorage();
+                
+                const testBuildings = [
+                    { type: 'training_ground', position: { x: 0, y: 0 } },
+                    { type: 'temple', position: { x: 1, y: 0 } }
+                ];
+                
+                testBuildings.forEach(building => {
+                    territorySystem.debugBuildBuilding(building.type, building.position);
+                });
+                
+                showResult('步骤2: 添加测试建筑 ✓', 'success');
+                
+                // 3. 保存数据
+                territorySystem.saveToLocalStorage();
+                showResult('步骤3: 保存数据 ✓', 'success');
+                
+                // 4. 重新加载数据
+                const newTerritorySystem = new TerritorySystem(resourceSystem);
+                newTerritorySystem.loadFromLocalStorage();
+                const loadedBuildings = newTerritorySystem.getBuildings();
+                
+                if (loadedBuildings.length === testBuildings.length + 1) { // +1 for main_base
+                    showResult('步骤4: 数据持久化测试通过 ✓', 'success');
+                    showResult('🎉 建筑数据持久化功能正常工作！', 'success');
+                } else {
+                    showResult(`步骤4: 数据持久化测试失败 - 期望 ${testBuildings.length + 1} 个建筑，实际 ${loadedBuildings.length} 个`, 'error');
+                }
+                
+            } catch (error) {
+                showResult(`测试失败: ${error.message}`, 'error');
+            }
+        };
+
+        // 显示结果
+        function showResult(message, type) {
+            const resultsDiv = document.getElementById('test-results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = type === 'error' ? 'test-error' : 'test-result';
+            resultDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            resultsDiv.appendChild(resultDiv);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        // 获取建筑图标
+        function getBuildingIcon(buildingType) {
+            const icons = {
+                'training_ground': '🏋️',
+                'temple': '🏛️',
+                'main_base': '🏰',
+                'barracks': '🏕️',
+                'workshop': '🔨',
+                'crystal_mine': '💎',
+                'library': '📚',
+                'hospital': '🏥',
+                'tower': '🗼',
+                'market': '🏪'
+            };
+            return icons[buildingType] || '🏗️';
+        }
+
+        // 页面加载时显示当前建筑
+        viewCurrentBuildings();
+    </script>
+</body>
+</html>

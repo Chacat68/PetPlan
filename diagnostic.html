@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快速诊断</title>
+</head>
+<body style="margin: 0; padding: 20px; background: #000; color: #0f0; font-family: monospace;">
+    <h1>游戏显示快速诊断</h1>
+    <div id="output" style="background: #111; padding: 10px; border: 1px solid #0f0;"></div>
+    <br>
+    <button onclick="location.href='index.html'" style="padding: 10px 20px; font-size: 16px;">
+        打开游戏主页
+    </button>
+    <button onclick="runTest()" style="padding: 10px 20px; font-size: 16px; margin-left: 10px;">
+        运行诊断
+    </button>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(msg, color = '#0f0') {
+            output.innerHTML += `<div style="color: ${color}">${msg}</div>`;
+        }
+        
+        async function runTest() {
+            output.innerHTML = '';
+            log('=== 开始诊断 ===', '#ff0');
+            
+            // 测试 1: 检查文件是否存在
+            log('\n1. 检查关键文件...');
+            try {
+                const response = await fetch('./js/main.js');
+                log(`   main.js: ${response.ok ? '✓ 存在' : '✗ 不存在'}`, response.ok ? '#0f0' : '#f00');
+            } catch (e) {
+                log(`   main.js: ✗ 无法访问`, '#f00');
+            }
+            
+            try {
+                const response = await fetch('./css/style.css');
+                log(`   style.css: ${response.ok ? '✓ 存在' : '✗ 不存在'}`, response.ok ? '#0f0' : '#f00');
+            } catch (e) {
+                log(`   style.css: ✗ 无法访问`, '#f00');
+            }
+            
+            // 测试 2: 检查模块是否可以加载
+            log('\n2. 测试模块加载...');
+            try {
+                const module = await import('./js/main.js');
+                log(`   main.js 模块: ✓ 加载成功`, '#0f0');
+                log(`   导出内容: ${Object.keys(module).join(', ')}`, '#0f0');
+            } catch (e) {
+                log(`   main.js 模块: ✗ 加载失败`, '#f00');
+                log(`   错误: ${e.message}`, '#f00');
+            }
+            
+            // 测试 3: 创建测试 DOM
+            log('\n3. 测试 DOM 和 Canvas...');
+            const testCanvas = document.createElement('canvas');
+            testCanvas.width = 400;
+            testCanvas.height = 435;
+            const ctx = testCanvas.getContext('2d');
+            
+            if (ctx) {
+                log(`   Canvas 2D 上下文: ✓ 可用`, '#0f0');
+                
+                // 尝试绘制
+                ctx.fillStyle = '#87CEEB';
+                ctx.fillRect(0, 0, 400, 435);
+                const imageData = ctx.getImageData(100, 100, 10, 10);
+                const hasContent = Array.from(imageData.data).some(v => v !== 0);
+                log(`   Canvas 绘制: ${hasContent ? '✓ 正常' : '✗ 失败'}`, hasContent ? '#0f0' : '#f00');
+            } else {
+                log(`   Canvas 2D 上下文: ✗ 不可用`, '#f00');
+            }
+            
+            // 测试 4: CSS 类测试
+            log('\n4. 测试 CSS 类...');
+            const testDiv = document.createElement('div');
+            testDiv.className = 'initial-fade';
+            document.body.appendChild(testDiv);
+            const opacity = getComputedStyle(testDiv).opacity;
+            log(`   initial-fade 透明度: ${opacity}`, parseFloat(opacity) === 0 ? '#ff0' : '#0f0');
+            document.body.removeChild(testDiv);
+            
+            log('\n=== 诊断完成 ===', '#ff0');
+            log('\n建议: 点击"打开游戏主页"查看实际运行效果', '#0ff');
+            log('按 F12 打开开发者工具查看详细日志', '#0ff');
+        }
+        
+        // 自动运行
+        window.addEventListener('load', () => {
+            setTimeout(runTest, 500);
+        });
+    </script>
+</body>
+</html>

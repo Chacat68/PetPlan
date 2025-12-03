@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>最小测试</title>
+</head>
+<body>
+    <h1>模块加载最小测试</h1>
+    <div id="output"></div>
+    <canvas id="gameCanvas" width="400" height="435"></canvas>
+    
+    <script type="module">
+        const output = document.getElementById('output');
+        
+        output.innerHTML += '<p>1. 开始测试...</p>';
+        
+        try {
+            output.innerHTML += '<p>2. 导入 GameCore...</p>';
+            const { default: GameCore } = await import('./js/modules/game-core.js');
+            output.innerHTML += '<p style="color:green">✓ GameCore 导入成功</p>';
+            
+            output.innerHTML += '<p>3. 导入 ResourceSystem...</p>';
+            const { default: ResourceSystem } = await import('./js/modules/resource-system.js');
+            output.innerHTML += '<p style="color:green">✓ ResourceSystem 导入成功</p>';
+            
+            output.innerHTML += '<p>4. 创建 ResourceSystem 实例...</p>';
+            const resourceSystem = ResourceSystem.getInstance();
+            output.innerHTML += '<p style="color:green">✓ ResourceSystem 实例创建成功</p>';
+            
+            output.innerHTML += '<p>5. 导入 TerritorySystem...</p>';
+            const { getTerritorySystemInstance } = await import('./js/modules/territory-system.js');
+            output.innerHTML += '<p style="color:green">✓ TerritorySystem 导入成功</p>';
+            
+            output.innerHTML += '<p>6. 创建 TerritorySystem 实例...</p>';
+            const territorySystem = getTerritorySystemInstance(resourceSystem);
+            output.innerHTML += '<p style="color:green">✓ TerritorySystem 实例创建成功</p>';
+            
+            output.innerHTML += '<p>7. 创建 GameCore 实例...</p>';
+            const canvas = document.getElementById('gameCanvas');
+            const gameCore = new GameCore(canvas);
+            output.innerHTML += '<p style="color:green">✓ GameCore 实例创建成功</p>';
+            
+            output.innerHTML += '<p>8. 导入 UISystem...</p>';
+            const { default: UISystem } = await import('./js/modules/ui-system.js');
+            output.innerHTML += '<p style="color:green">✓ UISystem 导入成功</p>';
+            
+            output.innerHTML += '<p>9. 创建 UISystem 实例...</p>';
+            const uiSystem = UISystem.getInstance();
+            output.innerHTML += '<p style="color:green">✓ UISystem 实例创建成功</p>';
+            
+            output.innerHTML += '<p>10. 导入 PlayerSystem...</p>';
+            const { default: PlayerSystem } = await import('./js/modules/player-system.js');
+            output.innerHTML += '<p style="color:green">✓ PlayerSystem 导入成功</p>';
+            
+            output.innerHTML += '<p>11. 创建 PlayerSystem 实例...</p>';
+            const playerSystem = new PlayerSystem(gameCore, resourceSystem);
+            output.innerHTML += '<p style="color:green">✓ PlayerSystem 实例创建成功</p>';
+            
+            output.innerHTML += '<p>12. 导入 CombatSystem...</p>';
+            const { default: CombatSystem } = await import('./js/modules/combat-system.js');
+            output.innerHTML += '<p style="color:green">✓ CombatSystem 导入成功</p>';
+            
+            output.innerHTML += '<p>13. 导入 SaveSystem...</p>';
+            const { getSaveSystemInstance } = await import('./js/modules/save-system.js');
+            output.innerHTML += '<p style="color:green">✓ SaveSystem 导入成功</p>';
+            
+            output.innerHTML += '<p>14. 导入 PetSystem...</p>';
+            const { getPetSystemInstance } = await import('./js/modules/pet-system.js');
+            output.innerHTML += '<p style="color:green">✓ PetSystem 导入成功</p>';
+            
+            output.innerHTML += '<p>15. 导入 SaveUI...</p>';
+            const { default: SaveUI } = await import('./js/modules/save-ui.js');
+            output.innerHTML += '<p style="color:green">✓ SaveUI 导入成功</p>';
+            
+            output.innerHTML += '<p>16. 导入 PetUI...</p>';
+            const { getPetUIInstance } = await import('./js/modules/pet-ui.js');
+            output.innerHTML += '<p style="color:green">✓ PetUI 导入成功</p>';
+            
+            output.innerHTML += '<p>17. 导入 main.js...</p>';
+            const { default: Game } = await import('./js/main.js');
+            output.innerHTML += '<p style="color:green">✓ main.js 导入成功</p>';
+            
+            output.innerHTML += '<hr>';
+            output.innerHTML += '<p style="color:green; font-size:20px">✓✓✓ 所有模块测试通过！</p>';
+            
+        } catch (error) {
+            output.innerHTML += `<p style="color:red">✗ 错误: ${error.message}</p>`;
+            output.innerHTML += `<pre style="color:red">${error.stack}</pre>`;
+            console.error('测试失败:', error);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas 测试</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        #testCanvas {
+            border: 2px solid #000;
+            background: #fff;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Canvas 显示测试</h1>
+    <canvas id="testCanvas" width="400" height="435"></canvas>
+    <div class="info">
+        <h3>测试结果：</h3>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('testCanvas');
+        const resultDiv = document.getElementById('result');
+        let log = '';
+
+        function addLog(msg) {
+            log += msg + '<br>';
+            resultDiv.innerHTML = log;
+            console.log(msg);
+        }
+
+        if (!canvas) {
+            addLog('❌ Canvas 元素未找到！');
+        } else {
+            addLog('✅ Canvas 元素已找到');
+            addLog(`Canvas 尺寸: ${canvas.width} x ${canvas.height}`);
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                addLog('❌ 无法获取 2D 上下文！');
+            } else {
+                addLog('✅ 2D 上下文获取成功');
+                
+                // 绘制测试图案
+                try {
+                    // 天空背景
+                    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                    gradient.addColorStop(0, '#87CEEB');
+                    gradient.addColorStop(1, '#E0F7FA');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // 绘制地面
+                    const groundY = canvas.height - 50;
+                    ctx.fillStyle = '#90EE90';
+                    ctx.fillRect(0, groundY, canvas.width, 50);
+                    
+                    // 绘制测试文字
+                    ctx.fillStyle = '#000';
+                    ctx.font = '24px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Canvas 正常显示！', canvas.width / 2, canvas.height / 2);
+                    
+                    // 绘制一个圆
+                    ctx.fillStyle = '#FF0000';
+                    ctx.beginPath();
+                    ctx.arc(canvas.width / 2, canvas.height / 2 + 50, 30, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    addLog('✅ Canvas 绘制成功！');
+                } catch (error) {
+                    addLog('❌ 绘制错误: ' + error.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

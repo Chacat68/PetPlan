@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Plan - 模块测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .loading { background: #fff3cd; border-color: #ffeaa7; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        #console {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Pet Plan 模块测试</h1>
+        
+        <div class="test-item loading" id="test-status">
+            正在测试模块加载...
+        </div>
+        
+        <div class="test-item">
+            <h3>模块测试结果</h3>
+            <div id="test-results"></div>
+        </div>
+        
+        <div class="test-item">
+            <h3>控制台输出</h3>
+            <div id="console"></div>
+        </div>
+        
+        <div class="test-item">
+            <button onclick="testModules()">重新测试</button>
+            <button onclick="clearConsole()">清空控制台</button>
+            <button onclick="window.location.href='index.html'">返回游戏</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // 重写console.log来显示在页面上
+        const originalLog = console.log;
+        const originalError = console.error;
+        const consoleDiv = document.getElementById('console');
+        
+        function addToConsole(message, type = 'log') {
+            const div = document.createElement('div');
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            div.style.color = type === 'error' ? '#ff6b6b' : '#0f0';
+            consoleDiv.appendChild(div);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addToConsole(args.join(' '), 'log');
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addToConsole(args.join(' '), 'error');
+        };
+        
+        async function testModules() {
+            const statusDiv = document.getElementById('test-status');
+            const resultsDiv = document.getElementById('test-results');
+            
+            statusDiv.className = 'test-item loading';
+            statusDiv.textContent = '正在测试模块加载...';
+            resultsDiv.innerHTML = '';
+            
+            const tests = [];
+            
+            try {
+                // 测试ResourceSystem
+                console.log('测试 ResourceSystem...');
+                const { ResourceSystem } = await import('./js/modules/index.js');
+                const resourceSystem = new ResourceSystem();
+                tests.push({ name: 'ResourceSystem', status: 'success', message: '加载成功' });
+                console.log('ResourceSystem 测试通过');
+            } catch (error) {
+                tests.push({ name: 'ResourceSystem', status: 'error', message: error.message });
+                console.error('ResourceSystem 测试失败:', error);
+            }
+            
+            try {
+                // 测试GameCore
+                console.log('测试 GameCore...');
+                const { GameCore } = await import('./js/modules/index.js');
+                const canvas = document.createElement('canvas');
+                canvas.width = 800;
+                canvas.height = 600;
+                const gameCore = new GameCore(canvas);
+                tests.push({ name: 'GameCore', status: 'success', message: '加载成功' });
+                console.log('GameCore 测试通过');
+            } catch (error) {
+                tests.push({ name: 'GameCore', status: 'error', message: error.message });
+                console.error('GameCore 测试失败:', error);
+            }
+            
+            try {
+                // 测试PlayerSystem
+                console.log('测试 PlayerSystem...');
+                const { PlayerSystem } = await import('./js/modules/index.js');
+                const canvas = document.createElement('canvas');
+                const resourceSystem = new ResourceSystem();
+                const gameCore = new GameCore(canvas);
+                const playerSystem = new PlayerSystem(gameCore, resourceSystem);
+                tests.push({ name: 'PlayerSystem', status: 'success', message: '加载成功' });
+                console.log('PlayerSystem 测试通过');
+            } catch (error) {
+                tests.push({ name: 'PlayerSystem', status: 'error', message: error.message });
+                console.error('PlayerSystem 测试失败:', error);
+            }
+            
+            try {
+                // 测试CombatSystem
+                console.log('测试 CombatSystem...');
+                const { CombatSystem } = await import('./js/modules/index.js');
+                const canvas = document.createElement('canvas');
+                const resourceSystem = new ResourceSystem();
+                const gameCore = new GameCore(canvas);
+                const playerSystem = new PlayerSystem(gameCore, resourceSystem);
+                const combatSystem = new CombatSystem(gameCore, playerSystem, resourceSystem);
+                tests.push({ name: 'CombatSystem', status: 'success', message: '加载成功' });
+                console.log('CombatSystem 测试通过');
+            } catch (error) {
+                tests.push({ name: 'CombatSystem', status: 'error', message: error.message });
+                console.error('CombatSystem 测试失败:', error);
+            }
+            
+            try {
+                // 测试UISystem
+                console.log('测试 UISystem...');
+                const { UISystem } = await import('./js/modules/index.js');
+                const canvas = document.createElement('canvas');
+                const resourceSystem = new ResourceSystem();
+                const gameCore = new GameCore(canvas);
+                const playerSystem = new PlayerSystem(gameCore, resourceSystem);
+                const uiSystem = new UISystem(gameCore, playerSystem, resourceSystem);
+                tests.push({ name: 'UISystem', status: 'success', message: '加载成功' });
+                console.log('UISystem 测试通过');
+            } catch (error) {
+                tests.push({ name: 'UISystem', status: 'error', message: error.message });
+                console.error('UISystem 测试失败:', error);
+            }
+            
+            // 显示测试结果
+            let allPassed = true;
+            tests.forEach(test => {
+                const div = document.createElement('div');
+                div.className = `test-item ${test.status}`;
+                div.innerHTML = `<strong>${test.name}:</strong> ${test.message}`;
+                resultsDiv.appendChild(div);
+                if (test.status === 'error') allPassed = false;
+            });
+            
+            statusDiv.className = `test-item ${allPassed ? 'success' : 'error'}`;
+            statusDiv.textContent = allPassed ? '所有模块测试通过！' : '部分模块测试失败！';
+            
+            console.log(`测试完成: ${tests.filter(t => t.status === 'success').length}/${tests.length} 通过`);
+        }
+        
+        function clearConsole() {
+            document.getElementById('console').innerHTML = '';
+        }
+        
+        // 页面加载完成后自动测试
+        window.addEventListener('load', () => {
+            setTimeout(testModules, 500);
+        });
+        
+        // 导出到全局作用域
+        window.testModules = testModules;
+        window.clearConsole = clearConsole;
+    </script>
+</body>
+</html>

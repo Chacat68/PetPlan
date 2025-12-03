@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快速测试</title>
+    <link rel="stylesheet" href="css/style.css?v=31">
+    <style>
+        body {
+            background: #1e1e1e;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            background: #2d2d2d;
+            border-radius: 4px;
+        }
+        .success { color: #4ec94e; }
+        .error { color: #e74c3c; }
+        .info { color: #3498db; }
+    </style>
+</head>
+<body>
+    <h1>Pet Plan - 快速诊断</h1>
+    <div id="status">
+        <p>正在检查...</p>
+    </div>
+
+    <script type="module">
+        const statusDiv = document.getElementById('status');
+        
+        function log(message, type = 'info') {
+            const p = document.createElement('p');
+            p.className = type;
+            p.textContent = message;
+            statusDiv.appendChild(p);
+            console.log(`[${type}] ${message}`);
+        }
+
+        async function diagnose() {
+            statusDiv.innerHTML = '';
+            log('开始诊断...', 'info');
+
+            try {
+                // 1. 测试UI系统导入
+                log('1. 测试UI系统导入...', 'info');
+                const { default: UISystem, showToast, showConfirm } = await import('./js/modules/ui-system.js');
+                log('   ✓ UI系统导入成功', 'success');
+                log('   - UISystem: ' + (UISystem ? '存在' : '不存在'), 'info');
+                log('   - showToast: ' + (typeof showToast === 'function' ? '函数' : '无效'), 'info');
+                log('   - showConfirm: ' + (typeof showConfirm === 'function' ? '函数' : '无效'), 'info');
+
+                // 2. 测试SaveUI导入
+                log('2. 测试SaveUI导入...', 'info');
+                const { default: SaveUI } = await import('./js/modules/save-ui.js');
+                log('   ✓ SaveUI导入成功', 'success');
+
+                // 3. 测试其他模块
+                log('3. 测试其他核心模块...', 'info');
+                const modules = [
+                    { name: 'GameCore', path: './js/modules/game-core.js' },
+                    { name: 'ResourceSystem', path: './js/modules/resource-system.js' },
+                    { name: 'TerritorySystem', path: './js/modules/territory-system.js' },
+                    { name: 'PlayerSystem', path: './js/modules/player-system.js' },
+                    { name: 'CombatSystem', path: './js/modules/combat-system.js' },
+                    { name: 'SaveSystem', path: './js/modules/save-system.js' },
+                    { name: 'PetSystem', path: './js/modules/pet-system.js' },
+                    { name: 'PetUI', path: './js/modules/pet-ui.js' },
+                ];
+
+                for (const mod of modules) {
+                    const imported = await import(mod.path);
+                    log(`   ✓ ${mod.name} 加载成功`, 'success');
+                }
+
+                // 4. 测试主文件
+                log('4. 测试主文件...', 'info');
+                const { default: Game } = await import('./js/main.js');
+                log('   ✓ main.js 加载成功', 'success');
+                log('   - Game构造函数: ' + (typeof Game === 'function' ? '存在' : '不存在'), 'info');
+
+                log('', 'info');
+                log('✓✓✓ 所有模块加载成功！', 'success');
+                log('问题可能不在模块加载，请检查运行时错误', 'info');
+
+            } catch (error) {
+                log('', 'info');
+                log('✗✗✗ 发现错误！', 'error');
+                log('错误信息: ' + error.message, 'error');
+                log('错误堆栈:', 'error');
+                const stack = error.stack.split('\\n');
+                stack.forEach(line => log('  ' + line, 'error'));
+            }
+        }
+
+        diagnose();
+    </script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模块加载测试</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #1e3a1e;
+            border-left: 4px solid #4ec94e;
+        }
+        .error {
+            background: #3a1e1e;
+            border-left: 4px solid #e74c3c;
+        }
+        .info {
+            background: #1e2a3a;
+            border-left: 4px solid #3498db;
+        }
+        pre {
+            margin: 5px 0;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>模块加载诊断</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        const results = document.getElementById('results');
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `<pre>${message}</pre>`;
+            results.appendChild(div);
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        async function testModuleLoading() {
+            log('开始模块加载测试...', 'info');
+
+            // 测试各个模块
+            const modules = [
+                { name: 'GameCore', path: './js/modules/game-core.js' },
+                { name: 'PlayerSystem', path: './js/modules/player-system.js' },
+                { name: 'CombatSystem', path: './js/modules/combat-system.js' },
+                { name: 'UISystem', path: './js/modules/ui-system.js' },
+                { name: 'ResourceSystem', path: './js/modules/resource-system.js' },
+                { name: 'TerritorySystem', path: './js/modules/territory-system.js' },
+                { name: 'SaveSystem', path: './js/modules/save-system.js' },
+                { name: 'SaveUI', path: './js/modules/save-ui.js' },
+                { name: 'PetSystem', path: './js/modules/pet-system.js' },
+                { name: 'PetUI', path: './js/modules/pet-ui.js' },
+            ];
+
+            for (const module of modules) {
+                try {
+                    const imported = await import(module.path);
+                    log(`✓ ${module.name} 加载成功`, 'success');
+                    log(`  导出内容: ${Object.keys(imported).join(', ')}`, 'info');
+                } catch (error) {
+                    log(`✗ ${module.name} 加载失败: ${error.message}`, 'error');
+                    log(`  错误堆栈: ${error.stack}`, 'error');
+                }
+            }
+
+            // 测试 main.js
+            log('\n测试主文件加载...', 'info');
+            try {
+                const main = await import('./js/main.js');
+                log('✓ main.js 加载成功', 'success');
+                log(`  导出内容: ${Object.keys(main).join(', ')}`, 'info');
+            } catch (error) {
+                log(`✗ main.js 加载失败: ${error.message}`, 'error');
+                log(`  错误堆栈: ${error.stack}`, 'error');
+            }
+
+            // 测试 Canvas 元素
+            log('\n测试 DOM 元素...', 'info');
+            const canvas = document.getElementById('gameCanvas');
+            if (canvas) {
+                log('✗ Canvas 元素不存在（预期结果，此页面没有游戏元素）', 'info');
+            } else {
+                log('✓ Canvas 元素不存在（预期结果）', 'info');
+            }
+
+            log('\n诊断完成！', 'success');
+        }
+
+        testModuleLoading().catch(error => {
+            log(`致命错误: ${error.message}`, 'error');
+            log(`错误堆栈: ${error.stack}`, 'error');
+        });
+    </script>
+</body>
+</html>

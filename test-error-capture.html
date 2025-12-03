@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Plan - 错误捕获</title>
+    <link rel="stylesheet" href="css/style.css?v=32">
+    <link rel="stylesheet" href="css/menu.css">
+    <link rel="stylesheet" href="css/character-management.css">
+    <link rel="stylesheet" href="css/save-system.css">
+    <link rel="stylesheet" href="css/pet-system.css">
+    <style>
+        #error-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            z-index: 999999;
+            display: none;
+            overflow: auto;
+            padding: 20px;
+            font-family: monospace;
+        }
+        #error-overlay.show {
+            display: block;
+        }
+        .error-title {
+            color: #e74c3c;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .error-details {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #e74c3c;
+        }
+        .error-stack {
+            white-space: pre-wrap;
+            font-size: 12px;
+            color: #ccc;
+        }
+        .console-log {
+            background: #1e1e1e;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 2px 5px;
+        }
+        .log-error { color: #e74c3c; }
+        .log-warn { color: #f39c12; }
+        .log-info { color: #3498db; }
+        .log-success { color: #2ecc71; }
+    </style>
+</head>
+<body>
+    <!-- 错误覆盖层 -->
+    <div id="error-overlay">
+        <div class="error-title">⚠️ 检测到错误</div>
+        <div id="error-content"></div>
+        <div class="error-title" style="margin-top: 30px;">📋 控制台日志</div>
+        <div class="console-log" id="console-log"></div>
+    </div>
+
+    <!-- 游戏内容 -->
+    <div class="game-container initial-fade">
+        <!-- 游戏内加载动画 -->
+        <div class="game-loading-screen" id="gameLoadingScreen" style="display: none;">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Pet Plan 加载中...</div>
+            </div>
+        </div>
+
+        <!-- 批量升级子菜单 -->
+        <div id="upgradeMenu" class="upgrade-menu" style="display: none;">
+            <div class="upgrade-menu-content">
+                <button class="upgrade-menu-btn" data-times="1">+1</button>
+                <button class="upgrade-menu-btn" data-times="10">+10</button>
+                <button class="upgrade-menu-btn" data-times="100">+100</button>
+            </div>
+        </div>
+
+        <!-- 设置菜单模态框 -->
+        <div id="settingsModal" class="modal" style="display: none;">
+            <div class="modal-content settings-modal-content">
+                <div class="modal-header">
+                    <h2>设置</h2>
+                    <span class="close-modal" id="closeSettingsModal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <button id="openSaveMenuBtn" class="menu-btn">💾 存档 / 读档</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-area">
+            <!-- 游戏画布 -->
+            <canvas id="gameCanvas" width="400" height="435"></canvas>
+            
+            <!-- 游戏内UI覆盖层 -->
+            <div class="game-ui-overlay">
+                <!-- 顶部状态信息 -->
+                <div class="game-top-status">
+                    <div class="game-status-left">
+                        <div class="player-avatar">
+                            <img src="./images/rw/rw3.png" alt="rw3" style="width: 100%; height: 100%; object-fit: contain; border-radius: 50%;">
+                        </div>
+                        <div class="currency-display">
+                            <div class="currency-item" title="金币">
+                                <span class="currency-icon">💰</span>
+                                <span id="coins">0</span>
+                            </div>
+                            <div class="currency-item" title="红宝石">
+                                <span class="currency-icon">🔴</span>
+                                <span id="gems">0</span>
+                            </div>
+                            <div class="currency-item" title="水晶">
+                                <span class="currency-icon">💎</span>
+                                <span id="crystals">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="game-status-center">
+                    </div>
+                    <div class="game-status-right">
+                        <div class="status-icon" title="商城">🛒</div>
+                        <div class="status-icon" title="活动">📅</div>
+                        <div class="status-icon" title="时间">⏰</div>
+                        <div class="status-icon" title="日常">📊</div>
+                        <div class="status-icon" id="settingsBtn" title="设置">⚙️</div>
+                    </div>
+                </div>
+                
+                <!-- 关卡难度显示 - 在游戏画布内 -->
+                <div class="stage-info-overlay">
+                    <div class="stage-info">
+                        <span class="stage-name">普通</span>
+                        <span class="stage-level">1-1</span>
+                    </div>
+                </div>
+                
+                <!-- 功能按钮区域 - 移到游戏画布内 -->
+                <div class="function-buttons-overlay">
+                    <button class="function-btn auto-btn">自动</button>
+                    <button class="function-btn attack-btn">+</button>
+                    <button class="function-btn hp-btn">+</button>
+                    <button class="function-btn regen-btn">+</button>
+                    <button class="function-btn add-btn">+</button>
+                    <button class="function-btn add-btn">+</button>
+                    <button class="function-btn add-btn">+</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 捕获所有错误
+        const logs = [];
+        const errorOverlay = document.getElementById('error-overlay');
+        const errorContent = document.getElementById('error-content');
+        const consoleLog = document.getElementById('console-log');
+
+        function addLog(message, type = 'info') {
+            const entry = { message, type, time: new Date().toLocaleTimeString() };
+            logs.push(entry);
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${entry.time}] ${message}`;
+            consoleLog.appendChild(logEntry);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        function showError(error) {
+            errorOverlay.classList.add('show');
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-details';
+            errorDiv.innerHTML = `
+                <strong>错误信息:</strong> ${error.message}<br>
+                <strong>错误位置:</strong> ${error.filename || '未知'}:${error.lineno || '?'}:${error.colno || '?'}<br>
+                <div class="error-stack"><strong>堆栈信息:</strong><br>${error.stack || error.error?.stack || '无'}</div>
+            `;
+            errorContent.appendChild(errorDiv);
+        }
+
+        // 拦截console方法
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info
+        };
+
+        console.log = function(...args) {
+            addLog(args.join(' '), 'info');
+            originalConsole.log.apply(console, args);
+        };
+
+        console.error = function(...args) {
+            addLog(args.join(' '), 'error');
+            originalConsole.error.apply(console, args);
+        };
+
+        console.warn = function(...args) {
+            addLog(args.join(' '), 'warn');
+            originalConsole.warn.apply(console, args);
+        };
+
+        // 捕获全局错误
+        window.addEventListener('error', (event) => {
+            addLog(`ERROR: ${event.message}`, 'error');
+            showError(event);
+            event.preventDefault();
+        });
+
+        // 捕获Promise rejection
+        window.addEventListener('unhandledrejection', (event) => {
+            addLog(`Promise Rejection: ${event.reason}`, 'error');
+            showError({ 
+                message: event.reason?.message || event.reason, 
+                stack: event.reason?.stack || '无堆栈信息'
+            });
+            event.preventDefault();
+        });
+
+        addLog('错误捕获器已启动', 'success');
+    </script>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

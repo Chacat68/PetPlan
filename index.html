@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Plan</title>
+    <link rel="stylesheet" href="css/style.css?v=33">
+    <link rel="stylesheet" href="css/menu.css?v=33">
+    <link rel="stylesheet" href="css/character-management.css?v=33">
+    <link rel="stylesheet" href="css/save-system.css?v=33">
+    <link rel="stylesheet" href="css/pet-system.css?v=33">
+</head>
+
+<body>
+    <div class="game-container initial-fade">
+        <!-- 游戏内加载动画 -->
+        <div class="game-loading-screen" id="gameLoadingScreen" style="display: none;">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Pet Plan 加载中...</div>
+            </div>
+        </div>
+
+        <!-- 批量升级子菜单 -->
+        <div id="upgradeMenu" class="upgrade-menu" style="display: none;">
+            <div class="upgrade-menu-content">
+                <button class="upgrade-menu-btn" data-times="1">+1</button>
+                <button class="upgrade-menu-btn" data-times="10">+10</button>
+                <button class="upgrade-menu-btn" data-times="100">+100</button>
+            </div>
+        </div>
+
+        <!-- 设置菜单模态框 -->
+        <div id="settingsModal" class="modal" style="display: none;">
+            <div class="modal-content settings-modal-content">
+                <div class="modal-header">
+                    <h2>设置</h2>
+                    <span class="close-modal" id="closeSettingsModal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <button id="openSaveMenuBtn" class="menu-btn">💾 存档 / 读档</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-area">
+            <!-- 游戏画布 -->
+            <canvas id="gameCanvas" width="400" height="435"></canvas>
+
+            <!-- 游戏内UI覆盖层 -->
+            <div class="game-ui-overlay">
+                <!-- 顶部状态信息 -->
+                <div class="game-top-status">
+                    <div class="game-status-left">
+                        <div class="player-avatar">
+                            <img src="./images/rw/rw3.png" alt="rw3"
+                                style="width: 100%; height: 100%; object-fit: contain; border-radius: 50%;">
+                        </div>
+                        <div class="currency-display">
+                            <div class="currency-item" title="金币">
+                                <span class="currency-icon">💰</span>
+                                <span id="coins">0</span>
+                            </div>
+                            <div class="currency-item" title="红宝石">
+                                <span class="currency-icon">🔴</span>
+                                <span id="gems">0</span>
+                            </div>
+                            <div class="currency-item" title="水晶">
+                                <span class="currency-icon">💎</span>
+                                <span id="crystals">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="game-status-center">
+                    </div>
+                    <div class="game-status-right">
+                        <div class="status-icon" title="商城">🛒</div>
+                        <div class="status-icon" title="活动">📅</div>
+                        <div class="status-icon" title="时间">⏰</div>
+                        <div class="status-icon" title="日常">📊</div>
+                        <div class="status-icon" id="settingsBtn" title="设置">⚙️</div>
+                    </div>
+                </div>
+
+                <!-- 关卡难度显示 - 在游戏画布内 -->
+                <div class="stage-info-overlay">
+                    <div class="stage-info">
+                        <span class="stage-name">普通</span>
+                        <span class="stage-level">1-1</span>
+                    </div>
+                </div>
+
+                <!-- 功能按钮区域 - 移到游戏画布内 -->
+                <div class="function-buttons-overlay">
+                    <button class="function-btn auto-btn">自动</button>
+                    <button class="function-btn attack-btn">+</button>
+                    <button class="function-btn hp-btn">+</button>
+                    <button class="function-btn regen-btn">+</button>
+                    <button class="function-btn add-btn">+</button>
+                    <button class="function-btn add-btn">+</button>
+                    <button class="function-btn add-btn">+</button>
+                </div>
+
+                <!-- 上阵宠物框 - 移到游戏画布内 -->
+                <div class="pet-deployment-overlay" style="display: none;">
+                    <div class="pet-deployment-box">
+                        <span class="pet-deployment-label">上阵宠物</span>
+                    </div>
+                    <div class="pet-slots">
+                        <div class="pet-slot" data-slot="1">
+                            <span class="pet-slot-plus">+</span>
+                        </div>
+                        <div class="pet-slot" data-slot="2">
+                            <span class="pet-slot-plus">+</span>
+                        </div>
+                        <div class="pet-slot" data-slot="3">
+                            <span class="pet-slot-plus">+</span>
+                        </div>
+                        <div class="pet-slot" data-slot="4">
+                            <span class="pet-slot-plus">+</span>
+                        </div>
+                        <div class="pet-slot" data-slot="5">
+                            <span class="pet-slot-plus">+</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 总战力显示 - 放在前后排右边 -->
+                <div class="total-power-overlay">
+                    <div class="total-power">
+                        <span class="power-label">总战力</span>
+                        <span class="power-value" id="totalPower">0</span>
+                    </div>
+                </div>
+
+                <!-- 属性升级面板 - 移到游戏画布内 -->
+                <div class="upgrade-panel-overlay">
+
+                    <div class="upgrade-items-vertical">
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">⚔️</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">攻击力</div>
+                                <div class="upgrade-value">20</div>
+                            </div>
+                            <button id="upgradeAttack" class="upgrade-btn" data-cost="10">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 10</span>
+                            </button>
+                        </div>
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">❤️</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">生命</div>
+                                <div class="upgrade-value">100</div>
+                            </div>
+                            <button id="upgradeHp" class="upgrade-btn" data-cost="15">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 15</span>
+                            </button>
+                        </div>
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">💚</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">生命恢复</div>
+                                <div class="upgrade-value">1</div>
+                            </div>
+                            <button id="upgradeHpRegen" class="upgrade-btn" data-cost="20">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 20</span>
+                            </button>
+                        </div>
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">💥</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">暴击伤害</div>
+                                <div class="upgrade-value">150%</div>
+                            </div>
+                            <button id="upgradeCritDamage" class="upgrade-btn" data-cost="25">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 25</span>
+                            </button>
+                        </div>
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">⚡</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">攻击速度</div>
+                                <div class="upgrade-value">1.0</div>
+                            </div>
+                            <button id="upgradeAttackSpeed" class="upgrade-btn" data-cost="30">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 30</span>
+                            </button>
+                        </div>
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">🎯</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">暴击</div>
+                                <div class="upgrade-value">5%</div>
+                            </div>
+                            <button id="upgradeCrit" class="upgrade-btn" data-cost="35">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 35</span>
+                            </button>
+                        </div>
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">🔫</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">连射</div>
+                                <div class="upgrade-value">1</div>
+                            </div>
+                            <button id="upgradeMultiShot" class="upgrade-btn" data-cost="40">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 40</span>
+                            </button>
+                        </div>
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">🔱</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">三连射</div>
+                                <div class="upgrade-value">0%</div>
+                            </div>
+                            <button id="upgradeTripleShot" class="upgrade-btn" data-cost="45">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 45</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部导航栏 -->
+        <div class="bottom-navigation">
+            <div class="nav-item" id="characterNavItem">
+                <div class="nav-icon">👑</div>
+                <div class="nav-label">角色</div>
+            </div>
+            <div class="nav-item nav-close-btn" id="closeNavItem" style="display: none;">
+                <div class="nav-icon">×</div>
+                <div class="nav-label">关闭</div>
+            </div>
+            <div class="nav-item" id="territory-button">
+                <div class="nav-icon">🥩</div>
+                <div class="nav-label">领地</div>
+            </div>
+            <div class="nav-item">
+                <div class="nav-icon">⚔️</div>
+                <div class="nav-label">副本</div>
+            </div>
+            <div class="nav-item">
+                <div class="nav-icon">🛡️</div>
+                <div class="nav-label">公会</div>
+            </div>
+            <div class="nav-item">
+                <div class="nav-icon">🔴</div>
+                <div class="nav-label">召唤</div>
+            </div>
+        </div>
+
+        <!-- 菜单弹出界面 -->
+        <div class="character-modal" id="characterModal">
+            <div class="modal-content menu-modal">
+                <div class="modal-header menu-header">
+                    <div class="menu-icon">☰</div>
+                    <h3>菜单</h3>
+                    <span class="close-btn" id="closeModal">▲</span>
+                </div>
+                <div class="modal-body menu-body">
+                    <div class="menu-item">
+                        <div class="menu-icon">⚙️</div>
+                        <span class="menu-text">设置</span>
+                    </div>
+                    <div class="menu-item">
+                        <div class="menu-icon">📊</div>
+                        <span class="menu-text">排行</span>
+                    </div>
+                    <div class="menu-item">
+                        <div class="menu-icon">📧</div>
+                        <span class="menu-text">邮箱</span>
+                    </div>
+                    <div class="menu-item">
+                        <div class="menu-icon">👥</div>
+                        <span class="menu-text">好友</span>
+                    </div>
+                    <div class="menu-item">
+                        <div class="menu-icon">🃏</div>
+                        <span class="menu-text">收藏</span>
+                    </div>
+                    <div class="menu-item">
+                        <div class="menu-icon">⚡</div>
+                        <span class="menu-text">省电模式</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 角色管理界面 -->
+        <div class="character-management-modal" id="characterManagementModal">
+            <div class="character-management-content">
+                <!-- 顶部资源栏 -->
+                <div class="character-resources">
+                    <div class="resource-item">
+                        <span class="resource-icon">💰</span>
+                        <span class="resource-value">1000</span>
+                    </div>
+                    <div class="resource-item">
+                        <span class="resource-icon">🔴</span>
+                        <span class="resource-value">50</span>
+                    </div>
+                    <div class="resource-item">
+                        <span class="resource-icon">💎</span>
+                        <span class="resource-value">0</span>
+                    </div>
+                    <div class="resource-item">
+                        <span class="resource-icon">💜</span>
+                        <span class="resource-value">60</span>
+                    </div>
+                </div>
+
+                <!-- 角色面板 -->
+                <div class="character-panel">
+                    <div class="character-panel-header">
+                        <div class="character-nav-bar">
+                            <div class="nav-item active" data-tab="character">
+                                <span class="nav-icon">👑</span>
+                                <span class="nav-text">角色</span>
+                            </div>
+                            <div class="nav-item" data-tab="skills">
+                                <span class="nav-icon">⚔️</span>
+                                <span class="nav-text">技能</span>
+                            </div>
+                            <div class="nav-item" data-tab="pets">
+                                <span class="nav-icon">🐾</span>
+                                <span class="nav-text">宠物</span>
+                            </div>
+                            <div class="nav-item" data-tab="collectibles">
+                                <span class="nav-icon">📦</span>
+                                <span class="nav-text">藏品</span>
+                            </div>
+                            <div class="nav-item" data-tab="contracts">
+                                <span class="nav-icon">📜</span>
+                                <span class="nav-text">契约</span>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- 主要角色显示 -->
+                    <div id="character-tab-content">
+                        <div class="main-character-display">
+                            <div class="character-card main-character">
+                                <div class="character-rank">刺客</div>
+                                <div class="character-left">
+                                    <div class="character-image">
+                                        <img src="./images/rw/rw3.png" alt="rw3" class="character-avatar-img">
+                                    </div>
+                                    <div class="character-name">孙悟空</div>
+                                    <div class="character-level">等级 220</div>
+                                </div>
+                                <div class="character-right">
+                                    <!-- 符石系统已删除 -->
+                                </div>
+                                <div class="weapon-slot">
+                                    <div class="weapon-icon">⚔️</div>
+                                </div>
+                                <div class="armor-slot">
+                                    <div class="armor-icon">🛡️</div>
+                                </div>
+                                <div class="ring-slot">
+                                    <div class="ring-icon">💍</div>
+                                </div>
+                                <div class="wing-slot">
+                                    <div class="wing-icon">🪽</div>
+                                </div>
+                                <div class="mount-slot">
+                                    <div class="mount-icon">🐎</div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- 底部按钮 -->
+                        <div class="character-actions">
+                            <button class="action-btn talent">天赋</button>
+                            <button class="action-btn upgrade">升级角色</button>
+                        </div>
+                    </div>
+
+                    <!-- 宠物界面容器 -->
+                    <div id="pet-tab-content" style="display: none; height: 100%; overflow-y: auto;">
+                        <!-- 宠物界面内容将由 JS 动态注入 -->
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 领地界面已移至独立页面 -->
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>

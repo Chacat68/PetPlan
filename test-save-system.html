@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>存档系统测试 - Pet Plan</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/save-system.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .test-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .test-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .test-btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+        
+        .status-display {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+        
+        .status-label {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .error {
+            color: #f44336;
+            font-weight: bold;
+        }
+        
+        .info {
+            color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🎮 存档系统测试</h1>
+        
+        <div class="test-section">
+            <h2>📊 当前游戏状态</h2>
+            <div class="status-display" id="gameStatus">
+                <div><span class="status-label">玩家等级:</span> <span id="playerLevel">1</span></div>
+                <div><span class="status-label">生命值:</span> <span id="playerHp">100</span></div>
+                <div><span class="status-label">攻击力:</span> <span id="playerAttack">20</span></div>
+                <div><span class="status-label">金币:</span> <span id="coins">1000</span></div>
+                <div><span class="status-label">红宝石:</span> <span id="rubies">50</span></div>
+                <div><span class="status-label">水晶:</span> <span id="crystals">0</span></div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>🎲 模拟游戏操作</h2>
+            <div class="test-buttons">
+                <button class="test-btn" onclick="increaseLevel()">升级</button>
+                <button class="test-btn" onclick="addCoins()">+1000 金币</button>
+                <button class="test-btn" onclick="addRubies()">+50 红宝石</button>
+                <button class="test-btn" onclick="addCrystals()">+10 水晶</button>
+                <button class="test-btn" onclick="upgradeAttack()">升级攻击</button>
+                <button class="test-btn" onclick="resetData()">重置数据</button>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>💾 存档操作</h2>
+            <div class="test-buttons">
+                <button class="test-btn" onclick="testSave(1)">保存到槽位1</button>
+                <button class="test-btn" onclick="testSave(2)">保存到槽位2</button>
+                <button class="test-btn" onclick="testLoad(1)">加载槽位1</button>
+                <button class="test-btn" onclick="testLoad(2)">加载槽位2</button>
+                <button class="test-btn" onclick="showAllSaves()">查看所有存档</button>
+                <button class="test-btn" onclick="openSaveUI()">打开存档界面</button>
+            </div>
+            <div class="status-display" id="saveStatus">
+                <span class="info">等待操作...</span>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>📝 操作日志</h2>
+            <div class="status-display" id="logDisplay" style="max-height: 200px; overflow-y: auto;">
+                <div class="info">系统已准备就绪</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { getSaveSystemInstance } from './js/modules/save-system.js';
+        import ResourceSystem from './js/modules/resource-system.js';
+        import SaveUI from './js/modules/save-ui.js';
+
+        // 模拟游戏数据
+        let gameData = {
+            player: {
+                level: 1,
+                hp: 100,
+                maxHp: 100,
+                attack: 20
+            }
+        };
+
+        // 初始化系统
+        const resourceSystem = ResourceSystem.getInstance();
+        const saveSystem = getSaveSystemInstance();
+        
+        // 模拟系统引用
+        const mockPlayerSystem = {
+            getSaveData: () => ({ player: gameData.player }),
+            loadSaveData: (data) => {
+                if (data && data.player) {
+                    gameData.player = { ...data.player };
+                    updateDisplay();
+                    addLog('玩家数据已加载', 'success');
+                }
+            }
+        };
+
+        const mockTerritorySystem = {
+            getSaveData: () => ({ level: 1, buildings: [] }),
+            loadSaveData: () => {}
+        };
+
+        const mockCombatSystem = {
+            getSaveData: () => ({}),
+            loadSaveData: () => {}
+        };
+
+        saveSystem.setSystems(mockPlayerSystem, mockTerritorySystem, resourceSystem, mockCombatSystem);
+
+        // 初始化存档UI
+        const saveUI = new SaveUI(saveSystem);
+
+        // 更新显示
+        function updateDisplay() {
+            document.getElementById('playerLevel').textContent = gameData.player.level;
+            document.getElementById('playerHp').textContent = gameData.player.hp;
+            document.getElementById('playerAttack').textContent = gameData.player.attack;
+            document.getElementById('coins').textContent = resourceSystem.getCoins();
+            document.getElementById('rubies').textContent = resourceSystem.getRubies();
+            document.getElementById('crystals').textContent = resourceSystem.getCrystals();
+        }
+
+        // 添加日志
+        function addLog(message, type = 'info') {
+            const logDisplay = document.getElementById('logDisplay');
+            const logEntry = document.createElement('div');
+            logEntry.className = type;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDisplay.insertBefore(logEntry, logDisplay.firstChild);
+            
+            // 限制日志条数
+            if (logDisplay.children.length > 50) {
+                logDisplay.removeChild(logDisplay.lastChild);
+            }
+        }
+
+        // 游戏操作函数
+        window.increaseLevel = () => {
+            gameData.player.level++;
+            gameData.player.maxHp += 20;
+            gameData.player.hp = gameData.player.maxHp;
+            updateDisplay();
+            addLog(`升级到 Lv.${gameData.player.level}`, 'success');
+        };
+
+        window.addCoins = () => {
+            resourceSystem.addCoins(1000);
+            updateDisplay();
+            addLog('获得 1000 金币', 'success');
+        };
+
+        window.addRubies = () => {
+            resourceSystem.addRubies(50);
+            updateDisplay();
+            addLog('获得 50 红宝石', 'success');
+        };
+
+        window.addCrystals = () => {
+            resourceSystem.addCrystals(10);
+            updateDisplay();
+            addLog('获得 10 水晶', 'success');
+        };
+
+        window.upgradeAttack = () => {
+            gameData.player.attack += 5;
+            updateDisplay();
+            addLog(`攻击力提升到 ${gameData.player.attack}`, 'success');
+        };
+
+        window.resetData = () => {
+            gameData.player = {
+                level: 1,
+                hp: 100,
+                maxHp: 100,
+                attack: 20
+            };
+            resourceSystem.setCoins(1000);
+            resourceSystem.setRubies(50);
+            resourceSystem.setCrystals(0);
+            updateDisplay();
+            addLog('数据已重置', 'info');
+        };
+
+        // 存档操作函数
+        window.testSave = (slot) => {
+            const success = saveSystem.saveGame(slot);
+            const statusDiv = document.getElementById('saveStatus');
+            if (success) {
+                statusDiv.innerHTML = `<span class="success">✓ 已保存到槽位 ${slot}</span>`;
+                addLog(`游戏已保存到槽位 ${slot}`, 'success');
+            } else {
+                statusDiv.innerHTML = `<span class="error">✗ 保存失败</span>`;
+                addLog(`保存到槽位 ${slot} 失败`, 'error');
+            }
+        };
+
+        window.testLoad = (slot) => {
+            const success = saveSystem.loadGame(slot);
+            const statusDiv = document.getElementById('saveStatus');
+            if (success) {
+                statusDiv.innerHTML = `<span class="success">✓ 已从槽位 ${slot} 加载</span>`;
+                addLog(`已从槽位 ${slot} 加载游戏`, 'success');
+            } else {
+                statusDiv.innerHTML = `<span class="error">✗ 加载失败（可能槽位为空）</span>`;
+                addLog(`从槽位 ${slot} 加载失败`, 'error');
+            }
+        };
+
+        window.showAllSaves = () => {
+            const saves = saveSystem.getAllSaves();
+            const statusDiv = document.getElementById('saveStatus');
+            let html = '<div><strong>所有存档:</strong></div>';
+            saves.forEach(save => {
+                if (save.exists) {
+                    html += `<div class="success">槽位 ${save.slot}: ${save.slotInfo.savedAt} (Lv.${save.slotInfo.playerLevel})</div>`;
+                } else {
+                    html += `<div class="info">槽位 ${save.slot}: 空</div>`;
+                }
+            });
+            statusDiv.innerHTML = html;
+            addLog('查看所有存档信息', 'info');
+        };
+
+        window.openSaveUI = () => {
+            addLog('打开存档管理界面', 'info');
+            // SaveUI 会自动处理
+        };
+
+        // 初始化显示
+        updateDisplay();
+        addLog('测试页面初始化完成', 'success');
+        addLog('可以开始测试存档系统功能', 'info');
+    </script>
+</body>
+</html>
