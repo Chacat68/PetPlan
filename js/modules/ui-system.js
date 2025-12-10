@@ -21,7 +21,7 @@ class UISystem {
      */
     initUI() {
         if (this.initialized) return;
-        
+
         // 创建Toast容器
         if (!document.querySelector('.toast-container')) {
             this.toastContainer = document.createElement('div');
@@ -30,7 +30,7 @@ class UISystem {
         } else {
             this.toastContainer = document.querySelector('.toast-container');
         }
-        
+
         this.initialized = true;
     }
 
@@ -123,6 +123,103 @@ class UISystem {
                 if (onCancel) onCancel();
                 close();
             }
+        });
+    }
+    /**
+     * 显示离线收益弹窗
+     * @param {Object} earnings - 收益数据 {time, gold, crystal}
+     */
+    showOfflineResult(earnings) {
+        // 格式化时间
+        const hours = Math.floor(earnings.time / 3600);
+        const minutes = Math.floor((earnings.time % 3600) / 60);
+        const seconds = earnings.time % 60;
+
+        let timeStr = '';
+        if (hours > 0) timeStr += `${hours}小时 `;
+        if (minutes > 0) timeStr += `${minutes}分钟 `;
+        if (seconds > 0 || timeStr === '') timeStr += `${seconds}秒`;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'offline-modal-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            animation: fadeIn 0.3s ease;
+        `;
+
+        overlay.innerHTML = `
+            <div class="offline-modal" style="
+                background: #2c3e50;
+                border: 2px solid #f1c40f;
+                border-radius: 10px;
+                padding: 20px;
+                width: 80%;
+                max-width: 400px;
+                color: white;
+                text-align: center;
+                box-shadow: 0 0 20px rgba(241, 196, 15, 0.3);
+                position: relative;
+            ">
+                <h2 style="color: #f1c40f; margin-top: 0;">欢迎回来!</h2>
+                <p style="color: #bdc3c7;">您离线了 <span style="color: white; font-weight: bold;">${timeStr}</span></p>
+                
+                <div class="offline-rewards" style="
+                    background: rgba(0, 0, 0, 0.3);
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin: 15px 0;
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                ">
+                    <div class="reward-item" style="display: flex; align-items: center; justify-content: center; gap: 5px;">
+                        <span style="font-size: 1.2em;">💰</span>
+                        <span style="color: #f1c40f; font-weight: bold;">+${earnings.gold}</span>
+                    </div>
+                    <div class="reward-item" style="display: flex; align-items: center; justify-content: center; gap: 5px;">
+                        <span style="font-size: 1.2em;">💎</span>
+                        <span style="color: #3498db; font-weight: bold;">+${earnings.crystal}</span>
+                    </div>
+                </div>
+                
+                <button class="claim-btn" style="
+                    background: linear-gradient(to bottom, #f1c40f, #f39c12);
+                    border: none;
+                    color: #fff;
+                    padding: 10px 30px;
+                    font-size: 16px;
+                    border-radius: 20px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    transition: transform 0.1s;
+                    width: 100%;
+                ">领取收益</button>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const claimBtn = overlay.querySelector('.claim-btn');
+        claimBtn.addEventListener('click', () => {
+            // 点击动画
+            claimBtn.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    if (overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                }, 300);
+            }, 100);
         });
     }
 }

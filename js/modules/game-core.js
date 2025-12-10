@@ -6,7 +6,7 @@
 class GameCore {
     constructor(canvas) {
         this.canvas = canvas;
-        this.ctx = canvas.getContext('2d', { 
+        this.ctx = canvas.getContext('2d', {
             alpha: false,  // 禁用alpha通道提升性能
             desynchronized: true  // 降低延迟
         });
@@ -14,21 +14,21 @@ class GameCore {
             console.error('无法获取画布上下文');
             return;
         }
-        
+
         // 优化Canvas渲染
         this.ctx.imageSmoothingEnabled = false;  // 禁用图像平滑
-        
+
         // 游戏状态
         this.isRunning = true;
         this.lastTime = 0;
         this.fps = 60;
         this.frameInterval = 1000 / this.fps;
         this.then = Date.now();
-        
+
         // 地图边界
         this.mapWidth = this.canvas.width;
         this.mapHeight = this.canvas.height;
-        
+
         // 子系统引用
         this.playerSystem = null;
         this.combatSystem = null;
@@ -40,7 +40,7 @@ class GameCore {
         this.grassDecorations = [];
         this.mountains = [];
     }
-    
+
     /**
      * 初始化游戏核心
      */
@@ -90,7 +90,7 @@ class GameCore {
             x += width * 0.6;
         }
     }
-    
+
     /**
      * 设置子系统引用
      */
@@ -103,34 +103,34 @@ class GameCore {
         this.saveSystem = saveSystem;
         this.petSystem = petSystem;
     }
-    
+
     /**
      * 游戏主循环
      */
     gameLoop(currentTime = 0) {
         requestAnimationFrame((time) => this.gameLoop(time));
-        
+
         if (!this.isRunning) {
             return;
         }
-        
+
         // 帧率控制
         const now = Date.now();
         const elapsed = now - this.then;
-        
+
         if (elapsed < this.frameInterval) {
             return;
         }
-        
+
         this.then = now - (elapsed % this.frameInterval);
-        
+
         const deltaTime = currentTime - this.lastTime;
         this.lastTime = currentTime;
-        
+
         this.update(deltaTime);
         this.render();
     }
-    
+
     /**
      * 更新游戏逻辑
      */
@@ -148,57 +148,62 @@ class GameCore {
         if (this.playerSystem) {
             this.playerSystem.update(deltaTime);
         }
-        
+
         // 更新战斗系统（宠物战斗也在这里更新）
         if (this.combatSystem) {
             this.combatSystem.update(deltaTime);
         }
-        
+
         // 更新UI系统
         if (this.uiSystem) {
             this.uiSystem.update();
         }
-        
+
+        // 更新领地系统（处理资源产出）
+        if (this.territorySystem) {
+            this.territorySystem.update(deltaTime);
+        }
+
         // 更新存档系统（自动保存）
         if (this.saveSystem) {
             this.saveSystem.updateAutoSave(deltaTime);
         }
     }
-    
+
     /**
      * 渲染游戏画面
      */
     render() {
         // 绘制天空背景
         this.drawSky();
-        
+
         // 绘制远景山脉
         this.drawMountains();
-        
+
         // 绘制地面
         this.drawGround();
-        
+
         // 绘制装饰性草丛
         this.drawGrassTexture();
-        
+
         // 绘制云朵
         this.drawClouds();
-        
+
         // 渲染各个系统
         if (this.playerSystem) {
             this.playerSystem.render(this.ctx);
         }
-        
+
         // 渲染宠物（在玩家之后，战斗系统之前）
         if (this.petSystem) {
             this.petSystem.render(this.ctx);
         }
-        
+
         if (this.combatSystem) {
             this.combatSystem.render(this.ctx);
         }
     }
-    
+
     /**
      * 绘制天空
      */
@@ -223,7 +228,7 @@ class GameCore {
             this.ctx.lineTo(mountain.x + mountain.width, mountain.y);
             this.ctx.closePath();
             this.ctx.fill();
-            
+
             // 山顶积雪
             this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
             this.ctx.beginPath();
@@ -245,15 +250,15 @@ class GameCore {
      */
     drawGround() {
         const groundY = this.mapHeight - 50;
-        
+
         // 地面渐变
         const gradient = this.ctx.createLinearGradient(0, groundY, 0, this.mapHeight);
         gradient.addColorStop(0, '#90EE90'); // 浅绿
         gradient.addColorStop(1, '#228B22'); // 森林绿
-        
+
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0, groundY, this.mapWidth, 50);
-        
+
         // 地面边缘线
         this.ctx.strokeStyle = '#2E8B57';
         this.ctx.lineWidth = 2;
@@ -278,31 +283,31 @@ class GameCore {
             this.ctx.fill();
         });
     }
-    
+
     /**
      * 绘制云朵
      */
     drawClouds() {
         this.ctx.fillStyle = '#ffffff';
         this.ctx.globalAlpha = 0.8;
-        
+
         this.clouds.forEach(cloud => {
             this.ctx.save();
             this.ctx.translate(cloud.x, cloud.y);
             this.ctx.scale(cloud.size, cloud.size);
-            
+
             this.ctx.beginPath();
             this.ctx.arc(0, 0, 20, 0, Math.PI * 2);
             this.ctx.arc(25, 0, 25, 0, Math.PI * 2);
             this.ctx.arc(50, 0, 20, 0, Math.PI * 2);
             this.ctx.fill();
-            
+
             this.ctx.restore();
         });
-        
+
         this.ctx.globalAlpha = 1;
     }
-    
+
     /**
      * 启动游戏
      */
@@ -310,21 +315,21 @@ class GameCore {
         this.isRunning = true;
         this.gameLoop();
     }
-    
+
     /**
      * 停止游戏
      */
     stop() {
         this.isRunning = false;
     }
-    
+
     /**
      * 获取画布上下文
      */
     getContext() {
         return this.ctx;
     }
-    
+
     /**
      * 获取地图尺寸
      */

@@ -139,7 +139,66 @@ class TerritorySystem {
         console.log("领地系统已初始化");
         console.log("建筑数据:", this.buildingData);
         console.log("建筑类型数量:", Object.keys(this.buildingData).length);
+        console.log("建筑类型数量:", Object.keys(this.buildingData).length);
         // 可以在这里添加从服务器加载数据的逻辑
+
+        // 初始化累积时间
+        this.accumulator = 0;
+    }
+
+    /**
+     * 更新领地系统逻辑
+     * @param {number} deltaTime - 时间增量（毫秒）
+     */
+    update(deltaTime) {
+        // 每秒产出一次资源
+        this.accumulator += deltaTime;
+        if (this.accumulator >= 1000) {
+            const production = this.calculateTotalProduction();
+
+            // 只有当有产出时才执行添加操作
+            if (production.gold > 0) {
+                this.resourceSystem.addCoins(production.gold);
+            }
+            if (production.crystal > 0) {
+                this.resourceSystem.addCrystals(production.crystal);
+            }
+
+            // 扣除整秒，保留余数
+            this.accumulator -= 1000;
+        }
+    }
+
+    /**
+     * 计算当前总资源产出（每秒）
+     * @returns {{gold: number, crystal: number}} 每秒产出量
+     */
+    calculateTotalProduction() {
+        let totalProduction = { gold: 0, crystal: 0 };
+
+        this.territoryData.buildings.forEach(building => {
+            const buildingInfo = this.buildingData[building.type];
+            if (buildingInfo && buildingInfo.levels) {
+                // 找到对应等级的数据（注意：building.level 是从1开始，数组索引是从0开始，通常需要-1）
+                // 但这里的数据结构 seems to use explicit level matching or array index?
+                // Checking previous code: buildingData[type].levels is an array.
+                // Assuming levels are ordered 1, 2, 3... so index = level - 1
+
+                const levelIndex = building.level - 1;
+                if (levelIndex >= 0 && levelIndex < buildingInfo.levels.length) {
+                    const levelInfo = buildingInfo.levels[levelIndex];
+
+                    if (levelInfo.goldProduction) {
+                        totalProduction.gold += levelInfo.goldProduction;
+                    }
+                    if (levelInfo.crystalProduction) {
+                        totalProduction.crystal += levelInfo.crystalProduction;
+                    }
+                }
+            }
+        });
+
+        return totalProduction;
     }
 
     /**
@@ -484,7 +543,7 @@ class TerritorySystem {
         const expansion = this.territoryData.expansion;
         const nextExpansionIndex = expansion.expansionCount;
         const canExpand = nextExpansionIndex < this.expansionConfig.costs.length;
-        
+
         return {
             currentSlots: expansion.currentSlots,
             maxSlots: expansion.maxSlots,
@@ -502,7 +561,7 @@ class TerritorySystem {
      */
     checkCanExpand() {
         const status = this.getExpansionStatus();
-        
+
         // 检查是否还能扩张
         if (!status.canExpand) {
             return { canExpand: false, reason: '已达到最大扩张次数' };
@@ -511,18 +570,18 @@ class TerritorySystem {
         // 检查主基地等级
         const mainBase = this.territoryData.buildings.find(b => b.type === 'main_base');
         if (!mainBase || mainBase.level < status.requiredMainBaseLevel) {
-            return { 
-                canExpand: false, 
-                reason: `需要主基地等级 ${status.requiredMainBaseLevel}` 
+            return {
+                canExpand: false,
+                reason: `需要主基地等级 ${status.requiredMainBaseLevel}`
             };
         }
 
         // 检查资源是否足够
         const cost = status.nextCost;
         if (!this.resourceSystem.hasEnoughResources({ gold: cost.gold, crystal: cost.crystal })) {
-            return { 
-                canExpand: false, 
-                reason: `资源不足，需要 ${cost.gold} 金币和 ${cost.crystal} 水晶` 
+            return {
+                canExpand: false,
+                reason: `资源不足，需要 ${cost.gold} 金币和 ${cost.crystal} 水晶`
             };
         }
 
@@ -588,8 +647,8 @@ class TerritorySystem {
         // 保存数据
         this.saveToLocalStorage();
 
-        return { 
-            success: true, 
+        return {
+            success: true,
             message: `成功扩张！新增 ${this.expansionConfig.slotsPerExpansion} 个地块`,
             newSlots: newSlots
         };
@@ -677,7 +736,7 @@ class TerritorySystem {
                     this.territoryData.size = territoryData.size || { width: 20, height: 20 };
                     this.territoryData.buildings = territoryData.buildings;
                     this.territoryData.buildQueue = territoryData.buildQueue || []; // 加载建造队列
-                    
+
                     // 加载扩张数据
                     this.territoryData.expansion = territoryData.expansion || {
                         currentSlots: 6,

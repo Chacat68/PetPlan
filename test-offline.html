@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Offline Progress Test</title>
+</head>
+<body>
+    <div id="gameCanvas"></div>
+    <script type="module">
+        import ResourceSystem from './js/modules/resource-system.js';
+        import TerritorySystem from './js/modules/territory-system.js';
+        import OfflineSystem from './js/modules/offline-system.js';
+
+        // Mock UI System
+        const mockUISystem = {
+            showOfflineResult: (earnings) => {
+                console.log('UI Shown:', earnings);
+                document.body.innerHTML += `<h3>Offline Result:</h3><pre>${JSON.stringify(earnings, null, 2)}</pre>`;
+            }
+        };
+
+        // Mock Save System
+        const mockSaveSystem = {
+            savePrefix: 'test_save_',
+            saveGame: () => {},
+            getGameState: () => ({ timestamp: Date.now() - 3600 * 1000 }) // 1 hour ago
+        };
+
+        // Setup Test
+        const resourceSystem = new ResourceSystem();
+        const territorySystem = new TerritorySystem(resourceSystem);
+        
+        // Add a building
+        territorySystem.territoryData.buildings.push({
+            type: 'workshop',
+            level: 1, // Produces 50 gold/sec
+            position: {x:0, y:0}
+        });
+
+        // Mock local storage for offline system
+        localStorage.setItem('test_save_slot1', JSON.stringify({
+            timestamp: Date.now() - 100000 // 100 seconds ago
+        }));
+
+        const offlineSystem = new OfflineSystem(territorySystem, resourceSystem, mockUISystem, mockSaveSystem);
+        
+        console.log('Testing Offline System...');
+        offlineSystem.checkOfflineProgress();
+        
+        // Check results
+        setTimeout(() => {
+            const logs = document.body.innerText;
+            if (logs.includes('"gold": 5000')) { // 50 * 100
+                document.body.innerHTML += '<h2 style="color:green">TEST PASSED</h2>';
+            } else {
+                 document.body.innerHTML += '<h2 style="color:red">TEST FAILED</h2>';
+            }
+        }, 500);
+
+    </script>
+</body>
+</html>
