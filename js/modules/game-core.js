@@ -94,7 +94,7 @@ class GameCore {
     /**
      * 设置子系统引用
      */
-    setSystems(playerSystem, combatSystem, uiSystem, resourceSystem, territorySystem, saveSystem, petSystem = null) {
+    setSystems(playerSystem, combatSystem, uiSystem, resourceSystem, territorySystem, saveSystem, petSystem, equipmentSystem) {
         this.playerSystem = playerSystem;
         this.combatSystem = combatSystem;
         this.uiSystem = uiSystem;
@@ -102,6 +102,12 @@ class GameCore {
         this.territorySystem = territorySystem;
         this.saveSystem = saveSystem;
         this.petSystem = petSystem;
+        this.equipmentSystem = equipmentSystem;
+
+        // 确保PlayerSystem也能访问EquipmentSystem
+        if (this.playerSystem) {
+            this.playerSystem.setEquipmentSystem(this.equipmentSystem);
+        }
     }
 
     /**

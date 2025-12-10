@@ -142,6 +142,84 @@ class PlayerSystem {
     }
 
     /**
+     * 设置装备系统引用
+     */
+    setEquipmentSystem(equipmentSystem) {
+        this.equipmentSystem = equipmentSystem;
+    }
+
+    /**
+     * 获取总被动加成（宠物 + 装备）
+     */
+    getTotalBonuses() {
+        const petBonuses = this.gameCore.petSystem ? this.gameCore.petSystem.getPassiveBonuses() : {
+            attackPercent: 0, speedPercent: 0, hpPercent: 0, defense: 0, critRate: 0, critDamage: 0
+        };
+
+        const equipBonuses = this.equipmentSystem ? this.equipmentSystem.getTotalBonuses() : {
+            attack: 0, defense: 0, hp: 0, critRate: 0, critDamage: 0, attackSpeed: 0
+        };
+
+        return { pet: petBonuses, equip: equipBonuses };
+    }
+
+    /**
+     * 获取实际攻击力
+     * 公式：(基础攻击 + 装备攻击) * (1 + 宠物攻击加成)
+     */
+    getActualAttack() {
+        const bonuses = this.getTotalBonuses();
+
+        // 1. 基础攻击力（固有 + 升级）
+        let baseAttack = this.player.attack;
+
+        // 2. 加上装备攻击力
+        baseAttack += bonuses.equip.attack;
+
+        // 3. 加上力量属性加成 (每点力量增加2点攻击)
+        baseAttack += this.player.strength * 2;
+
+        // 4. 应用宠物百分比加成
+        return Math.floor(baseAttack * (1 + bonuses.pet.attackPercent));
+    }
+
+    /**
+     * 获取实际最大生命值
+     * 公式：(基础生命 + 装备生命) * (1 + 宠物生命加成)
+     */
+    getActualMaxHp() {
+        const bonuses = this.getTotalBonuses();
+
+        let baseHp = this.player.maxHp;
+
+        // 加上装备生命
+        baseHp += bonuses.equip.hp;
+
+        // 加上力量属性加成 (每点力量增加10点生命)
+        baseHp += this.player.strength * 10;
+
+        return Math.floor(baseHp * (1 + bonuses.pet.hpPercent));
+    }
+
+    /**
+     * 获取实际攻击速度
+     * 公式：(基础攻速 + 装备攻速) * (1 + 宠物攻速加成)
+     */
+    getActualAttackSpeed() {
+        const bonuses = this.getTotalBonuses();
+
+        let baseSpeed = this.player.attackSpeed;
+
+        // 加上装备攻速
+        baseSpeed += bonuses.equip.attackSpeed;
+
+        // 加上敏捷属性加成 (每点敏捷增加0.01攻速)
+        baseSpeed += this.player.agility * 0.01;
+
+        return parseFloat((baseSpeed * (1 + bonuses.pet.speedPercent)).toFixed(2));
+    }
+
+    /**
      * 获取被动技能加成
      */
     getPassiveBonuses() {
@@ -159,34 +237,52 @@ class PlayerSystem {
     }
 
     /**
-     * 获取实际暴击率（包含三维属性加成和被动加成）
+     * 获取实际暴击率
      */
     getActualCrit() {
-        const derived = this.calculateDerivedStats();
-        const passives = this.getPassiveBonuses();
-        return Math.min(100, this.player.crit + derived.critBonus + passives.critRate);
+        const bonuses = this.getTotalBonuses();
+
+        let baseCrit = this.player.crit;
+
+        // 加上装备暴击率
+        baseCrit += bonuses.equip.critRate;
+
+        // 加上宠物暴击率 (直接相加，因为都是百分点)
+        baseCrit += bonuses.pet.critRate;
+
+        // 加上敏捷属性加成 (每点敏捷增加0.1%暴击)
+        baseCrit += this.player.agility * 0.1;
+
+        return parseFloat(baseCrit.toFixed(2));
     }
 
-
     /**
-     * 获取实际暴击伤害（包含三维属性加成和被动加成）
+     * 获取实际暴击伤害
      */
     getActualCritDamage() {
-        const derived = this.calculateDerivedStats();
-        const passives = this.getPassiveBonuses();
-        // 暴击伤害直接相加 (假设 p.value 是 0.2 这种)
-        // 注意：critDamage 是 150 (代表 150%)
-        // passives.critDamage 是 0.2 (代表 20%)
-        // 所以 passives.critDamage * 100
-        return Math.floor(this.player.critDamage + derived.critDamageBonus + (passives.critDamage * 100));
+        const bonuses = this.getTotalBonuses();
+
+        let baseCritDamage = this.player.critDamage;
+
+        // 加上装备暴击伤害 (注意单位，假设equip返回的是0.5代表50%)
+        baseCritDamage += (bonuses.equip.critDamage * 100);
+
+        // 加上宠物暴击伤害 (假设pet返回的是0.2代表20%)
+        baseCritDamage += (bonuses.pet.critDamage * 100);
+
+        // 加上智力属性加成 (每点智力增加1%暴击伤害)
+        baseCritDamage += this.player.intelligence * 1;
+
+        return Math.floor(baseCritDamage);
     }
 
     /**
-     * 获取实际生命回复（包含三维属性加成）
+     * 获取实际生命回复
      */
     getActualRegen() {
-        const derived = this.calculateDerivedStats();
-        return this.player.hpRegen + derived.regenBonus;
+        // 暂时没有装备和宠物的特定加成，只受体质影响（如果有体质属性的话）
+        // 这里暂时只返回基础+升级值
+        return this.player.hpRegen;
     }
 
     /**
@@ -198,11 +294,20 @@ class PlayerSystem {
     }
 
     /**
-     * 获取实际防御力（包含被动加成）
+     * 获取实际防御力
      */
     getActualDefense() {
-        const passives = this.getPassiveBonuses();
-        return this.player.defense + passives.defense;
+        const bonuses = this.getTotalBonuses();
+
+        let baseDefense = this.player.defense;
+
+        // 加上装备防御
+        baseDefense += bonuses.equip.defense;
+
+        // 加上宠物被动
+        baseDefense += bonuses.pet.defense;
+
+        return Math.floor(baseDefense);
     }
 
     /**

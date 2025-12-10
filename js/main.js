@@ -13,6 +13,8 @@ import { getTerritorySystemInstance } from './modules/territory-system.js';
 import SaveUI from './modules/save-ui.js';
 import { getPetSystemInstance } from './modules/pet-system.js';
 import { getPetUIInstance } from './modules/pet-ui.js';
+import { getEquipmentSystemInstance } from './modules/equipment-system.js';
+import { getEquipmentUIInstance } from './modules/equipment-ui.js';
 import OfflineSystem from './modules/offline-system.js';
 
 class Game {
@@ -29,6 +31,7 @@ class Game {
         this.gameCore = new GameCore(this.canvas);
         this.resourceSystem = ResourceSystem.getInstance();
         this.territorySystem = getTerritorySystemInstance(this.resourceSystem);
+        this.equipmentSystem = getEquipmentSystemInstance(this.resourceSystem);
         this.petSystem = getPetSystemInstance(this.gameCore, this.resourceSystem);
         this.playerSystem = new PlayerSystem(this.gameCore, this.resourceSystem);
         this.combatSystem = new CombatSystem(this.gameCore, this.playerSystem, this.resourceSystem);
@@ -36,6 +39,7 @@ class Game {
         this.saveSystem = getSaveSystemInstance();
         this.saveUI = null; // 稍后初始化
         this.petUI = null; // 稍后初始化
+        this.equipmentUI = null; // 稍后初始化
         this.offlineSystem = null; // 稍后初始化
 
         // 设置宠物系统和战斗系统的双向引用
@@ -43,8 +47,8 @@ class Game {
         this.petSystem.setCombatSystem(this.combatSystem);
 
         // 设置系统间的引用
-        this.gameCore.setSystems(this.playerSystem, this.combatSystem, this.uiSystem, this.resourceSystem, this.territorySystem, this.saveSystem, this.petSystem);
-        this.saveSystem.setSystems(this.playerSystem, this.territorySystem, this.resourceSystem, this.combatSystem, this.petSystem);
+        this.gameCore.setSystems(this.playerSystem, this.combatSystem, this.uiSystem, this.resourceSystem, this.territorySystem, this.saveSystem, this.petSystem, this.equipmentSystem);
+        this.saveSystem.setSystems(this.playerSystem, this.territorySystem, this.resourceSystem, this.combatSystem, this.petSystem, this.equipmentSystem);
 
         // 游戏状态
         this.isInitialized = false;
@@ -87,6 +91,11 @@ class Game {
             console.log('[Game] 初始化宠物UI...');
             this.petUI = getPetUIInstance(this.petSystem, this.resourceSystem);
             console.log('[Game] ✓ 宠物UI初始化完成');
+
+            // 初始化装备UI
+            console.log('[Game] 初始化装备UI...');
+            this.equipmentUI = getEquipmentUIInstance(this.equipmentSystem, this.resourceSystem);
+            console.log('[Game] ✓ 装备UI初始化完成');
 
             // 初始化离线系统
             console.log('[Game] 初始化离线系统...');
