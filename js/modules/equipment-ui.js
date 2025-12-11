@@ -26,12 +26,88 @@ class EquipmentUI {
                 justify-content: center;
                 gap: 15px;
                 margin-bottom: 20px;
+                position: relative;
+                z-index: 5;
             }
             .equipment-slot {
                 width: 60px;
                 height: 60px;
-                background: rgba(0, 0, 0, 0.4);
+                background: rgba(0, 0, 0, 0.6);
                 border: 2px solid #555;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                position: relative;
+                transition: all 0.2s;
+                box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            }
+            .equipment-slot:hover {
+                border-color: #ffd700;
+                transform: scale(1.1);
+                box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+            }
+            .equipment-slot.empty::after {
+                content: attr(data-placeholder);
+                color: #888;
+                font-size: 12px;
+            }
+            .equipment-icon {
+                font-size: 28px;
+                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+            }
+            .equipment-level {
+                position: absolute;
+                bottom: 2px;
+                right: 2px;
+                font-size: 10px;
+                color: #ffd700;
+                text-shadow: 1px 1px 0 #000;
+                font-weight: bold;
+            }
+            
+            /* 背包/锻造区域 */
+            .equipment-panel {
+                padding: 15px;
+                background: rgba(0, 0, 0, 0.3);
+                border-radius: 15px;
+                margin-top: 15px;
+                border: 1px solid rgba(255,255,255,0.05);
+            }
+            .panel-tabs {
+                display: flex;
+                border-bottom: 2px solid #444;
+                margin-bottom: 15px;
+            }
+            .panel-tab {
+                flex: 1;
+                padding: 10px;
+                text-align: center;
+                cursor: pointer;
+                color: #888;
+                font-weight: bold;
+                transition: all 0.2s;
+            }
+            .panel-tab:hover { color: #ccc; }
+            .panel-tab.active {
+                color: #ffd700;
+                border-bottom: 2px solid #ffd700;
+                background: linear-gradient(180deg, transparent, rgba(255,215,0,0.1));
+            }
+            
+            .equipment-inventory {
+                display: grid;
+                grid-template-columns: repeat(5, 1fr);
+                gap: 8px;
+                max-height: 200px;
+                overflow-y: auto;
+                padding: 5px;
+            }
+            .inventory-item {
+                aspect-ratio: 1;
+                background: rgba(0,0,0,0.5);
+                border: 2px solid #444;
                 border-radius: 8px;
                 display: flex;
                 align-items: center;
@@ -40,71 +116,9 @@ class EquipmentUI {
                 position: relative;
                 transition: all 0.2s;
             }
-            .equipment-slot:hover {
-                border-color: #ffd700;
-                transform: scale(1.05);
-            }
-            .equipment-slot.empty::after {
-                content: attr(data-placeholder);
-                color: #aaa;
-                font-size: 12px;
-            }
-            .equipment-icon {
-                font-size: 24px;
-            }
-            .equipment-level {
-                position: absolute;
-                bottom: 2px;
-                right: 2px;
-                font-size: 10px;
-                color: #fff;
-                text-shadow: 1px 1px 0 #000;
-            }
-            
-            /* 背包/锻造区域 */
-            .equipment-panel {
-                padding: 10px;
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 10px;
-                margin-top: 10px;
-            }
-            .panel-tabs {
-                display: flex;
-                border-bottom: 1px solid #444;
-                margin-bottom: 10px;
-            }
-            .panel-tab {
-                flex: 1;
-                padding: 8px;
-                text-align: center;
-                cursor: pointer;
-                color: #aaa;
-            }
-            .panel-tab.active {
-                color: #ffd700;
-                border-bottom: 2px solid #ffd700;
-            }
-            
-            .equipment-inventory {
-                display: grid;
-                grid-template-columns: repeat(5, 1fr);
-                gap: 5px;
-                max-height: 200px;
-                overflow-y: auto;
-            }
-            .inventory-item {
-                aspect-ratio: 1;
-                background: rgba(0,0,0,0.3);
-                border: 1px solid #444;
-                border-radius: 4px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                position: relative;
-            }
-            .inventory-item.legendary { border-color: #ff9800; box-shadow: 0 0 5px #ff9800; }
-            .inventory-item.epic { border-color: #9c27b0; }
+            .inventory-item:hover { transform: scale(1.05); border-color: #fff; }
+            .inventory-item.legendary { border-color: #ff9800; box-shadow: 0 0 10px rgba(255, 152, 0, 0.4); }
+            .inventory-item.epic { border-color: #9c27b0; box-shadow: 0 0 8px rgba(156, 39, 176, 0.4); }
             .inventory-item.rare { border-color: #2196f3; }
             .inventory-item.uncommon { border-color: #4caf50; }
             
@@ -114,22 +128,29 @@ class EquipmentUI {
                 gap: 10px;
             }
             .craft-btn {
-                padding: 10px;
-                background: linear-gradient(to bottom, #4a6fa5, #34495e);
-                border: 1px solid #7f8c8d;
-                border-radius: 5px;
-                color: white;
+                padding: 12px;
+                background: linear-gradient(135deg, #2c3e50, #34495e);
+                border: 1px solid #555;
+                border-radius: 8px;
+                color: #ddd;
                 cursor: pointer;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                transition: all 0.2s;
+            }
+            .craft-btn:hover {
+                background: linear-gradient(135deg, #34495e, #4a6fa5);
+                border-color: #777;
+                color: #fff;
             }
             .craft-btn:active {
                 transform: scale(0.98);
             }
             .craft-cost {
                 font-size: 12px;
-                color: #ddd;
+                color: #ffd700;
+                font-family: monospace;
             }
             
             /* 详情弹窗 */
@@ -139,33 +160,40 @@ class EquipmentUI {
                 border: 1px solid #666;
                 padding: 15px;
                 border-radius: 8px;
-                z-index: 1000;
-                width: 200px;
+                z-index: 3000;
+                width: 220px;
                 pointer-events: none;
                 display: none;
                 color: #fff;
+                box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+                backdrop-filter: blur(5px);
             }
-            .item-tooltip h4 { margin: 0 0 10px 0; }
-            .item-stats div { margin: 3px 0; font-size: 12px; }
+            .item-tooltip h4 { margin: 0 0 10px 0; color: #ffd700; border-bottom: 1px solid #444; padding-bottom: 5px; }
+            .item-stats div { margin: 5px 0; font-size: 13px; color: #ccc; }
+            
             .item-Action-Menu {
                 position: fixed;
-                background: #333;
-                border: 1px solid #666;
+                background: #222;
+                border: 1px solid #555;
                 padding: 5px;
-                z-index: 1001;
-                border-radius: 5px;
+                z-index: 3001;
+                border-radius: 8px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+                min-width: 120px;
             }
             .item-Action-Menu button {
                 display: block;
                 width: 100%;
-                padding: 5px 10px;
+                padding: 8px 12px;
                 margin: 2px 0;
-                background: #444;
-                color: white;
+                background: #333;
+                color: #eee;
                 border: none;
                 cursor: pointer;
+                border-radius: 4px;
+                text-align: left;
             }
-            .item-Action-Menu button:hover { background: #555; }
+            .item-Action-Menu button:hover { background: #444; color: #fff; }
         `;
         document.head.appendChild(style);
     }

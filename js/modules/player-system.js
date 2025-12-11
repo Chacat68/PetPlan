@@ -1,6 +1,12 @@
 /**
  * 玩家系统模块
  * 负责管理玩家角色数据、升级系统、动画效果等
+ * 
+ * System Prompts (系统提示词):
+ * - 升级成功 (Upgrade Success)
+ * - 金币不足 (Insufficient Coins)
+ * - 属性已满 (Attribute Maxed)
+ * - 等级限制 (Level Limit Reached)
  */
 
 import { getTerritorySystemInstance } from './territory-system.js';
