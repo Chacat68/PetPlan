@@ -11,6 +11,7 @@ class CombatSystem {
         this.playerSystem = playerSystem;
         this.resourceSystem = resourceSystem;
         this.petSystem = null; // 宠物系统引用，稍后设置
+        this.achievementSystem = null; // 成就系统引用
 
         // 怪物系统
         this.monsters = [];
@@ -38,6 +39,14 @@ class CombatSystem {
     setPetSystem(petSystem) {
         this.petSystem = petSystem;
         console.log('宠物系统已连接到战斗系统');
+    }
+
+    /**
+     * 设置成就系统引用
+     */
+    setAchievementSystem(achievementSystem) {
+        this.achievementSystem = achievementSystem;
+        console.log('成就系统已连接到战斗系统');
     }
 
     /**
@@ -142,6 +151,11 @@ class CombatSystem {
                                 `+${rubyReward} 红宝石`,
                                 '#ff4757'
                             );
+                        }
+
+                        // 触发成就事件
+                        if (this.achievementSystem) {
+                            this.achievementSystem.onEvent('kill', 1);
                         }
 
                         // 移除怪物
@@ -593,6 +607,11 @@ class CombatSystem {
                             this.addCombatText(monsterCenterX, monsterY - 35, `+${rubyReward} 红宝石`, '#ff4757');
                         }
 
+                        // 触发成就事件
+                        if (this.achievementSystem) {
+                            this.achievementSystem.onEvent('kill', 1);
+                        }
+
                         // 有概率获得水晶
                         if (Math.random() < 0.05) { // 5%概率
                             const crystalReward = 1 + Math.floor(Math.random() * 2); // 1-2个水晶
@@ -843,6 +862,11 @@ class CombatSystem {
                 const rubyReward = 1 + Math.floor(Math.random() * 3); // 1-3个红宝石
                 this.resourceSystem.addRubies(rubyReward);
                 this.addCombatText(monster.x + monster.width / 2, monsterY - 35, `+${rubyReward} 红宝石`, '#ff4757');
+            }
+
+            // 触发成就事件
+            if (this.achievementSystem) {
+                this.achievementSystem.onEvent('kill', 1);
             }
 
             // 有概率获得水晶

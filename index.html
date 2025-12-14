@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/character-management.css?v=33">
     <link rel="stylesheet" href="css/save-system.css?v=33">
     <link rel="stylesheet" href="css/pet-system.css?v=33">
+    <link rel="stylesheet" href="css/achievement.css?v=33">
 </head>
 
 <body>
@@ -78,7 +79,7 @@
                         <div class="status-icon" title="商城">🛒</div>
                         <div class="status-icon" title="活动">📅</div>
                         <div class="status-icon" title="时间">⏰</div>
-                        <div class="status-icon" title="日常">📊</div>
+                        <div class="status-icon" id="dailyBtn" title="日常">📊</div>
                         <div class="status-icon" id="settingsBtn" title="设置">⚙️</div>
                     </div>
                 </div>
@@ -164,6 +165,20 @@
                             <button id="upgradeHp" class="upgrade-btn" data-cost="15">
                                 <span class="btn-text">强化</span>
                                 <span class="btn-cost">💰 15</span>
+                            </button>
+                        </div>
+                        <div class="upgrade-item">
+                            <div class="upgrade-icon-container">
+                                <div class="upgrade-icon">🛡️</div>
+                                <div class="upgrade-level">Lv.1</div>
+                            </div>
+                            <div class="upgrade-info">
+                                <div class="upgrade-name">防御力</div>
+                                <div class="upgrade-value">5</div>
+                            </div>
+                            <button id="upgradeDefense" class="upgrade-btn" data-cost="12">
+                                <span class="btn-text">强化</span>
+                                <span class="btn-cost">💰 12</span>
                             </button>
                         </div>
                         <div class="upgrade-item">

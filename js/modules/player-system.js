@@ -155,6 +155,13 @@ class PlayerSystem {
     }
 
     /**
+     * 设置成就系统引用
+     */
+    setAchievementSystem(achievementSystem) {
+        this.achievementSystem = achievementSystem;
+    }
+
+    /**
      * 获取总被动加成（宠物 + 装备）
      */
     getTotalBonuses() {
@@ -455,6 +462,11 @@ class PlayerSystem {
             // 添加升级成功动画（批量升级时静默）
             if (!silent && button) {
                 this.showUpgradeSuccess(button, attribute);
+            }
+
+            // 触发成就事件
+            if (!silent && this.achievementSystem) {
+                this.achievementSystem.onEvent('upgrade', 1);
             }
 
             // 单次升级时立即刷新按钮状态
@@ -771,6 +783,20 @@ class PlayerSystem {
             }
         }
 
+        // 更新防御力
+        const defenseLevel = document.querySelector('#upgradeDefense')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
+        const defenseValue = document.querySelector('#upgradeDefense')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
+        const currentDefenseLevel = Math.floor((this.player.defense - 5) / 2) + 1;
+        if (defenseLevel) defenseLevel.textContent = `Lv.${currentDefenseLevel}`;
+        if (defenseValue) {
+            const actual = this.getActualDefense();
+            if (actual > this.player.defense) {
+                defenseValue.innerHTML = `${this.player.defense} <span style="color:#2ed573;font-size:0.8em;">+${actual - this.player.defense}</span>`;
+            } else {
+                defenseValue.textContent = this.player.defense;
+            }
+        }
+
         // 更新攻速
         const asLevel = document.querySelector('#upgradeAttackSpeed')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
         const asValue = document.querySelector('#upgradeAttackSpeed')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
@@ -826,6 +852,7 @@ class PlayerSystem {
         // 升级按钮事件 - 支持长按
         this.bindUpgradeButton('upgradeAttack', 'attack', 5);
         this.bindUpgradeButton('upgradeHp', 'hp', 20);
+        this.bindUpgradeButton('upgradeDefense', 'defense', 2);
         this.bindUpgradeButton('upgradeHpRegen', 'hpRegen', 1);
         this.bindUpgradeButton('upgradeCritDamage', 'critDamage', 10);
         this.bindUpgradeButton('upgradeAttackSpeed', 'attackSpeed', 0.1);

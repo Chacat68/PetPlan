@@ -23,13 +23,14 @@ class SaveSystem {
     /**
      * 设置系统引用
      */
-    setSystems(playerSystem, territorySystem, resourceSystem, combatSystem, petSystem = null, equipmentSystem = null) {
+    setSystems(playerSystem, territorySystem, resourceSystem, combatSystem, petSystem = null, equipmentSystem = null, achievementSystem = null) {
         this.playerSystem = playerSystem;
         this.territorySystem = territorySystem;
         this.resourceSystem = resourceSystem;
         this.combatSystem = combatSystem;
         this.petSystem = petSystem;
         this.equipmentSystem = equipmentSystem;
+        this.achievementSystem = achievementSystem;
     }
 
     /**
@@ -45,7 +46,8 @@ class SaveSystem {
             resources: this.resourceSystem ? this.resourceSystem.getSaveData() : null,
             combat: this.combatSystem ? this.combatSystem.getSaveData() : null,
             pets: this.petSystem ? this.petSystem.getSaveData() : null,
-            equipment: this.equipmentSystem ? this.equipmentSystem.getSaveData() : null
+            equipment: this.equipmentSystem ? this.equipmentSystem.getSaveData() : null,
+            achievements: this.achievementSystem ? this.achievementSystem.getSaveData() : null
         };
 
         return gameState;
@@ -90,6 +92,11 @@ class SaveSystem {
             // 7. 加载装备系统数据
             if (this.equipmentSystem && gameState.equipment) {
                 this.equipmentSystem.loadSaveData(gameState.equipment);
+            }
+
+            // 恢复成就系统
+            if (this.achievementSystem && gameState.achievements) {
+                this.achievementSystem.loadSaveData(gameState.achievements);
             }
 
             console.log('游戏状态加载完成');

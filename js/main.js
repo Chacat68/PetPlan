@@ -12,7 +12,10 @@ import { getSaveSystemInstance } from './modules/save-system.js';
 import { getTerritorySystemInstance } from './modules/territory-system.js';
 import SaveUI from './modules/save-ui.js';
 import { getPetSystemInstance } from './modules/pet-system.js';
+import { getPetSystemInstance } from './modules/pet-system.js';
 import { getPetUIInstance } from './modules/pet-ui.js';
+import AchievementSystem from './modules/achievement-system.js';
+import AchievementUI from './modules/achievement-ui.js';
 import { getEquipmentSystemInstance } from './modules/equipment-system.js';
 import { getEquipmentUIInstance } from './modules/equipment-ui.js';
 import OfflineSystem from './modules/offline-system.js';
@@ -39,6 +42,8 @@ class Game {
         this.saveSystem = getSaveSystemInstance();
         this.saveUI = null; // 稍后初始化
         this.petUI = null; // 稍后初始化
+        this.achievementSystem = new AchievementSystem(this.resourceSystem);
+        this.achievementUI = new AchievementUI(this.achievementSystem, document.body);
         this.equipmentUI = null; // 稍后初始化
         this.offlineSystem = null; // 稍后初始化
 
@@ -47,8 +52,13 @@ class Game {
         this.petSystem.setCombatSystem(this.combatSystem);
 
         // 设置系统间的引用
-        this.gameCore.setSystems(this.playerSystem, this.combatSystem, this.uiSystem, this.resourceSystem, this.territorySystem, this.saveSystem, this.petSystem, this.equipmentSystem);
-        this.saveSystem.setSystems(this.playerSystem, this.territorySystem, this.resourceSystem, this.combatSystem, this.petSystem, this.equipmentSystem);
+        this.gameCore.setSystems(this.playerSystem, this.combatSystem, this.uiSystem, this.resourceSystem, this.territorySystem, this.saveSystem, this.petSystem, null, this.achievementSystem);
+        this.saveSystem.setSystems(this.playerSystem, this.territorySystem, this.resourceSystem, this.combatSystem, this.petSystem, null, this.achievementSystem);
+
+        // 绑定成就系统到其他系统 (如果支持)
+        if (this.combatSystem.setAchievementSystem) this.combatSystem.setAchievementSystem(this.achievementSystem);
+        if (this.resourceSystem.setAchievementSystem) this.resourceSystem.setAchievementSystem(this.achievementSystem);
+        if (this.playerSystem.setAchievementSystem) this.playerSystem.setAchievementSystem(this.achievementSystem);
 
         // 游戏状态
         this.isInitialized = false;
@@ -91,6 +101,10 @@ class Game {
             console.log('[Game] 初始化宠物UI...');
             this.petUI = getPetUIInstance(this.petSystem, this.resourceSystem);
             console.log('[Game] ✓ 宠物UI初始化完成');
+
+            console.log('[Game] 初始化成就UI...');
+            this.achievementSystem.init();
+            this.achievementUI.init();
 
             // 初始化装备UI
             console.log('[Game] 初始化装备UI...');
@@ -313,6 +327,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('[Main] 领地按钮点击事件已绑定');
     } else {
         console.error('[Main] ❌ 未找到领地按钮元素 #territory-button');
+    }
+
+    const dailyBtn = document.getElementById('dailyBtn');
+    if (dailyBtn) {
+        dailyBtn.addEventListener('click', () => {
+            if (window.game && window.game.achievementUI) {
+                window.game.achievementUI.show();
+            }
+        });
+    }
+
+    // 菜单/设置按钮逻辑
+    const settingsBtn = document.getElementById('settingsBtn');
+    const characterModal = document.getElementById('characterModal');
+    const closeModal = document.getElementById('closeModal');
+
+    if (settingsBtn && characterModal) {
+        settingsBtn.addEventListener('click', () => {
+            characterModal.style.display = 'block';
+        });
+    }
+
+    if (closeModal && characterModal) {
+        closeModal.addEventListener('click', () => {
+            characterModal.style.display = 'none';
+        });
+    }
+
+    // 点击遮罩层关闭菜单
+    if (characterModal) {
+        characterModal.addEventListener('click', (e) => {
+            if (e.target === characterModal) {
+                characterModal.style.display = 'none';
+            }
+        });
     }
 
     try {

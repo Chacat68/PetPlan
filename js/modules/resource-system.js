@@ -33,6 +33,13 @@ class ResourceSystem {
     }
 
     /**
+     * 设置成就系统
+     */
+    setAchievementSystem(achievementSystem) {
+        this.achievementSystem = achievementSystem;
+    }
+
+    /**
      * 数字格式化函数：1000=1A，1000A=1B，1000Z=1AA，1000AA=1AB，以此类推
      */
     formatNumber(num) {
@@ -100,6 +107,10 @@ class ResourceSystem {
         const delta = this._sanitizeAmount(amount);
         this.coins = this._safeSum(this.coins, delta);
         this.updateCurrencyDisplay();
+
+        if (this.achievementSystem && delta > 0) {
+            this.achievementSystem.onEvent('coin', delta);
+        }
     }
 
     /**
@@ -109,6 +120,10 @@ class ResourceSystem {
         const delta = this._sanitizeAmount(amount);
         this.rubies = this._safeSum(this.rubies, delta);
         this.updateCurrencyDisplay();
+
+        if (this.achievementSystem && delta > 0) {
+            this.achievementSystem.onEvent('ruby', delta);
+        }
     }
 
     /**
@@ -118,6 +133,10 @@ class ResourceSystem {
         const delta = this._sanitizeAmount(amount);
         this.crystals = this._safeSum(this.crystals, delta);
         this.updateCurrencyDisplay();
+
+        if (this.achievementSystem && delta > 0) {
+            this.achievementSystem.onEvent('crystal', delta);
+        }
     }
 
     /**

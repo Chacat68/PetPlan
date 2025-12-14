@@ -13,94 +13,46 @@ class EquipmentUI {
 
     init() {
         this.injectStyles();
-        this.injectUI(); // 注入装备槽位到角色界面
-        this.bindEvents(); // 绑定锻造按钮
+        this.injectInventoryUI(); // 只注入背包和锻造面板
+        this.bindEvents();
+        this.updateView();
     }
 
     injectStyles() {
         const style = document.createElement('style');
         style.textContent = `
-            /* 装备槽位样式 */
-            .equipment-slots-container {
-                display: flex;
-                justify-content: center;
-                gap: 15px;
-                margin-bottom: 20px;
-                position: relative;
-                z-index: 5;
-            }
-            .equipment-slot {
-                width: 60px;
-                height: 60px;
-                background: rgba(0, 0, 0, 0.6);
-                border: 2px solid #555;
-                border-radius: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                position: relative;
-                transition: all 0.2s;
-                box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-            }
-            .equipment-slot:hover {
-                border-color: #ffd700;
-                transform: scale(1.1);
-                box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
-            }
-            .equipment-slot.empty::after {
-                content: attr(data-placeholder);
-                color: #888;
-                font-size: 12px;
-            }
-            .equipment-icon {
-                font-size: 28px;
-                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
-            }
-            .equipment-level {
-                position: absolute;
-                bottom: 2px;
-                right: 2px;
-                font-size: 10px;
-                color: #ffd700;
-                text-shadow: 1px 1px 0 #000;
-                font-weight: bold;
-            }
-            
-            /* 背包/锻造区域 */
             .equipment-panel {
-                padding: 15px;
-                background: rgba(0, 0, 0, 0.3);
-                border-radius: 15px;
-                margin-top: 15px;
-                border: 1px solid rgba(255,255,255,0.05);
+                padding: 10px;
+                background: rgba(0, 0, 0, 0.4);
+                border-radius: 10px;
+                margin: 10px 0;
+                border: 1px solid #444;
             }
             .panel-tabs {
                 display: flex;
-                border-bottom: 2px solid #444;
-                margin-bottom: 15px;
+                border-bottom: 1px solid #444;
+                margin-bottom: 10px;
             }
             .panel-tab {
                 flex: 1;
-                padding: 10px;
+                padding: 8px;
                 text-align: center;
                 cursor: pointer;
-                color: #888;
+                color: #aaa;
+                font-size: 14px;
                 font-weight: bold;
-                transition: all 0.2s;
             }
-            .panel-tab:hover { color: #ccc; }
             .panel-tab.active {
                 color: #ffd700;
                 border-bottom: 2px solid #ffd700;
-                background: linear-gradient(180deg, transparent, rgba(255,215,0,0.1));
+                background: linear-gradient(to top, rgba(255, 215, 0, 0.1), transparent);
             }
             
             .equipment-inventory {
                 display: grid;
                 grid-template-columns: repeat(5, 1fr);
                 gap: 8px;
-                max-height: 200px;
+                max-height: 180px;
                 overflow-y: auto;
                 padding: 5px;
             }
@@ -114,12 +66,13 @@ class EquipmentUI {
                 justify-content: center;
                 cursor: pointer;
                 position: relative;
-                transition: all 0.2s;
+                transition: transform 0.1s;
+                font-size: 20px;
             }
-            .inventory-item:hover { transform: scale(1.05); border-color: #fff; }
-            .inventory-item.legendary { border-color: #ff9800; box-shadow: 0 0 10px rgba(255, 152, 0, 0.4); }
-            .inventory-item.epic { border-color: #9c27b0; box-shadow: 0 0 8px rgba(156, 39, 176, 0.4); }
-            .inventory-item.rare { border-color: #2196f3; }
+            .inventory-item:hover { transform: scale(1.05); }
+            .inventory-item.legendary { border-color: #ff9800; box-shadow: 0 0 5px #ff9800; }
+            .inventory-item.epic { border-color: #9c27b0; box-shadow: 0 0 4px #9c27b0; }
+            .inventory-item.rare { border-color: #2196f3; box-shadow: 0 0 3px #2196f3; }
             .inventory-item.uncommon { border-color: #4caf50; }
             
             .crafting-menu {
@@ -130,9 +83,9 @@ class EquipmentUI {
             .craft-btn {
                 padding: 12px;
                 background: linear-gradient(135deg, #2c3e50, #34495e);
-                border: 1px solid #555;
+                border: 1px solid #5d6d7e;
                 border-radius: 8px;
-                color: #ddd;
+                color: white;
                 cursor: pointer;
                 display: flex;
                 justify-content: space-between;
@@ -140,120 +93,94 @@ class EquipmentUI {
                 transition: all 0.2s;
             }
             .craft-btn:hover {
-                background: linear-gradient(135deg, #34495e, #4a6fa5);
-                border-color: #777;
-                color: #fff;
+                background: linear-gradient(135deg, #34495e, #2c3e50);
+                border-color: #ffd700;
             }
             .craft-btn:active {
                 transform: scale(0.98);
             }
             .craft-cost {
-                font-size: 12px;
-                color: #ffd700;
                 font-family: monospace;
+                font-size: 12px;
+                color: #f1c40f;
             }
             
-            /* 详情弹窗 */
-            .item-tooltip {
-                position: fixed;
-                background: rgba(20, 20, 30, 0.95);
-                border: 1px solid #666;
-                padding: 15px;
-                border-radius: 8px;
-                z-index: 3000;
-                width: 220px;
-                pointer-events: none;
-                display: none;
-                color: #fff;
-                box-shadow: 0 10px 20px rgba(0,0,0,0.5);
-                backdrop-filter: blur(5px);
-            }
-            .item-tooltip h4 { margin: 0 0 10px 0; color: #ffd700; border-bottom: 1px solid #444; padding-bottom: 5px; }
-            .item-stats div { margin: 5px 0; font-size: 13px; color: #ccc; }
-            
+            /* Action Menu */
             .item-Action-Menu {
                 position: fixed;
-                background: #222;
-                border: 1px solid #555;
-                padding: 5px;
-                z-index: 3001;
+                background: rgba(30, 30, 40, 0.95);
+                border: 1px solid #666;
+                padding: 10px;
+                z-index: 2000;
                 border-radius: 8px;
                 box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-                min-width: 120px;
+                min-width: 150px;
+                backdrop-filter: blur(5px);
             }
             .item-Action-Menu button {
                 display: block;
                 width: 100%;
-                padding: 8px 12px;
-                margin: 2px 0;
-                background: #333;
-                color: #eee;
-                border: none;
-                cursor: pointer;
+                padding: 8px;
+                margin: 4px 0;
+                background: rgba(255,255,255,0.1);
+                color: white;
+                border: 1px solid transparent;
                 border-radius: 4px;
+                cursor: pointer;
                 text-align: left;
             }
-            .item-Action-Menu button:hover { background: #444; color: #fff; }
+            .item-Action-Menu button:hover { 
+                background: rgba(255,255,255,0.2); 
+                border-color: #ffd700;
+            }
         `;
         document.head.appendChild(style);
     }
 
-    injectUI() {
-        // 找到角色模态框的主体部分
-        const modalBody = document.querySelector('.character-modal .modal-body');
-        if (!modalBody) return;
+    injectInventoryUI() {
+        // 找到角色管理界面的内容区域
+        const contentArea = document.getElementById('character-tab-content');
+        if (!contentArea) return;
 
-        // 在最上面添加装备UI (插入到existing content之前)
-        const container = document.createElement('div');
-        container.className = 'equipment-container';
-        container.innerHTML = `
-            <div class="equipment-slots-container">
-                <div class="equipment-slot empty" data-slot="weapon" data-placeholder="武器"></div>
-                <div class="equipment-slot empty" data-slot="armor" data-placeholder="防具"></div>
-                <div class="equipment-slot empty" data-slot="accessory" data-placeholder="饰品"></div>
+        // 创建背包面板
+        const panel = document.createElement('div');
+        panel.className = 'equipment-panel';
+        panel.innerHTML = `
+            <div class="panel-tabs">
+                <div class="panel-tab active" data-tab="inventory">装备背包</div>
+                <div class="panel-tab" data-tab="craft">铁匠铺</div>
             </div>
             
-            <div class="equipment-panel">
-                <div class="panel-tabs">
-                    <div class="panel-tab active" data-tab="inventory">背包</div>
-                    <div class="panel-tab" data-tab="craft">锻造</div>
-                </div>
-                
-                <div class="panel-content" id="equipInventoryPanel">
-                    <div class="equipment-inventory" id="equipmentInventory"></div>
-                    <div style="margin-top:5px;text-align:center;font-size:12px;color:#888;">点击装备查看详情/穿戴</div>
-                </div>
-                
-                <div class="panel-content" id="equipCraftPanel" style="display:none;">
-                    <div class="crafting-menu">
-                        <button class="craft-btn" data-type="weapon">
-                            <span>⚔️ 打造武器</span>
-                            <span class="craft-cost">💰1000 💎50</span>
-                        </button>
-                        <button class="craft-btn" data-type="armor">
-                            <span>🛡️ 打造防具</span>
-                            <span class="craft-cost">💰1000 💎50</span>
-                        </button>
-                        <button class="craft-btn" data-type="accessory">
-                            <span>💍 打造饰品</span>
-                            <span class="craft-cost">💰1000 💎50</span>
-                        </button>
-                    </div>
+            <div class="panel-content" id="equipInventoryPanel">
+                <div class="equipment-inventory" id="equipmentInventory"></div>
+                <div style="margin-top:8px;text-align:center;font-size:12px;color:#888;">点击装备进行操作</div>
+            </div>
+            
+            <div class="panel-content" id="equipCraftPanel" style="display:none;">
+                <div class="crafting-menu">
+                    <button class="craft-btn" data-type="weapon">
+                        <span>⚔️ 打造武器</span>
+                        <span class="craft-cost">💰1000 💎50</span>
+                    </button>
+                    <button class="craft-btn" data-type="armor">
+                        <span>🛡️ 打造防具</span>
+                        <span class="craft-cost">💰1000 💎50</span>
+                    </button>
+                    <button class="craft-btn" data-type="accessory">
+                        <span>💍 打造饰品</span>
+                        <span class="craft-cost">💰1000 💎50</span>
+                    </button>
                 </div>
             </div>
-            <hr style="border-color:#444;margin:15px 0;">
         `;
 
-        // 插入到最前面
-        modalBody.insertBefore(container, modalBody.firstChild);
-
-        // 初始化Tooltip
-        const tooltip = document.createElement('div');
-        tooltip.className = 'item-tooltip';
-        tooltip.id = 'itemTooltip';
-        document.body.appendChild(tooltip);
-
-        this.updateView();
+        // 插入到角色卡片下方，按钮上方
+        const actions = contentArea.querySelector('.character-actions');
+        if (actions) {
+            contentArea.insertBefore(panel, actions);
+        } else {
+            contentArea.appendChild(panel);
+        }
     }
 
     bindEvents() {
@@ -268,7 +195,6 @@ class EquipmentUI {
                 document.getElementById('equipInventoryPanel').style.display = type === 'inventory' ? 'block' : 'none';
                 document.getElementById('equipCraftPanel').style.display = type === 'craft' ? 'block' : 'none';
 
-                // 如果切换到背包，刷新一下
                 if (type === 'inventory') this.updateView();
             });
         });
@@ -288,36 +214,63 @@ class EquipmentUI {
             });
         });
 
-        // 槽位点击 (卸下)
-        document.querySelectorAll('.equipment-slot').forEach(slot => {
-            slot.addEventListener('click', (e) => {
-                const type = slot.dataset.slot;
-                const item = this.equipmentSystem.equipmentSlots[type];
-                if (item) {
-                    this.showItemActionMenu(item, e.clientX, e.clientY, true);
+        // 绑定现有的装备槽位点击事件
+        // 映射 HTML class 到系统内部 type
+        const slotMap = {
+            '.weapon-slot': 'weapon',
+            '.armor-slot': 'armor',
+            '.ring-slot': 'accessory'
+        };
+
+        for (const [selector, type] of Object.entries(slotMap)) {
+            const slot = document.querySelector(selector);
+            if (slot) {
+                // 保存原始HTML以便复原（如果是空槽）
+                if (!slot.dataset.originalHtml) {
+                    slot.dataset.originalHtml = slot.innerHTML;
                 }
-            });
-        });
+
+                slot.addEventListener('click', (e) => {
+                    const item = this.equipmentSystem.equipmentSlots[type];
+                    if (item) {
+                        this.showItemActionMenu(item, e.clientX, e.clientY, true);
+                    } else {
+                        // 如果点击空槽位，提示去背包穿戴或自动跳转背包Tab
+                        this.showNotification('请在下方背包中选择装备穿戴', '#ffd700');
+                        document.querySelector('.panel-tab[data-tab="inventory"]').click();
+                    }
+                });
+            }
+        }
     }
 
     updateView() {
         // 1. 更新槽位显示
-        const slots = this.equipmentSystem.equipmentSlots;
-        for (const [type, item] of Object.entries(slots)) {
-            const el = document.querySelector(`.equipment-slot[data-slot="${type}"]`);
+        const slotMap = {
+            'weapon': '.weapon-slot',
+            'armor': '.armor-slot',
+            'accessory': '.ring-slot'
+        };
+
+        for (const [type, selector] of Object.entries(slotMap)) {
+            const el = document.querySelector(selector);
             if (!el) continue;
 
+            const item = this.equipmentSystem.equipmentSlots[type];
             if (item) {
-                el.classList.remove('empty');
-                el.style.borderColor = this.equipmentSystem.rarityConfig[item.rarity].color;
+                const color = this.equipmentSystem.rarityConfig[item.rarity].color;
+                el.style.borderColor = color;
+                el.style.boxShadow = `0 0 10px ${color}`;
                 el.innerHTML = `
-                    <div class="equipment-icon">${item.type === 'weapon' ? '⚔️' : item.type === 'armor' ? '🛡️' : '💍'}</div>
-                    <div class="equipment-level">Lv.${item.level}</div>
+                    <div style="font-size:24px">${item.type === 'weapon' ? '⚔️' : item.type === 'armor' ? '🛡️' : '💍'}</div>
                 `;
             } else {
-                el.classList.add('empty');
-                el.style.borderColor = '#555';
-                el.innerHTML = '';
+                // 恢复默认样式
+                el.style.borderColor = '';
+                el.style.boxShadow = '';
+                if (el.dataset.originalHtml) {
+                    el.innerHTML = el.dataset.originalHtml;
+                }
             }
         }
 
@@ -337,6 +290,10 @@ class EquipmentUI {
 
                 invContainer.appendChild(el);
             });
+
+            if (this.equipmentSystem.inventory.length === 0) {
+                invContainer.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#666;padding:20px;">背包是空的，去铁匠铺打造一些装备吧！</div>';
+            }
         }
     }
 
@@ -347,21 +304,41 @@ class EquipmentUI {
 
         const menu = document.createElement('div');
         menu.className = 'item-Action-Menu';
-        menu.style.left = `${x}px`;
-        menu.style.top = `${y}px`;
 
-        // 简单的详情描述
+        // 确保菜单不会超出屏幕
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+
+        let left = x + 10;
+        let top = y + 10;
+
+        if (left + 150 > screenWidth) left = x - 160;
+        if (top + 200 > screenHeight) top = y - 200;
+
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+
+        // 属性描述
         let statsDesc = '';
+        const statNames = {
+            attack: '攻击', defense: '防御', hp: '生命',
+            critRate: '暴击率', critDamage: '暴击伤害', attackSpeed: '攻速'
+        };
+
         for (const [key, val] of Object.entries(item.stats)) {
-            statsDesc += `${key}: ${val}\n`;
+            let displayVal = val;
+            if (key === 'critRate' || key === 'critDamage') displayVal += '%'; // 假设单位
+            if (key === 'attackSpeed') displayVal += '/s';
+            statsDesc += `${statNames[key] || key}: +${displayVal}\n`;
         }
 
         menu.innerHTML = `
-            <div style="color:${this.equipmentSystem.rarityConfig[item.rarity].color};font-weight:bold;margin-bottom:5px;">${item.name}</div>
-            <div style="font-size:12px;color:#ddd;margin-bottom:8px;white-space:pre-wrap;">${statsDesc}</div>
+            <div style="color:${this.equipmentSystem.rarityConfig[item.rarity].color};font-weight:bold;margin-bottom:5px;border-bottom:1px solid #555;padding-bottom:5px;">${item.name}</div>
+            <div style="font-size:12px;color:#aaa;margin-bottom:8px;">[${this.equipmentSystem.rarityConfig[item.rarity].name}]</div>
+            <div style="font-size:12px;color:#fff;margin-bottom:12px;line-height:1.4;">${statsDesc}</div>
             ${isEquipped ?
-                `<button id="actionUnequip">卸下</button>` :
-                `<button id="actionEquip">装备</button>`
+                `<button id="actionUnequip">⬇️ 卸下</button>` :
+                `<button id="actionEquip">⬆️ 装备</button>`
             }
             <button id="actionClose">关闭</button>
         `;
@@ -404,29 +381,50 @@ class EquipmentUI {
         if (res.success) {
             this.showNotification(res.message, '#4caf50');
             this.updateView();
-            // 触发玩家属性更新（需要刷新UI）
-            // 这是一个hack，应该发布事件，但这里直接调用全局UI刷新可能更简单，或者让PlayerSystem自己监听
-            // 为简单起见，这里假设玩家打开了属性面板，我们可能需要触发一些更新
+
+            // 刷新玩家属性显示（如果面板开着）
+            if (this.resourceSystem) {
+                // 触发一个全局UI更新（如果有的话），或者重新计算战力
+                // 这里我们假设PlayerSystem会自动在下次update loop中使用新属性
+                // 但为了UI即时反馈，最好能触发 PlayerSystem.updateUpgradeItems()
+                if (window.game && window.game.playerSystem) {
+                    window.game.playerSystem.updateUpgradeItems();
+                }
+            }
         } else {
             this.showNotification(res.message, '#f44336');
         }
     }
 
     showNotification(msg, color) {
-        // 复用现有的UI系统通知或创建简单的
         const div = document.createElement('div');
         div.style.position = 'fixed';
-        div.style.top = '20%';
+        div.style.top = '10%';
         div.style.left = '50%';
-        div.style.transform = 'translate(-50%, -50%)';
-        div.style.background = 'rgba(0,0,0,0.8)';
+        div.style.transform = 'translate(-50%, 0)';
+        div.style.background = 'rgba(0,0,0,0.85)';
         div.style.color = color;
-        div.style.padding = '10px 20px';
-        div.style.borderRadius = '5px';
-        div.style.zIndex = '2000';
+        div.style.padding = '12px 24px';
+        div.style.borderRadius = '30px';
+        div.style.zIndex = '3000';
+        div.style.fontWeight = 'bold';
+        div.style.border = `1px solid ${color}`;
+        div.style.boxShadow = '0 5px 15px rgba(0,0,0,0.5)';
         div.innerText = msg;
         document.body.appendChild(div);
-        setTimeout(() => div.remove(), 2000);
+
+        // 动画
+        div.animate([
+            { opacity: 0, transform: 'translate(-50%, -20px)' },
+            { opacity: 1, transform: 'translate(-50%, 0)' }
+        ], { duration: 200, fill: 'forwards' });
+
+        setTimeout(() => {
+            div.animate([
+                { opacity: 1 },
+                { opacity: 0 }
+            ], { duration: 200, fill: 'forwards' }).onfinish = () => div.remove();
+        }, 2000);
     }
 }
 
