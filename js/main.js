@@ -12,7 +12,6 @@ import { getSaveSystemInstance } from './modules/save-system.js';
 import { getTerritorySystemInstance } from './modules/territory-system.js';
 import SaveUI from './modules/save-ui.js';
 import { getPetSystemInstance } from './modules/pet-system.js';
-import { getPetSystemInstance } from './modules/pet-system.js';
 import { getPetUIInstance } from './modules/pet-ui.js';
 import AchievementSystem from './modules/achievement-system.js';
 import AchievementUI from './modules/achievement-ui.js';
