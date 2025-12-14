@@ -67,8 +67,7 @@ PetPlan/
 ├── index.html                    # 主游戏页面
 ├── territory.html                # 领地系统页面
 ├── README.md                     # 项目说明文档
-├── CHANGELOG.md                  # 更新日志
-├── CODE_REVIEW_REPORT.md         # 代码审查报告
+├── doc/                          # 完整文档库（所有文档）
 ├── css/                          # 样式文件
 │   ├── style.css                 # 主样式
 │   ├── menu.css                  # 菜单样式
@@ -109,31 +108,48 @@ PetPlan/
 
 ## 📖 文档
 
-详细文档请参阅 [doc/](./doc/) 文件夹
+### 🎯 快速导航
 
-### 系统设计文档
-- [系统架构总览](./doc/architecture/系统架构总览.md) - 项目整体架构
-- [模块结构设计](./doc/architecture/模块结构设计.md) - 模块划分和职责
-- [数据流设计](./doc/architecture/数据流设计.md) - 数据流向和状态管理
+- **[📚 完整文档索引](./doc/README.md)** - 所有文档的导航中心
+- **[🚀 快速开始指南](./doc/QUICKSTART.md)** - 5分钟入门（新玩家必读）
+- **[🎮 玩家指南](./doc/guides/玩家指南.md)** - 详细的游戏系统说明
 
-### 功能文档
-- [游戏核心系统](./doc/features/游戏核心系统.md) - 游戏循环和渲染
-- [宠物系统使用指南](./doc/宠物系统使用指南.md) - 宠物收集和养成
-- [存档系统使用指南](./doc/存档系统使用指南.md) - 存档管理
-- [领地功能整理](./doc/领地功能整理.md) - 领地建设系统
+### 开发者文档
 
-### API文档
-- [游戏核心API](./doc/api/游戏核心API.md) - GameCore接口
-- [玩家系统API](./doc/api/玩家系统API.md) - PlayerSystem接口
-- [存档系统API](./doc/api/存档系统API.md) - SaveSystem接口
-- [宠物系统API](./doc/api/宠物系统API.md) - PetSystem接口
+| 文档 | 说明 |
+|------|------|
+| [系统架构总览](./doc/architecture/系统架构总览.md) | 项目整体架构和模块交互 |
+| [模块结构设计](./doc/architecture/模块结构设计.md) | 模块划分、职责、扩展方案 |
+| [数据流设计](./doc/architecture/数据流设计.md) | 状态管理、数据流向 |
+| [代码审查报告](./doc/CODE_REVIEW_REPORT.md) | 代码质量评估和建议 |
+| [更新日志](./doc/CHANGELOG.md) | 版本历史和修改记录 |
+
+### 功能系统文档
+
+**核心系统**
+- [游戏核心系统](./doc/features/游戏核心系统.md)
+- [玩家系统](./doc/features/玩家系统.md)
+- [资源系统](./doc/features/资源系统.md)
+
+**游戏系统**
+- [战斗系统](./doc/features/战斗系统.md)
+- [宠物系统](./doc/features/宠物系统.md)
+- [领地系统](./doc/features/领地系统.md)
+
+**高级系统**
+- [存档系统](./doc/features/存档系统.md)
+- [成就系统](./doc/features/成就系统.md)
+- [装备系统](./doc/features/装备系统.md)
+- [离线系统](./doc/features/离线系统.md)
+
+### API 接口文档
+
+详见 [doc/api/](./doc/api/) 目录，包含各系统的完整接口说明
 
 ### 开发指南
-- [开发环境搭建](./doc/development/环境搭建指南.md) - 环境配置
-- [编码规范](./doc/development/编码规范.md) - 代码规范
 
-### 代码质量
-- [代码审查报告](./CODE_REVIEW_REPORT.md) - 最新代码审查结果
+- [开发环境搭建](./doc/development/环境搭建指南.md) - 本地开发环境配置
+- [编码规范](./doc/development/编码规范.md) - 代码风格和最佳实践
 
 ## 🎯 游戏系统
 
@@ -214,7 +230,7 @@ PetPlan/
 发现问题？请通过以下方式报告：
 1. 查看 [Issues](https://github.com/Chacat68/PetPlan/issues) 中是否已有相同问题
 2. 如果没有，请创建新的 Issue，附带详细的问题描述和复现步骤
-3. 查看 [CODE_REVIEW_REPORT.md](./CODE_REVIEW_REPORT.md) 了解已知问题
+3. 查看 [CODE_REVIEW_REPORT.md](./doc/CODE_REVIEW_REPORT.md) 了解已知问题
 
 ## � 代码质量
 
@@ -224,7 +240,7 @@ PetPlan/
 - ✅ **文档完整**: 详细的API文档和使用指南
 - 📈 **性能优化**: Canvas渲染优化、事件委托、缓存策略
 
-最新代码审查报告：[CODE_REVIEW_REPORT.md](./CODE_REVIEW_REPORT.md)
+最新代码审查报告：[CODE_REVIEW_REPORT.md](./doc/CODE_REVIEW_REPORT.md)
 
 ## 🛠️ 故障排除
 
