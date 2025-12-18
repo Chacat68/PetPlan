@@ -1,358 +1,372 @@
-/**
- * 存档系统样式 - Fantasy Theme
- */
+/* ============================================
+   Save System UI - Modern Glass Design
+   ============================================ */
 
-/* 存档按钮 */
-.save-menu-btn {
+/* 存档模态框覆盖层 */
+.save-modal-overlay {
     position: fixed;
-    bottom: 100px;
-    left: 20px;
-    padding: 12px 24px;
-    background: linear-gradient(135deg, #182848 0%, #4b6cb7 100%);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    transition: all 0.3s ease;
-    z-index: 1000;
-}
-
-.save-menu-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
-    border-color: #ffd700;
-}
-
-.save-menu-btn:active {
-    transform: translateY(0);
-}
-
-/* 存档管理模态框 */
-.save-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(5px);
-    z-index: 10000;
+    backdrop-filter: blur(10px);
+    display: flex;
     justify-content: center;
     align-items: center;
+    z-index: 3000;
+    animation: fadeIn 0.2s ease;
 }
 
-.save-modal.active {
+/* 存档模态框 */
+.save-modal {
+    background: linear-gradient(145deg, 
+        rgba(30, 27, 47, 0.98) 0%, 
+        rgba(15, 14, 23, 1) 100%);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-xl);
+    width: 95%;
+    max-width: 420px;
+    max-height: 85vh;
     display: flex;
+    flex-direction: column;
+    box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 40px rgba(99, 102, 241, 0.15);
+    animation: slideUp 0.3s ease;
 }
 
-.save-modal-content {
-    background: url('../images/ui/panel_bg.png') center/cover no-repeat, #16213e;
-    border: 1px solid #444;
-    border-radius: 20px;
-    padding: 30px;
-    max-width: 800px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.8);
-    position: relative;
-    color: #e0e0e0;
-}
-
+/* 存档模态框头部 */
 .save-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 25px;
-    padding-bottom: 15px;
-    border-bottom: 2px solid #444;
+    padding: 18px 20px;
+    background: var(--bg-glass);
+    border-bottom: 1px solid var(--border-glass);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
-.save-modal-title {
-    font-size: 28px;
-    font-weight: bold;
-    color: #ffd700;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+.save-modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
-.save-modal-close {
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #aaa;
-    font-size: 24px;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    cursor: pointer;
+.save-modal-header h2::before {
+    content: '💾';
+    -webkit-text-fill-color: initial;
+}
+
+.save-close-btn {
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s;
 }
 
-.save-modal-close:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
-    transform: rotate(90deg);
+.save-close-btn:hover {
+    background: var(--bg-glass-strong);
+    color: var(--text-primary);
+    border-color: var(--accent-red);
 }
 
-/* 存档槽位列表 */
-.save-slots {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+/* 存档内容区域 */
+.save-modal-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
 }
 
+/* 存档槽位卡片 */
 .save-slot {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid #555;
-    border-radius: 10px;
-    padding: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: all 0.3s ease;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .save-slot:hover {
-    background: rgba(0, 0, 0, 0.6);
-    border-color: #ffd700;
-    transform: translateX(5px);
-    box-shadow: 0 0 15px rgba(255, 215, 0, 0.1);
+    background: var(--bg-glass-strong);
+    border-color: var(--primary);
+    transform: translateX(4px);
 }
 
 .save-slot.empty {
-    opacity: 0.7;
+    opacity: 0.6;
     border-style: dashed;
 }
 
+.save-slot.empty:hover {
+    opacity: 1;
+}
+
+/* 存档槽位头部 */
+.save-slot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.save-slot-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.save-slot-title::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--accent-green);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent-green);
+}
+
+.save-slot.empty .save-slot-title::before {
+    background: var(--text-muted);
+    box-shadow: none;
+}
+
+.save-slot-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+/* 存档信息 */
 .save-slot-info {
-    flex: 1;
-    color: white;
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
 }
 
-.save-slot-number {
-    font-size: 20px;
-    font-weight: bold;
-    margin-bottom: 8px;
-    color: #ffd700;
+.save-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
 }
 
-.save-slot-details {
+.save-stat-icon {
     font-size: 14px;
-    line-height: 1.6;
-    color: #ccc;
 }
 
-.save-slot-empty {
-    font-style: italic;
-    color: #888;
+.save-stat-label {
+    color: var(--text-muted);
 }
 
+.save-stat-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+/* 存档操作按钮 */
 .save-slot-actions {
     display: flex;
-    gap: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
-.save-slot-btn {
-    padding: 8px 16px;
-    border: 1px solid #555;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    color: #ddd;
-}
-
-.save-slot-btn:hover {
-    transform: translateY(-2px);
-    color: #fff;
-}
-
-.save-slot-btn:active {
-    transform: translateY(0);
-}
-
-.save-slot-btn.save {
-    background: linear-gradient(135deg, #1aa034 0%, #116422 100%);
-    border-color: #1aa034;
-}
-
-.save-slot-btn.save:hover {
-    box-shadow: 0 0 10px rgba(26, 160, 52, 0.4);
-}
-
-.save-slot-btn.load {
-    background: linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%);
-    border-color: #4ca1af;
-}
-
-.save-slot-btn.load:hover {
-    box-shadow: 0 0 10px rgba(76, 161, 175, 0.4);
-}
-
-.save-slot-btn.delete {
-    background: linear-gradient(135deg, #870000 0%, #530000 100%);
-    border-color: #e74c3c;
-}
-
-.save-slot-btn.delete:hover {
-    box-shadow: 0 0 10px rgba(231, 76, 60, 0.4);
-}
-
-.save-slot-btn.export {
-    background: linear-gradient(135deg, #b7950b 0%, #9a7d0a 100%);
-    border-color: #f1c40f;
-    color: #1a1a1a;
-}
-
-.save-slot-btn.export:hover {
-    box-shadow: 0 0 10px rgba(241, 196, 15, 0.4);
-    filter: brightness(1.1);
-}
-
-.save-slot-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none !important;
-    background: #444;
-}
-
-/* 导入存档区域 */
-.import-section {
-    margin-top: 25px;
-    padding-top: 25px;
-    border-top: 2px solid rgba(255, 255, 255, 0.1);
-}
-
-.import-title {
-    font-size: 18px;
-    font-weight: bold;
-    color: #ffd700;
-    margin-bottom: 15px;
-}
-
-.import-controls {
-    display: flex;
-    gap: 15px;
-    align-items: center;
-}
-
-.import-file-input {
-    display: none;
-}
-
-.import-file-label {
-    padding: 10px 20px;
-    background: #333;
-    border: 1px solid #555;
-    color: #ddd;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s ease;
-}
-
-.import-file-label:hover {
-    color: #fff;
-    border-color: #ffd700;
-}
-
-.import-file-name {
-    color: #aaa;
-    font-size: 14px;
+.save-action-btn {
     flex: 1;
-}
-
-.import-slot-select {
-    padding: 8px 12px;
-    border: 1px solid #555;
-    border-radius: 6px;
-    background: #222;
-    color: #fff;
-    font-size: 14px;
+    min-width: 70px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 
-.import-btn {
-    padding: 10px 20px;
-    background: linear-gradient(135deg, #182848 0%, #4b6cb7 100%);
-    color: white;
-    border: 1px solid #4b6cb7;
-    border-radius: 6px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
+.save-action-btn:hover:not(:disabled) {
+    transform: scale(1.02);
 }
 
-.import-btn:hover {
-    box-shadow: 0 0 10px rgba(75, 108, 183, 0.4);
-}
-
-.import-btn:disabled {
+.save-action-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-/* 自动保存提示动画 */
-@keyframes fadeInOut {
-    0% {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-
-    10% {
-        opacity: 1;
-        transform: translateY(0);
-    }
-
-    90% {
-        opacity: 1;
-        transform: translateY(0);
-    }
-
-    100% {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
+/* 按钮样式变体 */
+.save-action-btn.save {
+    background: linear-gradient(135deg, var(--accent-green), #16a34a);
+    color: white;
+    box-shadow: 0 2px 10px rgba(34, 197, 94, 0.3);
 }
 
-.auto-save-notification {
-    animation: fadeInOut 2s ease-in-out;
+.save-action-btn.load {
+    background: linear-gradient(135deg, var(--accent-blue), #2563eb);
+    color: white;
+    box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
 }
 
-/* 快捷键提示 */
-.save-shortcuts {
-    margin-top: 20px;
-    padding: 15px;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 8px;
-    color: #888;
+.save-action-btn.delete {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    color: var(--accent-red);
+}
+
+.save-action-btn.delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--accent-red);
+}
+
+.save-action-btn.export {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+}
+
+.save-action-btn.import {
+    background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+    color: white;
+    box-shadow: 0 2px 10px rgba(168, 85, 247, 0.3);
+}
+
+/* 空槽位提示 */
+.save-slot-empty-text {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
     font-size: 13px;
-    line-height: 1.8;
 }
 
-.save-shortcuts-title {
-    font-weight: bold;
-    color: #ffd700;
-    margin-bottom: 8px;
-}
-
-.shortcut-item {
+/* 底部操作区 */
+.save-modal-footer {
+    padding: 16px 20px;
+    background: var(--bg-glass);
+    border-top: 1px solid var(--border-glass);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
     display: flex;
     gap: 10px;
 }
 
-.shortcut-key {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-weight: bold;
-    color: #fff;
-    border: 1px solid #444;
+.save-footer-btn {
+    flex: 1;
+    padding: 12px 16px;
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    background: var(--bg-glass);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.save-footer-btn:hover {
+    background: var(--bg-glass-strong);
+    border-color: var(--primary);
+}
+
+.save-footer-btn.danger {
+    color: var(--accent-red);
+}
+
+.save-footer-btn.danger:hover {
+    border-color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* 自动保存通知 */
+.auto-save-notification {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease, fadeOut 0.3s ease 1.7s forwards;
+}
+
+.auto-save-notification::before {
+    content: '✓';
+    font-size: 16px;
+}
+
+/* 动画 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+}
+
+/* 响应式 */
+@media (max-width: 380px) {
+    .save-slot-actions {
+        flex-direction: column;
+    }
+    
+    .save-action-btn {
+        width: 100%;
+    }
 }

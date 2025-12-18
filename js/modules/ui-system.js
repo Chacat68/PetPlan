@@ -224,14 +224,15 @@ class UISystem {
     }
 }
 
+// 创建并导出单例实例
+export const uiSystem = UISystem.getInstance();
+
 // 导出便捷函数（延迟获取实例）
 export function showToast(message, duration) {
-    const uiSystem = UISystem.getInstance();
     uiSystem.showToast(message, duration);
 }
 
 export function showConfirm(message, onConfirm, onCancel) {
-    const uiSystem = UISystem.getInstance();
     uiSystem.showConfirm(message, onConfirm, onCancel);
 }
 

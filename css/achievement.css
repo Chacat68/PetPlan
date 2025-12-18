@@ -1,148 +1,337 @@
-/* 成就系统模态框样式 */
-.achievement-modal-content {
-    background-color: #2c3e50;
-    width: 90%;
-    max-width: 500px;
-    height: 70vh;
-    border-radius: 12px;
-    border: 2px solid #34495e;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+/* ============================================
+   Achievement System - Modern Card Design
+   ============================================ */
+
+/* 成就系统模态框 */
+.achievement-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
     display: flex;
-    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+    animation: fadeIn 0.2s ease;
 }
 
-.modal-header {
-    padding: 15px;
-    background: #34495e;
-    border-bottom: 1px solid #466075;
+.achievement-modal {
+    background: linear-gradient(145deg, 
+        rgba(30, 27, 47, 0.98) 0%, 
+        rgba(15, 14, 23, 1) 100%);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-xl);
+    width: 95%;
+    max-width: 400px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 40px rgba(99, 102, 241, 0.15);
+    animation: slideUp 0.3s ease;
+}
+
+/* 成就模态框头部 */
+.achievement-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-radius: 10px 10px 0 0;
+    padding: 18px 20px;
+    background: var(--bg-glass);
+    border-bottom: 1px solid var(--border-glass);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
-.modal-header h2 {
-    color: #ecf0f1;
+.achievement-header h2 {
     margin: 0;
-    font-size: 1.2rem;
-}
-
-.close-modal {
-    color: #bdc3c7;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.modal-body {
-    flex: 1;
+    font-size: 20px;
+    font-weight: 700;
     display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: 10px;
-    color: #ecf0f1;
-}
-
-.tab-container {
-    display: flex;
+    align-items: center;
     gap: 10px;
-    margin-bottom: 15px;
-    justify-content: center;
+    background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
-.tab-btn {
-    background: #34495e;
-    border: none;
-    color: #bdc3c7;
-    padding: 8px 20px;
-    border-radius: 20px;
+.achievement-header h2::before {
+    content: '🏆';
+    -webkit-text-fill-color: initial;
+}
+
+.achievement-close-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
     cursor: pointer;
-    font-size: 14px;
+    font-size: 18px;
     transition: all 0.2s;
 }
 
-.tab-btn.active {
-    background: #3498db;
-    color: white;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+.achievement-close-btn:hover {
+    background: var(--bg-glass-strong);
+    color: var(--text-primary);
+    border-color: var(--accent-red);
 }
 
-.quest-list {
+/* 标签页切换 */
+.achievement-tabs {
+    display: flex;
+    padding: 0 16px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid var(--border-glass);
+}
+
+.achievement-tab {
+    flex: 1;
+    padding: 14px 16px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.achievement-tab:hover {
+    color: var(--text-secondary);
+    background: var(--bg-glass);
+}
+
+.achievement-tab.active {
+    color: var(--accent-gold);
+    border-bottom-color: var(--accent-gold);
+}
+
+/* 成就内容区域 */
+.achievement-content {
     flex: 1;
     overflow-y: auto;
-    padding-right: 5px;
+    padding: 16px;
 }
 
-/* 滚动条样式 */
-.quest-list::-webkit-scrollbar {
-    width: 6px;
-}
-.quest-list::-webkit-scrollbar-track {
-    background: #2c3e50;
-}
-.quest-list::-webkit-scrollbar-thumb {
-    background: #466075;
-    border-radius: 3px;
-}
-
-.quest-item {
-    background: rgba(0,0,0,0.2);
-    margin-bottom: 10px;
-    padding: 12px;
-    border-radius: 8px;
+/* 成就/任务卡片 */
+.quest-item,
+.achievement-item {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    margin-bottom: 12px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    border: 1px solid rgba(255,255,255,0.05);
+    gap: 14px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.quest-info {
+.quest-item:hover,
+.achievement-item:hover {
+    background: var(--bg-glass-strong);
+    border-color: var(--primary);
+    transform: translateX(4px);
+}
+
+.quest-item.completed,
+.achievement-item.completed {
+    opacity: 0.6;
+    border-color: var(--accent-green);
+}
+
+.quest-item.claimed,
+.achievement-item.claimed {
+    opacity: 0.4;
+}
+
+/* 任务图标 */
+.quest-icon,
+.achievement-icon {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, var(--bg-card), var(--bg-dark));
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+/* 任务信息 */
+.quest-info,
+.achievement-info {
     flex: 1;
+    min-width: 0;
 }
 
-.quest-title {
-    font-weight: bold;
-    color: #f1c40f;
+.quest-title,
+.achievement-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
     margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.quest-desc {
+.quest-desc,
+.achievement-desc {
     font-size: 12px;
-    color: #bdc3c7;
-    margin-bottom: 4px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
 }
 
-.quest-reward {
+/* 进度条 */
+.quest-progress,
+.achievement-progress {
+    height: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.quest-progress-bar,
+.achievement-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), var(--accent-purple));
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.quest-progress-bar.complete,
+.achievement-progress-bar.complete {
+    background: linear-gradient(90deg, var(--accent-green), #16a34a);
+}
+
+.quest-progress-text,
+.achievement-progress-text {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+/* 奖励区域 */
+.quest-reward,
+.achievement-reward {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.reward-items {
+    display: flex;
+    gap: 6px;
+}
+
+.reward-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-gold);
+}
+
+.reward-icon {
     font-size: 12px;
-    color: #2ecc71;
 }
 
-.quest-btn {
-    background: #34495e;
+/* 领取按钮 */
+.claim-btn {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, var(--accent-gold), #f59e0b);
     border: none;
-    color: #95a5a6;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: default;
-    min-width: 80px;
+    border-radius: var(--radius-sm);
+    color: var(--bg-dark);
     font-size: 12px;
-}
-
-.quest-btn.can-claim {
-    background: #e74c3c;
-    color: white;
+    font-weight: 700;
     cursor: pointer;
-    animation: pulse 1.5s infinite;
+    transition: all 0.2s;
+    box-shadow: 0 2px 10px rgba(251, 191, 36, 0.3);
 }
 
-.quest-btn.claimed {
-    background: transparent;
-    border: 1px solid #27ae60;
-    color: #27ae60;
+.claim-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(251, 191, 36, 0.5);
 }
 
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
+.claim-btn:disabled {
+    background: linear-gradient(135deg, #4b5563, #374151);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.claim-btn.claimed {
+    background: var(--accent-green);
+    cursor: default;
+}
+
+/* 空状态 */
+.achievement-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+
+.achievement-empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.achievement-empty-text {
+    font-size: 14px;
+}
+
+/* 动画 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 移动端适配 */
+@media (max-height: 600px) {
+    .achievement-modal {
+        max-height: 95vh;
+    }
+    
+    .quest-item,
+    .achievement-item {
+        padding: 10px 12px;
+    }
+    
+    .quest-icon,
+    .achievement-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
 }

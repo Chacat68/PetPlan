@@ -429,7 +429,11 @@ class PlayerSystem {
     /**
      * 升级属性
      */
-    upgradeAttribute(attribute, increase, silent = false) {
+    upgradeAttribute(attribute, increase = null, silent = false) {
+        // 如果没有提供 increase 参数，使用默认增量映射
+        if (increase === null) {
+            increase = this.attributeIncreases[attribute] || 1;
+        }
         const cost = this.player.upgradeCosts[attribute];
         const button = document.getElementById(`upgrade${attribute.charAt(0).toUpperCase() + attribute.slice(1)}`);
 
@@ -1208,12 +1212,18 @@ class PlayerSystem {
                 hp: this.player.hp,
                 maxHp: this.player.maxHp,
                 attack: this.player.attack,
+                defense: this.player.defense,
+                dodge: this.player.dodge,
                 hpRegen: this.player.hpRegen,
                 critDamage: this.player.critDamage,
                 attackSpeed: this.player.attackSpeed,
                 crit: this.player.crit,
                 multiShot: this.player.multiShot,
                 tripleShot: this.player.tripleShot,
+                // 三维属性
+                strength: this.player.strength,
+                agility: this.player.agility,
+                intelligence: this.player.intelligence,
                 upgradeCosts: { ...this.player.upgradeCosts }
             }
         };
@@ -1232,12 +1242,19 @@ class PlayerSystem {
             this.player.hp = savedPlayer.hp !== undefined ? savedPlayer.hp : this.player.hp;
             this.player.maxHp = savedPlayer.maxHp !== undefined ? savedPlayer.maxHp : this.player.maxHp;
             this.player.attack = savedPlayer.attack !== undefined ? savedPlayer.attack : this.player.attack;
+            this.player.defense = savedPlayer.defense !== undefined ? savedPlayer.defense : this.player.defense;
+            this.player.dodge = savedPlayer.dodge !== undefined ? savedPlayer.dodge : this.player.dodge;
             this.player.hpRegen = savedPlayer.hpRegen !== undefined ? savedPlayer.hpRegen : this.player.hpRegen;
             this.player.critDamage = savedPlayer.critDamage !== undefined ? savedPlayer.critDamage : this.player.critDamage;
             this.player.attackSpeed = savedPlayer.attackSpeed !== undefined ? savedPlayer.attackSpeed : this.player.attackSpeed;
             this.player.crit = savedPlayer.crit !== undefined ? savedPlayer.crit : this.player.crit;
             this.player.multiShot = savedPlayer.multiShot !== undefined ? savedPlayer.multiShot : this.player.multiShot;
             this.player.tripleShot = savedPlayer.tripleShot !== undefined ? savedPlayer.tripleShot : this.player.tripleShot;
+
+            // 恢复三维属性
+            this.player.strength = savedPlayer.strength !== undefined ? savedPlayer.strength : this.player.strength;
+            this.player.agility = savedPlayer.agility !== undefined ? savedPlayer.agility : this.player.agility;
+            this.player.intelligence = savedPlayer.intelligence !== undefined ? savedPlayer.intelligence : this.player.intelligence;
 
             // 恢复升级成本
             if (savedPlayer.upgradeCosts) {

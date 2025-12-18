@@ -163,7 +163,7 @@ class GameCore {
 
         // 更新UI系统
         if (this.uiSystem) {
-            this.uiSystem.update();
+            this.uiSystem.update(deltaTime);
         }
 
         // 更新领地系统（处理资源产出）
