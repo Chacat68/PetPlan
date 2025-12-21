@@ -5,7 +5,7 @@
 
 import GameCore from './modules/game-core.js';
 import PlayerSystem from './modules/player-system.js';
-import CombatSystem from './modules/combat-system.js';
+import CombatController from './modules/combat/CombatController.js';
 import UISystem, { uiSystem } from './modules/ui-system.js';
 import ResourceSystem from './modules/resource-system.js';
 import { getSaveSystemInstance } from './modules/save-system.js';
@@ -36,7 +36,8 @@ class Game {
         this.equipmentSystem = getEquipmentSystemInstance(this.resourceSystem);
         this.petSystem = getPetSystemInstance(this.gameCore, this.resourceSystem);
         this.playerSystem = new PlayerSystem(this.gameCore, this.resourceSystem);
-        this.combatSystem = new CombatSystem(this.gameCore, this.playerSystem, this.resourceSystem);
+        // 使用新的 CombatController
+        this.combatSystem = new CombatController(this.gameCore, this.playerSystem, this.resourceSystem);
         this.uiSystem = uiSystem; // 使用单例实例
         this.saveSystem = getSaveSystemInstance();
         this.saveUI = null; // 稍后初始化
