@@ -210,55 +210,140 @@ class PetSystem {
                 id: 7,
                 name: '暗影狼',
                 rarity: 'epic',
-                type: 'dark',
+                type: 'shadow',
                 baseAttack: 40,
                 baseHp: 90,
                 baseDefense: 8,
-                attackSpeed: 1.6,
+                attackSpeed: 1.4,
                 skill: {
                     id: 'shadow_strike',
                     name: '暗影突袭',
-                    cooldown: 6000,
+                    cooldown: 8000,
                     damage: 150,
-                    crit: 0.5, // 50%暴击率
-                    description: '从暗影中突袭，高暴击'
+                    bleed: 20, // 流血伤害/秒
+                    duration: 3000,
+                    description: '瞬间移动到敌人背后造成高额伤害并流血'
                 },
                 passive: {
                     type: 'crit_damage',
-                    value: 0.2, // 增加20%暴伤
+                    value: 0.2, // 增加20%爆伤
                     description: '全队暴击伤害 +20%'
                 },
                 image: '🌑🐺',
-                description: '潜行的暗影杀手，暴击伤害极高',
+                description: '潜伏在暗影中的刺客，致命而无声',
                 unlockLevel: 25,
-                unlockCost: { coins: 25000, gems: 600 }
+                unlockCost: { coins: 30000, gems: 600 }
             },
             8: {
                 id: 8,
-                name: '凤凰',
-                rarity: 'legendary',
-                type: 'phoenix',
-                baseAttack: 50,
-                baseHp: 150,
-                baseDefense: 20,
-                attackSpeed: 1.4,
+                name: '自然之灵',
+                rarity: 'rare',
+                type: 'nature',
+                baseAttack: 15,
+                baseHp: 100,
+                baseDefense: 10,
+                attackSpeed: 1.0,
                 skill: {
-                    id: 'rebirth',
-                    name: '浴火重生',
-                    cooldown: 30000,
-                    revive: true, // 复活能力
-                    damage: 200,
-                    description: '死亡时复活并造成爆炸伤害'
+                    id: 'nature_gift',
+                    name: '自然馈赠',
+                    cooldown: 15000,
+                    heal_percent: 0.2, // 回复最大生命值20%
+                    duration: 5000, // 5秒内持续
+                    description: '在5秒内持续治疗全队'
                 },
                 passive: {
-                    type: 'resurrection',
-                    value: 0.5, // 复活血量50%
-                    description: '主角复活时拥有50%生命'
+                    type: 'regen_boost',
+                    value: 10, 
+                    description: '全队每秒回血 +10'
+                },
+                image: '🌿🧚',
+                description: '大自然的守护精灵，擅长治愈伙伴',
+                unlockLevel: 18,
+                unlockCost: { coins: 15000, gems: 200 }
+            },
+            9: {
+                id: 9,
+                name: '钢铁魔像',
+                rarity: 'rare',
+                type: 'metal',
+                baseAttack: 20,
+                baseHp: 200,
+                baseDefense: 30,
+                attackSpeed: 0.6,
+                skill: {
+                    id: 'iron_shell',
+                    name: '钢铁外壳',
+                    cooldown: 12000,
+                    shield: 100,
+                    reflect: 0.3, // 反弹30%伤害
+                    duration: 6000,
+                    description: '获得护盾并反弹受到的伤害'
+                },
+                passive: {
+                    type: 'defense_percent',
+                    value: 0.15, 
+                    description: '全队防御力 +15%'
+                },
+                image: '🤖🛡️',
+                description: '坚不可摧的钢铁堡垒，最可靠的前排',
+                unlockLevel: 22,
+                unlockCost: { coins: 25000, gems: 300 }
+            },
+            10: {
+                id: 10,
+                name: '虚空行者',
+                rarity: 'epic',
+                type: 'dark',
+                baseAttack: 38,
+                baseHp: 110,
+                baseDefense: 12,
+                attackSpeed: 1.2,
+                skill: {
+                    id: 'black_hole',
+                    name: '黑洞',
+                    cooldown: 14000,
+                    damage: 80,
+                    pull: true, // 聚怪效果
+                    radius: 150,
+                    description: '制造黑洞牵引周围敌人并造成伤害'
+                },
+                passive: {
+                    type: 'cooldown_reduction',
+                    value: 0.05, 
+                    description: '全队技能冷却 -5%'
+                },
+                image: '🔮👻',
+                description: '来自虚空的神秘生物，掌控空间之力',
+                unlockLevel: 30,
+                unlockCost: { coins: 50000, gems: 800 }
+            },
+            11: {
+                id: 11,
+                name: '不死鸟',
+                rarity: 'legendary',
+                type: 'fire',
+                baseAttack: 60,
+                baseHp: 150,
+                baseDefense: 20,
+                attackSpeed: 1.5,
+                skill: {
+                    id: 'eternal_flame',
+                    name: '永恒之火',
+                    cooldown: 18000,
+                    damage: 200, // 初始伤害
+                    burn: 50, // 灼烧伤害
+                    radius: 200, // 大范围
+                    description: '对大范围敌人造成毁灭性火焰伤害'
+                },
+                passive: {
+                    type: 'all_stats',
+                    value: 0.1, 
+                    description: '全队全属性 +10%'
                 },
                 image: '🔥🦅',
-                description: '不死的传说，拥有重生之力',
-                unlockLevel: 30,
-                unlockCost: { coins: 50000, gems: 1000 }
+                description: '传说中的神兽，拥有毁灭与重生的力量',
+                unlockLevel: 40,
+                unlockCost: { coins: 100000, gems: 2000 }
             }
         };
     }
