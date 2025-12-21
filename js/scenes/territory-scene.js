@@ -1,6 +1,8 @@
 import { getTerritorySystemInstance } from '../modules/territory-system.js';
 import ResourceSystem from '../modules/resource-system.js';
 import { showToast } from '../modules/ui-system.js';
+import { BUILDING_ICONS, BUILDING_SVGS, BUILDING_NAMES, getBuildingDescription } from '../config/building-assets.js';
+import { BuildingType } from '../config/territory-config.js';
 
 class TerritoryScene {
     constructor() {
@@ -56,6 +58,10 @@ class TerritoryScene {
         }
 
         await this.territorySystem.init();
+        
+        // 注册产出回调用于特效
+        this.territorySystem.onProduction = this.handleProduction.bind(this);
+        
         console.log('领地场景初始化完成');
         this.initCanvas(); // 初始化Canvas动画场景
         this.renderExpandedSlots(); // 渲染扩张的地块
@@ -65,6 +71,57 @@ class TerritoryScene {
         this.setupEventListeners();
         this.startBuildProgressMonitor(); // 启动建造进度监控
         this.hideLoadingScreen();
+        
+        // 检查离线收益
+        this.checkOfflineGains();
+    }
+
+    checkOfflineGains() {
+        const gains = this.territorySystem.getOfflineGains();
+        if (gains) {
+            this.showOfflineGainsModal(gains);
+        }
+    }
+
+    showOfflineGainsModal(gains) {
+        const modal = document.getElementById('offline-gains-modal');
+        if (!modal) return;
+
+        const timeText = document.getElementById('offline-time-text');
+        const goldValue = document.getElementById('offline-gold-value');
+        const crystalValue = document.getElementById('offline-crystal-value');
+        const claimBtn = document.getElementById('claim-offline-btn');
+
+        if (timeText) timeText.textContent = `离线时长: ${gains.timeFormatted}`;
+        if (goldValue) goldValue.textContent = this.resourceSystem.formatNumber(gains.gold);
+        if (crystalValue) crystalValue.textContent = this.resourceSystem.formatNumber(gains.crystal);
+
+        // 显示弹窗
+        modal.style.display = 'flex';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
+
+        // 绑定领取按钮
+        if (claimBtn) {
+            // 移除旧的事件监听器 (如果存在)
+            const newBtn = claimBtn.cloneNode(true);
+            claimBtn.parentNode.replaceChild(newBtn, claimBtn);
+            
+            newBtn.addEventListener('click', () => {
+                const claimed = this.territorySystem.claimOfflineGains();
+                if (claimed) {
+                    showToast(`领取成功! 获得 ${this.resourceSystem.formatNumber(claimed.gold)} 金币, ${this.resourceSystem.formatNumber(claimed.crystal)} 水晶`);
+                    this.updateResourceDisplay();
+                    
+                    // 关闭弹窗
+                    modal.classList.remove('show');
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                    }, 300);
+                }
+            });
+        }
     }
 
     setupEventListeners() {
@@ -315,34 +372,75 @@ class TerritoryScene {
             // 有建筑完成，刷新UI
             this.updateSlots();
             this.updateResourceDisplay();
-
-            completedBuildings.forEach(building => {
-                const buildingInfo = this.territorySystem.buildingData[building.type];
-                console.log(`${buildingInfo.name} 建造完成！`);
-            });
+            // 播放完成音效或特效（TODO）
         }
 
-        // 更新所有正在建造中的进度条
-        this.slots.forEach((slot, index) => {
-            const slotContent = slot.querySelector('.slot-content');
-            if (slotContent && slotContent.classList.contains('building')) {
-                // 使用地块的实际索引（从dataset获取），而不是DOM顺序的index
-                const slotIndex = parseInt(slot.dataset.slot) || index;
-                const x = slotIndex % 2;
-                const y = Math.floor(slotIndex / 2);
-                const buildTask = this.territorySystem.getBuildTaskAtPosition(x, y);
+        // 仅更新正在建造的任务进度，避免遍历所有地块
+        const buildQueue = this.territorySystem.territoryData.buildQueue;
+        if (!buildQueue || buildQueue.length === 0) return;
 
-                if (buildTask) {
-                    const progress = this.territorySystem.getBuildProgress(buildTask);
-                    const progressBar = slot.querySelector('.building-progress-bar');
-                    if (progressBar) {
-                        progressBar.style.width = `${progress}%`;
-                    }
-                } else {
-                    // 如果没有建造任务但显示为建造中，说明已完成，刷新UI
-                    this.updateSlots();
+        buildQueue.forEach(task => {
+            const slotIndex = task.position.y * 2 + task.position.x;
+            const slot = document.querySelector(`.territory-slot[data-slot="${slotIndex}"]`);
+            
+            if (slot) {
+                const progress = this.territorySystem.getBuildProgress(task);
+                const remaining = this.territorySystem.getBuildRemainingTime(task);
+                
+                const progressBar = slot.querySelector('.building-progress-bar');
+                if (progressBar) {
+                    progressBar.style.width = `${progress}%`;
+                }
+                
+                const timer = slot.querySelector('.building-timer');
+                if (timer) {
+                    timer.textContent = `${remaining}s`;
                 }
             }
+        });
+    }
+
+    /**
+     * 处理资源产出特效
+     * @param {Array} details 产出详情
+     */
+    handleProduction(details) {
+        details.forEach(detail => {
+            // 计算地块索引: index = y * 2 + x (假设两列布局)
+            const slotIndex = detail.position.y * 2 + detail.position.x;
+            const slot = document.querySelector(`.territory-slot[data-slot="${slotIndex}"]`);
+            
+            if (slot) {
+                const rect = slot.getBoundingClientRect();
+                // 随机微调位置，让飘字不重叠
+                const startX = rect.left + rect.width / 2 + (Math.random() * 40 - 20);
+                const startY = rect.top + (Math.random() * 20 - 10);
+                
+                if (detail.production.gold > 0) {
+                    this.showFloatingText(startX, startY, `+${detail.production.gold} 💰`);
+                }
+                
+                // 如果同时产出水晶，稍微延迟显示错开
+                if (detail.production.crystal > 0) {
+                    setTimeout(() => {
+                        this.showFloatingText(startX, startY - 25, `+${detail.production.crystal} 💎`, 'crystal');
+                    }, 300);
+                }
+            }
+        });
+    }
+
+    showFloatingText(x, y, text, type = '') {
+        const el = document.createElement('div');
+        el.className = `floating-text ${type}`;
+        el.textContent = text;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        document.body.appendChild(el);
+        
+        // 动画结束后移除元素
+        el.addEventListener('animationend', () => {
+             el.remove();
         });
     }
 
@@ -627,83 +725,23 @@ class TerritoryScene {
     }
 
     getBuildingIcon(buildingType) {
-        const icons = {
-            'training_ground': '🏋️',
-            'temple': '🏛️',
-            'main_base': '🏰',
-            'barracks': '🏕️',
-            'workshop': '🔨',
-            'crystal_mine': '💎',
-            'library': '📚',
-            'hospital': '🏥',
-            'tower': '🗼',
-            'market': '🏪'
-        };
-        return icons[buildingType] || '🏗️';
+        return BUILDING_ICONS[buildingType] || '🏗️';
     }
 
     getBuildingName(buildingType) {
-        const names = {
-            'training_ground': '训练场',
-            'temple': '神庙',
-            'main_base': '主基地',
-            'barracks': '兵营',
-            'workshop': '工坊',
-            'crystal_mine': '水晶矿',
-            'library': '图书馆',
-            'hospital': '医院',
-            'tower': '防御塔',
-            'market': '市场'
-        };
-        return names[buildingType] || '未知建筑';
+        return BUILDING_NAMES[buildingType] || '未知建筑';
     }
 
     getBuildingSVG(buildingType) {
-        const svgs = {
-            'main_base': `<svg viewBox="0 0 100 100" width="100%" height="100%"><defs><linearGradient id="wallGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#bdc3c7;stop-opacity:1" /><stop offset="100%" style="stop-color:#95a5a6;stop-opacity:1" /></linearGradient><linearGradient id="roofGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#e74c3c;stop-opacity:1" /><stop offset="100%" style="stop-color:#c0392b;stop-opacity:1" /></linearGradient></defs><rect x="30" y="40" width="40" height="50" fill="url(#wallGrad)" /><polygon points="30,40 50,10 70,40" fill="url(#roofGrad)" /><rect x="45" y="60" width="10" height="30" fill="#555" rx="5" /><rect x="10" y="50" width="20" height="40" fill="url(#wallGrad)" /><polygon points="10,50 20,30 30,50" fill="url(#roofGrad)" /><rect x="70" y="50" width="20" height="40" fill="url(#wallGrad)" /><polygon points="70,50 80,30 90,50" fill="url(#roofGrad)" /></svg>`,
-            'crystal_mine': `<svg viewBox="0 0 100 100" width="100%" height="100%"><defs><linearGradient id="crystalGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#a2d9ff;stop-opacity:0.9" /><stop offset="100%" style="stop-color:#0077be;stop-opacity:0.9" /></linearGradient></defs><path d="M50 10 L70 40 L50 90 L30 40 Z" fill="url(#crystalGrad)" stroke="white" stroke-width="1"/><path d="M20 60 L35 50 L30 80 Z" fill="url(#crystalGrad)" stroke="white" stroke-width="1"/><path d="M80 60 L65 50 L70 80 Z" fill="url(#crystalGrad)" stroke="white" stroke-width="1"/></svg>`,
-            'training_ground': `<svg viewBox="0 0 100 100" width="100%" height="100%"><ellipse cx="50" cy="80" rx="40" ry="10" fill="#e67e22" /><rect x="45" y="40" width="10" height="40" fill="#8e44ad" /><circle cx="50" cy="40" r="20" fill="#ecf0f1" stroke="#c0392b" stroke-width="5" /><circle cx="50" cy="40" r="10" fill="#c0392b" /><path d="M70 70 L90 50 L85 45 L65 65 Z" fill="#bdc3c7" /><rect x="62" y="62" width="8" height="8" fill="#f1c40f" transform="rotate(45 66 66)" /></svg>`,
-            'temple': `<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="10" y="80" width="80" height="10" fill="#ecf0f1" /><rect x="15" y="75" width="70" height="5" fill="#bdc3c7" /><rect x="20" y="35" width="10" height="40" fill="#ecf0f1" /><rect x="45" y="35" width="10" height="40" fill="#ecf0f1" /><rect x="70" y="35" width="10" height="40" fill="#ecf0f1" /><polygon points="10,35 50,10 90,35" fill="#f1c40f" /><rect x="10" y="35" width="80" height="5" fill="#bdc3c7" /></svg>`,
-            'barracks': `<svg viewBox="0 0 100 100" width="100%" height="100%"><path d="M20 80 L50 20 L80 80 Z" fill="#27ae60" /><path d="M45 80 L50 20 L55 80 Z" fill="#2ecc71" /><path d="M40 80 L50 50 L60 80 Z" fill="#2c3e50" /><line x1="50" y1="20" x2="50" y2="5" stroke="#7f8c8d" stroke-width="2" /><polygon points="50,5 70,10 50,15" fill="#e74c3c" /></svg>`,
-            'workshop': `<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="20" y="40" width="60" height="40" fill="#d35400" /><polygon points="20,40 50,20 80,40" fill="#e67e22" /><rect x="65" y="25" width="10" height="20" fill="#7f8c8d" /><circle cx="50" cy="60" r="15" fill="#95a5a6" stroke="#7f8c8d" stroke-width="5" stroke-dasharray="5,5" /></svg>`,
-            'library': `<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="20" y="30" width="60" height="50" fill="#3498db" rx="5" /><rect x="25" y="35" width="50" height="40" fill="#ecf0f1" /><rect x="30" y="40" width="40" height="5" fill="#bdc3c7" /><rect x="30" y="50" width="40" height="5" fill="#bdc3c7" /><rect x="30" y="60" width="40" height="5" fill="#bdc3c7" /></svg>`,
-            'hospital': `<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="25" y="30" width="50" height="50" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="2" /><polygon points="20,30 50,10 80,30" fill="#e74c3c" /><rect x="45" y="45" width="10" height="20" fill="#e74c3c" /><rect x="40" y="50" width="20" height="10" fill="#e74c3c" /></svg>`,
-            'tower': `<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="35" y="30" width="30" height="60" fill="#7f8c8d" /><rect x="30" y="20" width="40" height="10" fill="#95a5a6" /><rect x="32" y="15" width="6" height="5" fill="#95a5a6" /><rect x="47" y="15" width="6" height="5" fill="#95a5a6" /><rect x="62" y="15" width="6" height="5" fill="#95a5a6" /><rect x="45" y="40" width="10" height="15" fill="#2c3e50" rx="5" /></svg>`,
-            'market': `<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="20" y="50" width="60" height="30" fill="#f39c12" /><rect x="20" y="80" width="10" height="10" fill="#d35400" /><rect x="70" y="80" width="10" height="10" fill="#d35400" /><path d="M15 50 L85 50 L75 30 L25 30 Z" fill="#e74c3c" /><path d="M25 30 L35 50 L45 30 L55 50 L65 30 L75 50" fill="none" stroke="#ecf0f1" stroke-width="2" /></svg>`
-        };
-        return svgs[buildingType] || this.getBuildingIcon(buildingType);
+        return BUILDING_SVGS[buildingType] || this.getBuildingIcon(buildingType);
     }
 
     getBuildingDescription(buildingType, levelInfo) {
-        const descriptions = {
-            'training_ground': `攻击力 +${levelInfo.attackBonus || 0}`,
-            'temple': `防御力 +${levelInfo.defenseBonus || 0}`,
-            'main_base': `生命值 ${levelInfo.hp || 0}，建筑上限 ${levelInfo.buildLimit || 0}`,
-            'barracks': `生命值 ${levelInfo.hp || 0}，攻击+${levelInfo.attackBonus || 0}，防御+${levelInfo.defenseBonus || 0}`,
-            'workshop': `金币产出 +${levelInfo.goldProduction || 0}/小时`,
-            'crystal_mine': `宝石产出 +${levelInfo.crystalProduction || 0}/小时`,
-            'library': `经验加成 +${levelInfo.experienceBonus || 0}%`,
-            'hospital': `生命值 ${levelInfo.hp || 0}，治疗率 +${levelInfo.healingRate || 0}/小时`,
-            'tower': `攻击+${levelInfo.attackBonus || 0}，防御+${levelInfo.defenseBonus || 0}`,
-            'market': `金币+${levelInfo.goldProduction || 0}/小时，宝石+${levelInfo.crystalProduction || 0}/小时`
-        };
-        return descriptions[buildingType] || '提供属性加成';
+        return getBuildingDescription(buildingType, levelInfo);
     }
 
     getBuildingTypeFromIcon(icon) {
-        const iconMap = {
-            '🏋️': 'training_ground',
-            '🏛️': 'temple',
-            '🏰': 'main_base',
-            '🏕️': 'barracks',
-            '🔨': 'workshop',
-            '💎': 'crystal_mine',
-            '📚': 'library',
-            '🏥': 'hospital',
-            '🗼': 'tower',
-            '🏪': 'market'
-        };
-        return iconMap[icon] || 'training_ground';
+        return Object.keys(BUILDING_ICONS).find(type => BUILDING_ICONS[type] === icon) || BuildingType.TRAINING_GROUND;
     }
 
     closeBuildingListModal() {

@@ -18,6 +18,7 @@ import AchievementUI from './modules/achievement-ui.js';
 import { getEquipmentSystemInstance } from './modules/equipment-system.js';
 import { getEquipmentUIInstance } from './modules/equipment-ui.js';
 import OfflineSystem from './modules/offline-system.js';
+import PlayerUI from './modules/player-ui.js';
 
 class Game {
     constructor() {
@@ -45,6 +46,7 @@ class Game {
         this.achievementSystem = new AchievementSystem(this.resourceSystem);
         this.achievementUI = new AchievementUI(this.achievementSystem, document.body);
         this.equipmentUI = null; // 稍后初始化
+        this.playerUI = new PlayerUI(this.playerSystem, this.resourceSystem); // 初始化玩家UI
         this.offlineSystem = null; // 稍后初始化
 
         // 设置宠物系统和战斗系统的双向引用
@@ -59,6 +61,7 @@ class Game {
         if (this.combatSystem.setAchievementSystem) this.combatSystem.setAchievementSystem(this.achievementSystem);
         if (this.resourceSystem.setAchievementSystem) this.resourceSystem.setAchievementSystem(this.achievementSystem);
         if (this.playerSystem.setAchievementSystem) this.playerSystem.setAchievementSystem(this.achievementSystem);
+        this.playerUI.setAchievementSystem(this.achievementSystem);
 
         // 游戏状态
         this.isInitialized = false;
@@ -86,6 +89,7 @@ class Game {
 
             console.log('[Game] 初始化玩家系统...');
             this.playerSystem.init();
+            this.playerUI.init();
             console.log('[Game] ✓ 玩家系统初始化完成');
 
             console.log('[Game] 初始化UI系统...');

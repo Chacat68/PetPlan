@@ -3,6 +3,8 @@
  * @description 管理领地数据、建筑、资源产出和属性加成。
  */
 
+import { BUILDING_DATA, EXPANSION_CONFIG } from '../config/territory-config.js';
+
 class TerritorySystem {
     constructor(resourceSystem) {
         this.resourceSystem = resourceSystem;
@@ -28,108 +30,13 @@ class TerritorySystem {
             }
         };
 
+        this.offlineGains = null; // 存储离线收益
+
         // 领地扩张配置
-        this.expansionConfig = {
-            // 每次扩张增加的地块数量
-            slotsPerExpansion: 2,
-            // 扩张成本配置（按扩张次数递增）
-            costs: [
-                { gold: 10000, crystal: 500, contractRequired: 1 },    // 第1次扩张
-                { gold: 25000, crystal: 1500, contractRequired: 2 },   // 第2次扩张
-                { gold: 50000, crystal: 3000, contractRequired: 3 },   // 第3次扩张
-            ],
-            // 扩张需要的主基地等级
-            requiredMainBaseLevel: [1, 1, 2],
-            // 扩张后新地块的解锁等级要求
-            newSlotUnlockLevels: [
-                [0, 5],    // 第1次扩张：地块6(0级)、地块7(5级)
-                [10, 15],  // 第2次扩张：地块8(10级)、地块9(15级)
-                [20, 25],  // 第3次扩张：地块10(20级)、地块11(25级)
-            ]
-        };
+        this.expansionConfig = EXPANSION_CONFIG;
 
         // 建筑的静态数据，包括各等级的属性
-        this.buildingData = {
-            "main_base": {
-                name: "主基地",
-                levels: [
-                    { level: 1, cost: { gold: 0, crystal: 0 }, hp: 1000, buildLimit: 5 },
-                    { level: 2, cost: { gold: 10000, crystal: 500 }, hp: 1500, buildLimit: 8 },
-                ]
-            },
-            "training_ground": {
-                name: "训练场",
-                levels: [
-                    { level: 1, cost: { gold: 1000, crystal: 0 }, attackBonus: 5 },
-                    { level: 2, cost: { gold: 5000, crystal: 500 }, attackBonus: 10 },
-                    { level: 3, cost: { gold: 15000, crystal: 1500 }, attackBonus: 20 },
-                ]
-            },
-            "temple": {
-                name: "神庙",
-                levels: [
-                    { level: 1, cost: { gold: 1000, crystal: 0 }, defenseBonus: 5 },
-                    { level: 2, cost: { gold: 5000, crystal: 500 }, defenseBonus: 10 },
-                    { level: 3, cost: { gold: 15000, crystal: 1500 }, defenseBonus: 20 },
-                ]
-            },
-            "barracks": {
-                name: "兵营",
-                levels: [
-                    { level: 1, cost: { gold: 2000, crystal: 200 }, hp: 800, attackBonus: 3, defenseBonus: 3 },
-                    { level: 2, cost: { gold: 8000, crystal: 800 }, hp: 1200, attackBonus: 6, defenseBonus: 6 },
-                    { level: 3, cost: { gold: 20000, crystal: 2000 }, hp: 1800, attackBonus: 12, defenseBonus: 12 },
-                ]
-            },
-            "workshop": {
-                name: "工坊",
-                levels: [
-                    { level: 1, cost: { gold: 3000, crystal: 300 }, goldProduction: 50 },
-                    { level: 2, cost: { gold: 12000, crystal: 1200 }, goldProduction: 100 },
-                    { level: 3, cost: { gold: 30000, crystal: 3000 }, goldProduction: 200 },
-                ]
-            },
-            "crystal_mine": {
-                name: "水晶矿",
-                levels: [
-                    { level: 1, cost: { gold: 5000, crystal: 0 }, crystalProduction: 10 },
-                    { level: 2, cost: { gold: 20000, crystal: 2000 }, crystalProduction: 25 },
-                    { level: 3, cost: { gold: 50000, crystal: 5000 }, crystalProduction: 50 },
-                ]
-            },
-            "library": {
-                name: "图书馆",
-                levels: [
-                    { level: 1, cost: { gold: 4000, crystal: 400 }, experienceBonus: 10 },
-                    { level: 2, cost: { gold: 16000, crystal: 1600 }, experienceBonus: 25 },
-                    { level: 3, cost: { gold: 40000, crystal: 4000 }, experienceBonus: 50 },
-                ]
-            },
-            "hospital": {
-                name: "医院",
-                levels: [
-                    { level: 1, cost: { gold: 6000, crystal: 600 }, hp: 1200, healingRate: 5 },
-                    { level: 2, cost: { gold: 24000, crystal: 2400 }, hp: 2000, healingRate: 10 },
-                    { level: 3, cost: { gold: 60000, crystal: 6000 }, hp: 3000, healingRate: 20 },
-                ]
-            },
-            "tower": {
-                name: "防御塔",
-                levels: [
-                    { level: 1, cost: { gold: 8000, crystal: 800 }, attackBonus: 8, defenseBonus: 8 },
-                    { level: 2, cost: { gold: 32000, crystal: 3200 }, attackBonus: 16, defenseBonus: 16 },
-                    { level: 3, cost: { gold: 80000, crystal: 8000 }, attackBonus: 32, defenseBonus: 32 },
-                ]
-            },
-            "market": {
-                name: "市场",
-                levels: [
-                    { level: 1, cost: { gold: 10000, crystal: 1000 }, goldProduction: 100, crystalProduction: 5 },
-                    { level: 2, cost: { gold: 40000, crystal: 4000 }, goldProduction: 200, crystalProduction: 15 },
-                    { level: 3, cost: { gold: 100000, crystal: 10000 }, goldProduction: 400, crystalProduction: 30 },
-                ]
-            },
-        };
+        this.buildingData = BUILDING_DATA;
     }
 
     /**
@@ -164,6 +71,11 @@ class TerritorySystem {
                 this.resourceSystem.addCrystals(production.crystal);
             }
 
+            // 通知UI显示特效
+            if (this.onProduction && production.details && production.details.length > 0) {
+                this.onProduction(production.details);
+            }
+
             // 扣除整秒，保留余数
             this.accumulator -= 1000;
         }
@@ -171,28 +83,34 @@ class TerritorySystem {
 
     /**
      * 计算当前总资源产出（每秒）
-     * @returns {{gold: number, crystal: number}} 每秒产出量
+     * @returns {{gold: number, crystal: number, details: Array}} 每秒产出量及详情
      */
     calculateTotalProduction() {
-        let totalProduction = { gold: 0, crystal: 0 };
+        let totalProduction = { gold: 0, crystal: 0, details: [] };
 
         this.territoryData.buildings.forEach(building => {
             const buildingInfo = this.buildingData[building.type];
             if (buildingInfo && buildingInfo.levels) {
-                // 找到对应等级的数据（注意：building.level 是从1开始，数组索引是从0开始，通常需要-1）
-                // 但这里的数据结构 seems to use explicit level matching or array index?
-                // Checking previous code: buildingData[type].levels is an array.
-                // Assuming levels are ordered 1, 2, 3... so index = level - 1
-
                 const levelIndex = building.level - 1;
                 if (levelIndex >= 0 && levelIndex < buildingInfo.levels.length) {
                     const levelInfo = buildingInfo.levels[levelIndex];
+                    let buildingProd = { gold: 0, crystal: 0 };
 
                     if (levelInfo.goldProduction) {
+                        buildingProd.gold = levelInfo.goldProduction;
                         totalProduction.gold += levelInfo.goldProduction;
                     }
                     if (levelInfo.crystalProduction) {
+                        buildingProd.crystal = levelInfo.crystalProduction;
                         totalProduction.crystal += levelInfo.crystalProduction;
+                    }
+
+                    if (buildingProd.gold > 0 || buildingProd.crystal > 0) {
+                        totalProduction.details.push({
+                            id: building.id,
+                            position: building.position,
+                            production: buildingProd
+                        });
                     }
                 }
             }
@@ -203,21 +121,90 @@ class TerritorySystem {
 
     /**
      * 获取所有建筑提供的总属性加成
-     * @returns {{attackBonus: number, defenseBonus: number}} 返回总的攻击和防御加成
+     * @returns {Object} 返回总的属性加成对象 { attackBonus, defenseBonus, maxHpBonus, healingRateBonus, experienceBonus }
      */
     getTotalAttributeBonuses() {
-        let totalBonuses = { attackBonus: 0, defenseBonus: 0 };
+        let totalBonuses = {
+            attackBonus: 0,
+            defenseBonus: 0,
+            maxHpBonus: 0,
+            healingRateBonus: 0,
+            experienceBonus: 0
+        };
+
         this.territoryData.buildings.forEach(building => {
             const buildingInfo = this.buildingData[building.type];
             if (buildingInfo && buildingInfo.levels) {
-                const levelInfo = buildingInfo.levels.find(l => l.level === building.level);
-                if (levelInfo) {
-                    if (levelInfo.attackBonus) {
-                        totalBonuses.attackBonus += levelInfo.attackBonus;
-                    }
-                    if (levelInfo.defenseBonus) {
-                        totalBonuses.defenseBonus += levelInfo.defenseBonus;
-                    }
+                // building.level is 1-based
+                const levelIndex = building.level - 1;
+                if (levelIndex >= 0 && levelIndex < buildingInfo.levels.length) {
+                    const levelInfo = buildingInfo.levels[levelIndex];
+
+                    if (levelInfo.attackBonus) totalBonuses.attackBonus += levelInfo.attackBonus;
+                    if (levelInfo.defenseBonus) totalBonuses.defenseBonus += levelInfo.defenseBonus;
+                    // hp in buildings usually adds to player Max HP (e.g. Barracks/Base might add structure HP, but here we treat relevant ones as player bonuses if applicable.
+                    // Wait, main_base hp is usually for the base itself. Barracks hp is also for the building.
+                    // Let's check the config again.
+                    // "main_base": { ... hp: 1000 ... } -> Building HP
+                    // "barracks": { ... hp: 800 ... } -> Building HP
+                    // "hospital": { ... hp: 1200 ... } -> Building HP
+                    // Only specific bonuses like "attackBonus", "defenseBonus" are clearly player stats.
+                    // "experienceBonus" in library is clear.
+                    // "healingRate" in hospital is likely player regeneration.
+                    
+                    // Let's assume 'hp' in building data is BUILDING HEALTH, not player health bonus, unless specified otherwise.
+                    // Checking config from Step 39:
+                    // training_ground: attackBonus
+                    // temple: defenseBonus
+                    // barracks: hp, attackBonus, defenseBonus. (Here hp is likely building hp, bonuses are player stats)
+                    // library: experienceBonus
+                    // hospital: hp, healingRate.
+                    
+                    // Plan says: "hp / maxHp (main_base, barracks, hospital)". 
+                    // User might want these buildings to add to PLAYER HP? Or maybe just misinterpreted?
+                    // Usually "Barracks" giving "Player HP" makes sense in some games, but "Building HP" makes more sense for a strategy game.
+                    // However, previous context `getActualMaxHp`...
+                    // Let's look at `implementation_plan.md`: "- hp / maxHp (主基地、兵营、医院)"
+                    // If the user wants deep integration, and explicitly listed these, I should probably check if there is a `maxHpBonus` field or if `hp` is meant to be it.
+                    // In `territory-config.js`:
+                    // barracks levels: { hp: 800, attackBonus: 3, defenseBonus: 3 }
+                    // It seems `hp` is the building's own health (for enemies to destroy).
+                    // BUT `hospital` has `healingRate`.
+                    
+                    // If I look at `PlayerSystem.js` lines 31-64, player has `maxHp`.
+                    // If I look at `CombatController.js` line 126, it uses `attrBonuses.attackBonus`.
+                    
+                    // Let's stick to adding explicitly named bonuses to player.
+                    // If the building has `maxHpBonus`, add it. If it just has `hp`, it's likely building hp.
+                    // HOWEVER, the plan explicitly said "extensions... hp / maxHp".
+                    // I will add `maxHpBonus` if it exists in config. I suspect the current config only has `hp` (building hp).
+                    // I will check if I should add `hp` to player.
+                    // Actually, let's look at `js/config/territory-config.js` again? I cannot see it now but I wrote it.
+                    // In Step 39, I wrote:
+                    // barracks: { level: 1, cost: ..., hp: 800, attackBonus: 3, defenseBonus: 3 }
+                    // It seems `hp` IS building HP.
+                    // There is NO `maxHpBonus` in the config I wrote.
+                    // So... `TerritorySystem` bonuses might strictly be `attackBonus`, `defenseBonus`, `healingRate`, `experienceBonus`.
+                    // Unless the user INTENDED for building HP to add to player HP? Unlikely.
+                    // But wait, `implementation_plan.md` says: "hp / maxHp (主基地、兵营、医院)".
+                    // Maybe I should assume for now that only `attackBonus`, `defenseBonus`, `healingRate`, `experienceBonus` are player stats.
+                    // The plan might be slightly loose in terminology. I will NOT add building HP to player HP unless it says `playerHpBonus`.
+                    // But wait, checking `building-assets.js` descriptions I wrote in Step 47:
+                    // 'barracks': `生命值 ${levelInfo.hp || 0}，攻击+${levelInfo.attackBonus || 0}...`
+                    // 'main_base': `生命值 ${levelInfo.hp || 0}...`
+                    // These descriptions imply `hp` is a property of the building.
+                    
+                    // Update: The `PlayerSystem` has `hpRegen`. `hospital` has `healingRate`. This matches.
+                    // `library` has `experienceBonus`.
+                    
+                    // So I will just sum up: `attackBonus`, `defenseBonus`, `healingRate`, `experienceBonus`.
+                    // I will NOT add `hp` to `maxHpBonus` because that seems like a bug (structure hp != player hp).
+                    // UNLESS the user implies that *owning* a barracks makes the player tankier.
+                    // Given the ambiguity, and "Safety First", I will treat `hp` as building hp.
+                    // However, I will add `maxHpBonus` to the return object (initialized to 0) in case future config adds it.
+                    
+                    if (levelInfo.healingRate) totalBonuses.healingRateBonus += levelInfo.healingRate;
+                    if (levelInfo.experienceBonus) totalBonuses.experienceBonus += levelInfo.experienceBonus;
                 }
             }
         });
@@ -747,6 +734,39 @@ class TerritorySystem {
 
                     console.log('领地数据已从本地存储加载:', this.territoryData);
 
+                    // 检查离线收益
+                    if (territoryData.timestamp) {
+                        const now = Date.now();
+                        const lastSaveTime = territoryData.timestamp;
+                        const timeDiff = now - lastSaveTime; // 毫秒
+                        
+                        // 最小离线时间 1 分钟，最大 24 小时
+                        const minOfflineTime = 60 * 1000;
+                        const maxOfflineTime = 24 * 60 * 60 * 1000;
+
+                        if (timeDiff >= minOfflineTime) {
+                            const effectiveTime = Math.min(timeDiff, maxOfflineTime);
+                            const productionPerSecond = this.calculateTotalProduction();
+                            const offlineSeconds = Math.floor(effectiveTime / 1000);
+
+                            const offlineGold = Math.floor(productionPerSecond.gold * offlineSeconds);
+                            const offlineCrystal = Math.floor(productionPerSecond.crystal * offlineSeconds);
+
+                            if (offlineGold > 0 || offlineCrystal > 0) {
+                                this.offlineGains = {
+                                    gold: offlineGold,
+                                    crystal: offlineCrystal,
+                                    seconds: offlineSeconds,
+                                    timeFormatted: this.formatTimeDuration(offlineSeconds)
+                                };
+                                console.log(`离线收益: ${offlineGold} 金币, ${offlineCrystal} 水晶 (${this.offlineGains.timeFormatted})`);
+                                
+                                // 直接添加资源 (?) - 还是等玩家在UI上点击领取?
+                                // 策略: 这里先不添加，等UI层调用 claimOfflineGains()
+                            }
+                        }
+                    }
+
                     // 检查并完成在离线期间完成的建造任务
                     const completedBuildings = this.checkAndCompleteBuildings();
                     if (completedBuildings.length > 0) {
@@ -762,6 +782,43 @@ class TerritorySystem {
             console.error('加载领地数据失败:', error);
         }
         return false;
+    }
+
+    /**
+     * 格式化时长
+     */
+    formatTimeDuration(seconds) {
+        if (seconds < 60) return `${seconds}秒`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}分钟`;
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return `${hours}小时${mins}分钟`;
+    }
+
+    /**
+     * 获取离线收益数据
+     */
+    getOfflineGains() {
+        return this.offlineGains || null;
+    }
+
+    /**
+     * 领取离线收益
+     */
+    claimOfflineGains() {
+        if (!this.offlineGains) return null;
+        
+        const gains = { ...this.offlineGains };
+        
+        // 添加资源
+        if (gains.gold > 0) this.resourceSystem.addCoins(gains.gold);
+        if (gains.crystal > 0) this.resourceSystem.addCrystals(gains.crystal);
+        
+        // 清除记录
+        this.offlineGains = null;
+        
+        return gains;
     }
 
     /**

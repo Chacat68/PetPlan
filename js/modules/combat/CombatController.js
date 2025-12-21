@@ -122,35 +122,27 @@ class CombatController {
         const playerCenterY = playerY + playerData.height / 2;
 
         // 计算攻击力
-        const territorySystem = getTerritorySystemInstance(this.resourceSystem);
-        const attrBonuses = territorySystem.getTotalAttributeBonuses();
-        
-        // 从PlayerSystem获取实际属性
-        const actualAttack = this.playerSystem.getActualAttack() + (attrBonuses.attackBonus || 0);
+        // 领地加成现在已集成在 getActualAttack() 中
+        const actualAttack = this.playerSystem.getActualAttack();
         const actualCrit = this.playerSystem.getActualCrit();
         const actualCritDamage = this.playerSystem.getActualCritDamage();
 
-        const bullet = {
-            x: playerCenterX,
-            y: playerCenterY,
-            width: 6,
-            height: 6,
-            speed: 300,
-            dirX: 1, // 简化的水平射击
-            dirY: 0,
-            
-            // 伤害快照
-            attackerStats: {
-                damage: actualAttack,
-                crit: actualCrit,
-                critDamage: actualCritDamage
-            },
-            
-            life: 2000,
-            trail: []
+        const attackerStats = {
+            damage: actualAttack,
+            crit: actualCrit,
+            critDamage: actualCritDamage
         };
 
-        this.projectileSystem.addBullet(bullet);
+        this.projectileSystem.createBullet(
+            playerCenterX,
+            playerCenterY,
+            6, // width
+            6, // height
+            300, // speed
+            1, // dirX
+            0, // dirY
+            attackerStats
+        );
     }
 
     // --- 碰撞检测逻辑 ---

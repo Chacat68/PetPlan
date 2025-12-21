@@ -17,26 +17,23 @@ class SaveUI {
      * 初始化UI
      */
     init() {
-        // this.createSaveButton(); // 移除旧按钮创建
-        this.createSaveModal();
-        this.bindEvents();
-        console.log('存档UI初始化完成');
+        const container = document.getElementById('save-ui-container');
+        if (container) {
+            this.renderSaveUI(container);
+            this.bindEvents();
+            console.log('存档UI初始化完成 (集成模式)');
+        } else {
+            console.error('未找到存档UI容器 #save-ui-container');
+        }
     }
 
     /**
-     * 创建存档模态框
+     * 渲染存档界面到指定容器
      */
-    createSaveModal() {
-        const modal = document.createElement('div');
-        modal.className = 'save-modal';
-        modal.id = 'saveModal';
-
-        modal.innerHTML = `
-            <div class="save-modal-content">
-                <div class="save-modal-header">
-                    <h2 class="save-modal-title">存档管理</h2>
-                    <button class="save-modal-close" id="closeSaveModal">×</button>
-                </div>
+    renderSaveUI(container) {
+        container.innerHTML = `
+            <div class="save-management-panel">
+                <h3 class="save-section-title">存档管理</h3>
                 
                 <div class="save-slots" id="saveSlots">
                     <!-- 存档槽位将动态生成 -->
@@ -65,44 +62,20 @@ class SaveUI {
                         <span class="shortcut-key">F5</span>
                         <span>快速保存（槽位1）</span>
                     </div>
-                    <div class="shortcut-item">
-                        <span class="shortcut-key">F9</span>
-                        <span>快速加载（槽位1）</span>
-                    </div>
-                    <div class="shortcut-item">
-                        <span>💡</span>
-                        <span>游戏每30秒自动保存到槽位1</span>
-                    </div>
                 </div>
             </div>
         `;
-
-        document.body.appendChild(modal);
-        this.modal = modal;
+        
+        // 渲染后立即刷新槽位信息
+        this.refreshSaveSlots();
     }
 
     /**
      * 绑定事件
      */
     bindEvents() {
-        // 打开存档菜单
-        const openBtn = document.getElementById('openSaveMenuBtn'); // 修改为新的按钮ID
-        if (openBtn) {
-            openBtn.addEventListener('click', () => this.openModal());
-        }
-
-        // 关闭存档菜单
-        const closeBtn = document.getElementById('closeSaveModal');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeModal());
-        }
-
-        // 点击模态框外部关闭
-        this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) {
-                this.closeModal();
-            }
-        });
+        // 移除旧的打开/关闭模态框事件绑定，因为现在是嵌入到设置中
+        // 只需要保留功能性事件
 
         // 文件选择
         const fileInput = document.getElementById('importFileInput');
@@ -124,17 +97,7 @@ class SaveUI {
     /**
      * 打开模态框
      */
-    openModal() {
-        this.modal.classList.add('active');
-        this.refreshSaveSlots();
-    }
-
-    /**
-     * 关闭模态框
-     */
-    closeModal() {
-        this.modal.classList.remove('active');
-    }
+    // openModal 和 closeModal 方法已移除
 
     /**
      * 刷新存档槽位显示
@@ -255,7 +218,7 @@ class SaveUI {
             const success = this.saveSystem.loadGame(slot);
             if (success) {
                 showToast(`已从槽位 ${slot} 加载`);
-                this.closeModal();
+                // this.closeModal(); // 不再需要关闭
                 // 刷新页面以应用加载的数据
                 setTimeout(() => {
                     location.reload();
@@ -282,7 +245,7 @@ class SaveUI {
             const success = this.saveSystem.deleteSave(slot);
             if (success) {
                 showToast(`槽位 ${slot} 已删除，正在重新加载...`);
-                this.closeModal();
+                // this.closeModal();
 
                 // 清除当前游戏数据并重新加载页面
                 setTimeout(() => {

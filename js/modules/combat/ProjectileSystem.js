@@ -5,17 +5,37 @@
 class ProjectileSystem {
     constructor() {
         this.bullets = [];
+        this.pool = [];
     }
 
     /**
-     * 添加子弹
-     * @param {Object} bullet 子弹对象
+     * 创建并添加子弹 (通过对象池)
      */
-    addBullet(bullet) {
-        // 确保必要的属性存在
-        bullet.trail = bullet.trail || [];
-        bullet.life = bullet.life || 2000;
+    createBullet(x, y, width, height, speed, dirX, dirY, attackerStats, life = 2000) {
+        let bullet;
+        if (this.pool.length > 0) {
+            bullet = this.pool.pop();
+            // 重置属性
+            bullet.x = x;
+            bullet.y = y;
+            bullet.width = width;
+            bullet.height = height;
+            bullet.speed = speed;
+            bullet.dirX = dirX;
+            bullet.dirY = dirY;
+            bullet.attackerStats = attackerStats;
+            bullet.life = life;
+            bullet.trail.length = 0;
+        } else {
+            bullet = {
+                x, y, width, height, speed, dirX, dirY,
+                attackerStats,
+                life,
+                trail: []
+            };
+        }
         this.bullets.push(bullet);
+        return bullet;
     }
 
     /**
@@ -29,6 +49,7 @@ class ProjectileSystem {
             const bullet = this.bullets[i];
 
             // 1. 轨迹记录
+            // 简单优化：复用轨迹点对象需要更复杂的逻辑，暂且每次创建新点，但因为数量少 (8个)，GC影响可控
             bullet.trail.push({ x: bullet.x, y: bullet.y, life: 200 });
             if (bullet.trail.length > 8) {
                 bullet.trail.shift();
@@ -50,16 +71,25 @@ class ProjectileSystem {
             if (bullet.life <= 0 ||
                 bullet.x < -50 || bullet.x > mapSize.width + 50 ||
                 bullet.y < -50 || bullet.y > mapSize.height + 50) {
+                this.returnToPool(bullet);
                 this.bullets.splice(i, 1);
             }
         }
     }
 
+    /**
+     * 移除子弹并归还对象池
+     */
     removeBullet(bullet) {
         const index = this.bullets.indexOf(bullet);
         if (index > -1) {
+            this.returnToPool(bullet);
             this.bullets.splice(index, 1);
         }
+    }
+
+    returnToPool(bullet) {
+        this.pool.push(bullet);
     }
 
     getBullets() {

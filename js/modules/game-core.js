@@ -63,29 +63,29 @@ class GameCore {
             });
         }
 
-        // 初始化草丛装饰
+        // 初始化装饰元素 (Glowing Particles / Dark Rocks)
         for (let i = 0; i < 40; i++) {
             this.grassDecorations.push({
                 x: Math.random() * this.mapWidth,
                 y: this.mapHeight - 50 + Math.random() * 40,
-                height: 5 + Math.random() * 10,
-                color: Math.random() > 0.5 ? '#228b22' : '#006400'
+                height: 2 + Math.random() * 5, // Smaller, more like particles or small rocks
+                color: Math.random() > 0.5 ? '#4c1d95' : '#5b21b6', // Dark Purple
+                alpha: 0.3 + Math.random() * 0.5
             });
         }
 
-        // 初始化远景山脉
+        // 初始化远景山脉 (Dark Silhouettes)
         this.mountains = [];
-        // 远山
         let x = 0;
         while (x < this.mapWidth) {
             const width = 100 + Math.random() * 150;
-            const height = 80 + Math.random() * 100;
+            const height = 100 + Math.random() * 150; // Taller, more imposing
             this.mountains.push({
                 x: x,
-                y: this.mapHeight - 50,
+                y: this.mapHeight - 40,
                 width: width,
                 height: height,
-                color: '#5F9EA0' // CadetBlue
+                color: '#1e1b2e' // Very dark blue/purple
             });
             x += width * 0.6;
         }
@@ -212,42 +212,41 @@ class GameCore {
     }
 
     /**
-     * 绘制天空
+     * 绘制天空 (Dark Fantasy Night)
      */
     drawSky() {
         const gradient = this.ctx.createLinearGradient(0, 0, 0, this.mapHeight);
-        gradient.addColorStop(0, '#87CEEB'); // 天蓝色
-        gradient.addColorStop(1, '#E0F7FA'); // 浅青色
+        gradient.addColorStop(0, '#0f0e17'); // Pitch black/Deep purple
+        gradient.addColorStop(1, '#2d2b42'); // Dark horizon
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
+
+        // Optional: Add stars
+        // (Assuming simple random stars could be added in init or draw, but for now gradient is key)
     }
 
     /**
      * 绘制山脉
+     */
+    /**
+     * 绘制山脉 (Silhouettes)
      */
     drawMountains() {
         this.ctx.save();
         this.mountains.forEach(mountain => {
             this.ctx.fillStyle = mountain.color;
             this.ctx.beginPath();
+            // Simple triangle shape
             this.ctx.moveTo(mountain.x, mountain.y);
             this.ctx.lineTo(mountain.x + mountain.width / 2, mountain.y - mountain.height);
             this.ctx.lineTo(mountain.x + mountain.width, mountain.y);
             this.ctx.closePath();
             this.ctx.fill();
-
-            // 山顶积雪
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-            this.ctx.beginPath();
-            this.ctx.moveTo(mountain.x + mountain.width * 0.35, mountain.y - mountain.height * 0.7);
-            this.ctx.lineTo(mountain.x + mountain.width / 2, mountain.y - mountain.height);
-            this.ctx.lineTo(mountain.x + mountain.width * 0.65, mountain.y - mountain.height * 0.7);
-            // 锯齿状雪线
-            this.ctx.lineTo(mountain.x + mountain.width * 0.6, mountain.y - mountain.height * 0.6);
-            this.ctx.lineTo(mountain.x + mountain.width * 0.5, mountain.y - mountain.height * 0.75);
-            this.ctx.lineTo(mountain.x + mountain.width * 0.4, mountain.y - mountain.height * 0.6);
-            this.ctx.closePath();
-            this.ctx.fill();
+            
+            // Faint rim light instead of snow
+            this.ctx.strokeStyle = 'rgba(99, 102, 241, 0.1)'; // Faint purple/blue rim
+            this.ctx.lineWidth = 1;
+            this.ctx.stroke();
         });
         this.ctx.restore();
     }
@@ -255,20 +254,23 @@ class GameCore {
     /**
      * 绘制地面
      */
+    /**
+     * 绘制地面 (Dark Terrain)
+     */
     drawGround() {
         const groundY = this.mapHeight - 50;
 
         // 地面渐变
         const gradient = this.ctx.createLinearGradient(0, groundY, 0, this.mapHeight);
-        gradient.addColorStop(0, '#90EE90'); // 浅绿
-        gradient.addColorStop(1, '#228B22'); // 森林绿
+        gradient.addColorStop(0, '#1a1a2e'); // Dark Blue/Black
+        gradient.addColorStop(1, '#0f0e17'); // Almost black
 
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0, groundY, this.mapWidth, 50);
 
-        // 地面边缘线
-        this.ctx.strokeStyle = '#2E8B57';
-        this.ctx.lineWidth = 2;
+        // 地面边缘线 (Glowing)
+        this.ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)'; // Faint purple glow
+        this.ctx.lineWidth = 1;
         this.ctx.beginPath();
         this.ctx.moveTo(0, groundY);
         this.ctx.lineTo(this.mapWidth, groundY);
@@ -278,35 +280,44 @@ class GameCore {
     /**
      * 绘制草地纹理
      */
+    /**
+     * 绘制地面装饰 (Mystical Particles/Rocks)
+     */
     drawGrassTexture() {
-        // 绘制草地装饰
-        this.grassDecorations.forEach(grass => {
-            this.ctx.fillStyle = grass.color;
+        this.grassDecorations.forEach(item => {
+            this.ctx.fillStyle = item.color;
+            this.ctx.globalAlpha = item.alpha || 0.5;
             this.ctx.beginPath();
-            this.ctx.moveTo(grass.x, grass.y);
-            this.ctx.lineTo(grass.x - 3, grass.y - grass.height);
-            this.ctx.lineTo(grass.x + 3, grass.y - grass.height);
+            // Small diamond/rock shapes
+            this.ctx.moveTo(item.x, item.y);
+            this.ctx.lineTo(item.x - 2, item.y - item.height / 2);
+            this.ctx.lineTo(item.x, item.y - item.height);
+            this.ctx.lineTo(item.x + 2, item.y - item.height / 2);
             this.ctx.closePath();
             this.ctx.fill();
+            this.ctx.globalAlpha = 1.0;
         });
     }
 
     /**
      * 绘制云朵
      */
+    /**
+     * 绘制云朵 (Mist/Fog)
+     */
     drawClouds() {
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.globalAlpha = 0.8;
+        this.ctx.fillStyle = '#6366f1'; // faint purple/blue mist
+        this.ctx.globalAlpha = 0.05; // Very subtle
 
         this.clouds.forEach(cloud => {
             this.ctx.save();
             this.ctx.translate(cloud.x, cloud.y);
-            this.ctx.scale(cloud.size, cloud.size);
+            this.ctx.scale(cloud.size, cloud.size * 0.6); // Flattened like fog
 
             this.ctx.beginPath();
-            this.ctx.arc(0, 0, 20, 0, Math.PI * 2);
-            this.ctx.arc(25, 0, 25, 0, Math.PI * 2);
-            this.ctx.arc(50, 0, 20, 0, Math.PI * 2);
+            this.ctx.arc(0, 0, 30, 0, Math.PI * 2);
+            this.ctx.arc(40, 10, 40, 0, Math.PI * 2);
+            this.ctx.arc(80, 0, 30, 0, Math.PI * 2);
             this.ctx.fill();
 
             this.ctx.restore();

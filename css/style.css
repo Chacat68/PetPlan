@@ -5,821 +5,856 @@
 
 /* 全局重置与基础样式 */
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-tap-highlight-color: transparent;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
-    scroll-behavior: smooth;
+  scroll-behavior: smooth;
 }
 
 /* CSS 变量 - 主题色彩系统 */
 :root {
-    /* 主色调 */
-    --primary: #6366f1;
-    --primary-light: #818cf8;
-    --primary-dark: #4f46e5;
-    
-    /* 强调色 */
-    --accent-gold: #fbbf24;
-    --accent-gold-light: #fcd34d;
-    --accent-red: #ef4444;
-    --accent-green: #22c55e;
-    --accent-blue: #3b82f6;
-    --accent-purple: #a855f7;
-    
-    /* 背景色 */
-    --bg-dark: #0f0e17;
-    --bg-card: rgba(30, 27, 47, 0.85);
-    --bg-glass: rgba(255, 255, 255, 0.05);
-    --bg-glass-strong: rgba(255, 255, 255, 0.1);
-    
-    /* 文字色 */
-    --text-primary: #fffffe;
-    --text-secondary: #a7a9be;
-    --text-muted: #72757e;
-    
-    /* 边框 */
-    --border-glass: rgba(255, 255, 255, 0.1);
-    --border-glow: rgba(99, 102, 241, 0.4);
-    
-    /* 圆角 */
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 24px;
-    
-    /* 阴影 */
-    --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
-    --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
+  /* 主色调 */
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --primary-dark: #4f46e5;
+
+  /* 强调色 */
+  --accent-gold: #fbbf24;
+  --accent-gold-light: #fcd34d;
+  --accent-red: #ef4444;
+  --accent-green: #22c55e;
+  --accent-blue: #3b82f6;
+  --accent-purple: #a855f7;
+
+  /* 背景色 */
+  --bg-dark: #0f0e17;
+  --bg-card: rgba(30, 27, 47, 0.85);
+  --bg-glass: rgba(255, 255, 255, 0.05);
+  --bg-glass-strong: rgba(255, 255, 255, 0.1);
+
+  /* 文字色 */
+  --text-primary: #fffffe;
+  --text-secondary: #a7a9be;
+  --text-muted: #72757e;
+
+  /* 边框 */
+  --border-glass: rgba(255, 255, 255, 0.1);
+  --border-glow: rgba(99, 102, 241, 0.4);
+
+  /* 圆角 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* 阴影 */
+  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+  --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 body {
-    font-family: 'Inter', 'SF Pro Display', 'Segoe UI', 'Microsoft YaHei', sans-serif;
-    background: linear-gradient(135deg, #0f0e17 0%, #1a1832 50%, #0f0e17 100%);
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: var(--text-primary);
-    overflow: hidden;
-    position: relative;
+  font-family: "Inter", "SF Pro Display", "Segoe UI", "Microsoft YaHei",
+    sans-serif;
+  background: linear-gradient(135deg, #0f0e17 0%, #1a1832 50%, #0f0e17 100%);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-primary);
+  overflow: hidden;
+  position: relative;
 }
 
 /* 背景装饰 - 动态光晕 */
 body::before {
-    content: '';
-    position: fixed;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: 
-        radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
-        radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.1) 0%, transparent 40%);
-    animation: bgPulse 20s ease-in-out infinite;
-    pointer-events: none;
-    z-index: 0;
+  content: "";
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+      circle at 20% 30%,
+      rgba(99, 102, 241, 0.15) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 80% 70%,
+      rgba(168, 85, 247, 0.1) 0%,
+      transparent 40%
+    );
+  animation: bgPulse 20s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
 }
 
 @keyframes bgPulse {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(-5%, 5%) scale(1.1); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-5%, 5%) scale(1.1);
+  }
 }
 
 /* 自定义滚动条 */
 ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background: var(--primary);
-    border-radius: 4px;
+  background: var(--primary);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--primary-light);
+  background: var(--primary-light);
 }
 
 /* ============================================
    主游戏容器
    ============================================ */
 .game-container {
-    width: 100%;
-    max-width: 420px;
-    height: 100vh;
-    max-height: 800px;
-    background: var(--bg-dark);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-card), 0 0 60px rgba(99, 102, 241, 0.2);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
-    border: 1px solid var(--border-glass);
-    z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  height: 100vh;
+  max-height: 800px;
+  background: var(--bg-dark);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card), 0 0 60px rgba(99, 102, 241, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border-glass);
+  z-index: 1;
 }
 
 /* 游戏区域 */
 .game-area {
-    flex: 1;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* 游戏画布 */
 #gameCanvas {
-    width: 100%;
-    flex: 1;
-    border-radius: var(--radius-md);
-    background: linear-gradient(180deg, #1e1b2f 0%, #0f0e17 100%);
-    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.5);
+  width: 100%;
+  flex: 1;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #1e1b2f 0%, #0f0e17 100%);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.5);
 }
 
 /* ============================================
    UI 覆盖层系统
    ============================================ */
 .game-ui-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ============================================
    顶部状态栏 - 玻璃态设计
    ============================================ */
 .game-top-status {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 12px 16px;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, transparent 100%);
-    pointer-events: auto;
-    z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, transparent 100%);
+  pointer-events: auto;
+  z-index: 20;
 }
 
 .game-status-left {
-    display: flex;
-    gap: 12px;
-    align-items: center;
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 /* 玩家头像 - 带光晕边框 */
 .player-avatar {
-    width: 52px;
-    height: 52px;
-    border-radius: var(--radius-md);
-    border: 2px solid var(--accent-gold);
-    box-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
-    overflow: hidden;
-    background: var(--bg-dark);
-    position: relative;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--accent-gold);
+  box-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
+  overflow: hidden;
+  background: var(--bg-dark);
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
 }
 
 .player-avatar::after {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    border-radius: var(--radius-md);
-    background: linear-gradient(45deg, var(--accent-gold), transparent, var(--accent-gold));
-    opacity: 0;
-    transition: opacity 0.3s;
-    z-index: -1;
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    45deg,
+    var(--accent-gold),
+    transparent,
+    var(--accent-gold)
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: -1;
 }
 
 .player-avatar:hover::after {
-    opacity: 0.5;
+  opacity: 0.5;
 }
 
 .player-avatar:hover {
-    transform: scale(1.05);
+  transform: scale(1.05);
 }
 
 /* 货币显示 - 紧凑胶囊式 */
 .currency-display {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .currency-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--bg-glass);
-    backdrop-filter: blur(10px);
-    padding: 4px 10px;
-    border-radius: 20px;
-    border: 1px solid var(--border-glass);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-    transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border-glass);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all 0.2s;
 }
 
 .currency-item:hover {
-    background: var(--bg-glass-strong);
-    transform: translateX(2px);
+  background: var(--bg-glass-strong);
+  transform: translateX(2px);
 }
 
 .currency-icon {
-    font-size: 14px;
-    filter: drop-shadow(0 0 4px currentColor);
+  font-size: 14px;
+  filter: drop-shadow(0 0 4px currentColor);
 }
 
 /* 顶部右侧功能按钮 */
 .game-status-right {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    max-width: 90px;
-    justify-content: flex-end;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 90px;
+  justify-content: flex-end;
 }
 
 .status-icon {
-    width: 34px;
-    height: 34px;
-    background: var(--bg-glass);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 34px;
+  height: 34px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-secondary);
 }
 
 .status-icon:hover {
-    background: var(--bg-glass-strong);
-    border-color: var(--primary);
-    transform: scale(1.1);
-    box-shadow: var(--shadow-glow);
+  background: var(--bg-glass-strong);
+  border-color: var(--primary);
+  transform: scale(1.1);
+  box-shadow: var(--shadow-glow);
 }
 
 .status-icon:active {
-    transform: scale(0.95);
+  transform: scale(0.95);
 }
 
 /* ============================================
    关卡信息徽章
    ============================================ */
 .stage-info-overlay {
-    position: absolute;
-    top: 70px;
-    left: 50%;
-    transform: translateX(-50%);
-    pointer-events: none;
-    z-index: 15;
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 15;
 }
 
 .stage-info {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    background: var(--bg-glass);
-    backdrop-filter: blur(15px);
-    padding: 6px 16px;
-    border-radius: 20px;
-    border: 1px solid var(--border-glass);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg-glass);
+  backdrop-filter: blur(15px);
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
 .stage-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--accent-gold);
-    text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-gold);
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
 }
 
 .stage-level {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-primary);
-    background: linear-gradient(135deg, var(--primary), var(--accent-purple));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* ============================================
    功能按钮区域 (快捷操作)
    ============================================ */
 .function-buttons-overlay {
-    position: absolute;
-    bottom: 290px;
-    left: 16px;
-    right: 16px;
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    pointer-events: auto;
-    z-index: 30;
+  position: absolute;
+  bottom: 290px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: auto;
+  z-index: 30;
 }
 
 .function-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-sm);
-    border: none;
-    color: var(--text-primary);
-    font-weight: 700;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: none;
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
 .function-btn::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 50%);
-    pointer-events: none;
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    transparent 50%
+  );
+  pointer-events: none;
 }
 
 .function-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 .function-btn:active {
-    transform: translateY(0);
+  transform: translateY(0);
 }
 
 /* 按钮颜色变体 */
-.auto-btn { 
-    background: linear-gradient(135deg, #22c55e, #16a34a); 
-    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+.auto-btn {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
 }
-.attack-btn { 
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+.attack-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
 }
-.hp-btn { 
-    background: linear-gradient(135deg, #f97316, #ea580c);
-    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4);
+.hp-btn {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4);
 }
-.regen-btn { 
-    background: linear-gradient(135deg, #a855f7, #9333ea);
-    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+.regen-btn {
+  background: linear-gradient(135deg, #a855f7, #9333ea);
+  box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
 }
-.add-btn { 
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+.add-btn {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
 }
 
 /* ============================================
    宠物部署区域
    ============================================ */
 .pet-deployment-overlay {
-    position: absolute;
-    bottom: 240px;
-    left: 16px;
-    pointer-events: auto;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  position: absolute;
+  bottom: 240px;
+  left: 16px;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .pet-deployment-box {
-    background: var(--bg-glass);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--accent-green);
-    border-radius: var(--radius-sm);
-    padding: 6px 12px;
-    font-weight: 600;
-    font-size: 11px;
-    color: var(--accent-green);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .pet-slots {
-    display: flex;
-    gap: 6px;
+  display: flex;
+  gap: 6px;
 }
 
 .pet-slot {
-    width: 38px;
-    height: 38px;
-    background: var(--bg-glass);
-    backdrop-filter: blur(10px);
-    border: 2px dashed var(--border-glass);
-    border-radius: var(--radius-sm);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    transition: all 0.2s;
+  width: 38px;
+  height: 38px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border: 2px dashed var(--border-glass);
+  border-radius: var(--radius-sm);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .pet-slot:hover {
-    border-color: var(--accent-gold);
-    border-style: solid;
-    box-shadow: 0 0 15px rgba(251, 191, 36, 0.3);
-    transform: scale(1.05);
+  border-color: var(--accent-gold);
+  border-style: solid;
+  box-shadow: 0 0 15px rgba(251, 191, 36, 0.3);
+  transform: scale(1.05);
 }
 
 .pet-slot.occupied {
-    background: rgba(251, 191, 36, 0.1);
-    border-color: var(--accent-gold);
-    border-style: solid;
+  background: rgba(251, 191, 36, 0.1);
+  border-color: var(--accent-gold);
+  border-style: solid;
 }
 
 .pet-slot-plus {
-    color: var(--text-muted);
-    font-size: 20px;
-    font-weight: 300;
-    transition: color 0.2s;
+  color: var(--text-muted);
+  font-size: 20px;
+  font-weight: 300;
+  transition: color 0.2s;
 }
 
 .pet-slot:hover .pet-slot-plus {
-    color: var(--accent-gold);
+  color: var(--accent-gold);
 }
 
 /* ============================================
    总战力显示
    ============================================ */
 .total-power-overlay {
-    position: absolute;
-    bottom: 240px;
-    right: 16px;
-    pointer-events: auto;
+  position: absolute;
+  bottom: 240px;
+  right: 16px;
+  pointer-events: auto;
 }
 
 .total-power {
-    background: var(--bg-glass);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--accent-red);
-    padding: 8px 14px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--accent-red);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
 }
 
 .power-label {
-    font-size: 9px;
-    color: var(--accent-red);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-weight: 600;
+  font-size: 9px;
+  color: var(--accent-red);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
 }
 
 .power-value {
-    font-size: 18px;
-    font-weight: 700;
-    background: linear-gradient(135deg, #ef4444, #f97316);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    text-shadow: none;
+  font-size: 18px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
 }
 
 /* ============================================
    升级面板 - 卡片式设计
    ============================================ */
 .upgrade-panel-overlay {
-    position: absolute;
-    bottom: 70px;
-    left: 0;
-    right: 0;
-    height: 210px;
-    background: linear-gradient(180deg, rgba(15, 14, 23, 0.95) 0%, rgba(15, 14, 23, 0.98) 100%);
-    backdrop-filter: blur(20px);
-    border-top: 1px solid var(--border-glass);
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    padding: 12px;
-    overflow-y: auto;
-    pointer-events: auto;
-    z-index: 50;
+  position: absolute;
+  bottom: 70px;
+  left: 0;
+  right: 0;
+  height: 210px;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 14, 23, 0.95) 0%,
+    rgba(15, 14, 23, 0.98) 100%
+  );
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 12px;
+  overflow-y: auto;
+  pointer-events: auto;
+  z-index: 50;
 }
 
 .upgrade-items-vertical {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* 升级卡片 */
 .upgrade-item {
-    display: flex;
-    align-items: center;
-    background: var(--bg-glass);
-    border: 1px solid var(--border-glass);
-    padding: 10px 12px;
-    border-radius: var(--radius-md);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .upgrade-item:hover {
-    background: var(--bg-glass-strong);
-    border-color: var(--primary);
-    transform: translateX(4px);
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+  background: var(--bg-glass-strong);
+  border-color: var(--primary);
+  transform: translateX(4px);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
 }
 
 /* 图标容器 */
 .upgrade-icon-container {
-    width: 44px;
-    height: 44px;
-    background: linear-gradient(135deg, var(--bg-card), var(--bg-dark));
-    border-radius: var(--radius-sm);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    margin-right: 12px;
-    border: 1px solid var(--border-glass);
-    flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-dark));
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  border: 1px solid var(--border-glass);
+  flex-shrink: 0;
 }
 
 .upgrade-icon {
-    font-size: 20px;
-    filter: drop-shadow(0 0 6px currentColor);
+  font-size: 20px;
+  filter: drop-shadow(0 0 6px currentColor);
 }
 
 .upgrade-level {
-    font-size: 9px;
-    color: var(--text-muted);
-    margin-top: 1px;
-    font-weight: 600;
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  font-weight: 600;
 }
 
 /* 属性信息 */
 .upgrade-info {
-    flex: 1;
-    min-width: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .upgrade-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
 }
 
 .upgrade-value {
-    font-size: 13px;
-    color: var(--accent-green);
-    font-weight: 600;
-    font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 13px;
+  color: var(--accent-green);
+  font-weight: 600;
+  font-family: "SF Mono", "Consolas", monospace;
 }
 
 /* 升级按钮 */
 .upgrade-btn {
-    background: linear-gradient(135deg, var(--accent-gold), #f59e0b);
-    border: none;
-    color: var(--bg-dark);
-    padding: 8px 14px;
-    border-radius: var(--radius-sm);
-    font-weight: 700;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 80px;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 15px rgba(251, 191, 36, 0.3);
-    flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent-gold), #f59e0b);
+  border: none;
+  color: var(--bg-dark);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(251, 191, 36, 0.3);
+  flex-shrink: 0;
 }
 
 .upgrade-btn:hover:not(:disabled) {
-    transform: scale(1.05);
-    box-shadow: 0 6px 25px rgba(251, 191, 36, 0.5);
+  transform: scale(1.05);
+  box-shadow: 0 6px 25px rgba(251, 191, 36, 0.5);
 }
 
 .upgrade-btn:active:not(:disabled) {
-    transform: scale(0.98);
+  transform: scale(0.98);
 }
 
 .upgrade-btn:disabled {
-    background: linear-gradient(135deg, #4b5563, #374151);
-    color: var(--text-muted);
-    cursor: not-allowed;
-    box-shadow: none;
+  background: linear-gradient(135deg, #4b5563, #374151);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-text {
-    font-size: 12px;
-    margin-bottom: 1px;
+  font-size: 12px;
+  margin-bottom: 1px;
 }
 
 .btn-cost {
-    font-size: 10px;
-    opacity: 0.8;
-    font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 10px;
+  opacity: 0.8;
+  font-family: "SF Mono", "Consolas", monospace;
 }
 
 /* ============================================
    底部导航栏 - 现代玻璃态
    ============================================ */
 .bottom-navigation {
-    height: 70px;
-    background: rgba(15, 14, 23, 0.95);
-    backdrop-filter: blur(20px);
-    border-top: 1px solid var(--border-glass);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    padding: 8px 0;
-    z-index: 100;
+  height: 70px;
+  background: rgba(15, 14, 23, 0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-glass);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8px 0;
+  z-index: 100;
 }
 
 .nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer;
-    padding: 8px 12px;
-    border-radius: var(--radius-md);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    color: var(--text-muted);
-    position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-muted);
+  position: relative;
 }
 
 .nav-item::before {
-    content: '';
-    position: absolute;
-    bottom: -4px;
-    left: 50%;
-    transform: translateX(-50%) scaleX(0);
-    width: 20px;
-    height: 3px;
-    background: var(--accent-gold);
-    border-radius: 2px;
-    transition: transform 0.2s;
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  width: 20px;
+  height: 3px;
+  background: var(--accent-gold);
+  border-radius: 2px;
+  transition: transform 0.2s;
 }
 
 .nav-item:hover,
 .nav-item.active {
-    color: var(--accent-gold);
-    background: rgba(251, 191, 36, 0.1);
+  color: var(--accent-gold);
+  background: rgba(251, 191, 36, 0.1);
 }
 
 .nav-item.active::before,
 .nav-item:hover::before {
-    transform: translateX(-50%) scaleX(1);
+  transform: translateX(-50%) scaleX(1);
 }
 
 .nav-icon {
-    font-size: 22px;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-    transition: transform 0.2s;
+  font-size: 22px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  transition: transform 0.2s;
 }
 
 .nav-item:hover .nav-icon {
-    transform: scale(1.1);
+  transform: scale(1.1);
 }
 
 .nav-label {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 /* 关闭按钮样式 */
 .nav-close-btn {
-    background: rgba(239, 68, 68, 0.1);
-    color: var(--accent-red);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--accent-red);
 }
 
 .nav-close-btn:hover {
-    background: rgba(239, 68, 68, 0.2);
-    color: var(--accent-red);
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--accent-red);
 }
 
 /* ============================================
    模态框系统
    ============================================ */
 .modal {
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(10px);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 2000;
-    animation: fadeIn 0.2s ease;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-content {
-    background: linear-gradient(135deg, var(--bg-card), var(--bg-dark));
-    border: 1px solid var(--border-glass);
-    color: var(--text-primary);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card), var(--shadow-glow);
-    padding: 0;
-    max-width: 90%;
-    width: 340px;
-    display: flex;
-    flex-direction: column;
-    animation: slideUp 0.3s ease;
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-dark));
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+  padding: 0;
+  max-width: 90%;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
 }
 
 @keyframes slideUp {
-    from { 
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to { 
-        opacity: 1;
-        transform: translateY(0);
-    }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .modal-header {
-    border-bottom: 1px solid var(--border-glass);
-    padding: 16px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--bg-glass);
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-bottom: 1px solid var(--border-glass);
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-glass);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .modal-header h2 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  background: linear-gradient(
+    135deg,
+    var(--accent-gold),
+    var(--accent-gold-light)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .close-modal,
 .close-btn {
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 24px;
-    line-height: 1;
-    transition: all 0.2s;
-    padding: 4px;
-    border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  transition: all 0.2s;
+  padding: 4px;
+  border-radius: 4px;
 }
 
 .close-modal:hover,
 .close-btn:hover {
-    color: var(--text-primary);
-    background: var(--bg-glass);
+  color: var(--text-primary);
+  background: var(--bg-glass);
 }
 
 .modal-body {
-    padding: 20px;
+  padding: 20px;
 }
 
 .menu-btn {
-    width: 100%;
-    padding: 14px 16px;
-    background: var(--bg-glass);
-    color: var(--text-primary);
-    border: 1px solid var(--border-glass);
-    margin-bottom: 10px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 14px;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--bg-glass);
+  color: var(--text-primary);
+  border: 1px solid var(--border-glass);
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .menu-btn:hover {
-    background: var(--bg-glass-strong);
-    border-color: var(--primary);
-    transform: translateX(4px);
+  background: var(--bg-glass-strong);
+  border-color: var(--primary);
+  transform: translateX(4px);
 }
 
 /* ============================================
@@ -827,196 +862,222 @@ body::before {
    ============================================ */
 .character-modal,
 .character-management-modal {
-    background: var(--bg-dark);
-    z-index: 2000;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: none;
+  background: var(--bg-dark);
+  z-index: 2000;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
 }
 
 .character-management-content {
-    background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-dark) 100%);
-    height: 100%;
-    display: flex;
-    flex-direction: column;
+  background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-dark) 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .character-resources {
-    display: flex;
-    justify-content: space-around;
-    padding: 12px 16px;
-    background: var(--bg-glass);
-    border-bottom: 1px solid var(--border-glass);
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 16px;
+  background: var(--bg-glass);
+  border-bottom: 1px solid var(--border-glass);
 }
 
 .resource-item {
-    font-weight: 600;
-    color: var(--accent-gold);
-    font-family: 'SF Mono', 'Consolas', monospace;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-gold);
+  font-family: "SF Mono", "Consolas", monospace;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
 }
 
 .resource-icon {
-    font-size: 16px;
+  font-size: 16px;
 }
 
 .character-panel {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .character-panel-header {
-    background: var(--bg-glass);
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--border-glass);
+  background: var(--bg-glass);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-glass);
 }
 
 .character-nav-bar {
-    display: flex;
-    justify-content: space-around;
+  display: flex;
+  justify-content: space-around;
 }
 
 .character-nav-bar .nav-item {
-    color: var(--text-muted);
-    padding: 8px 14px;
-    border-radius: var(--radius-sm);
-    font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
 }
 
 .character-nav-bar .nav-item.active {
-    color: var(--accent-gold);
-    background: rgba(251, 191, 36, 0.1);
+  color: var(--accent-gold);
+  background: rgba(251, 191, 36, 0.1);
 }
 
 .main-character-display {
-    padding: 24px 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    overflow-y: auto;
-    flex: 1;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .character-card {
-    width: 100%;
-    max-width: 320px;
-    background: linear-gradient(135deg, rgba(30, 27, 47, 0.9), rgba(15, 14, 23, 0.95));
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-lg);
-    position: relative;
-    padding: 24px;
-    margin-bottom: 24px;
-    box-shadow: var(--shadow-card);
+  width: 100%;
+  max-width: 320px;
+  background: linear-gradient(
+    135deg,
+    rgba(30, 27, 47, 0.9),
+    rgba(15, 14, 23, 0.95)
+  );
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  position: relative;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-card);
 }
 
 .character-rank {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    background: linear-gradient(135deg, var(--accent-red), #dc2626);
-    color: white;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: linear-gradient(135deg, var(--accent-red), #dc2626);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .character-left {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
 .character-avatar-img {
-    width: 90px;
-    height: 90px;
-    border-radius: 50%;
-    border: 3px solid var(--accent-gold);
-    margin-bottom: 12px;
-    box-shadow: 0 0 30px rgba(251, 191, 36, 0.3);
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 3px solid var(--accent-gold);
+  margin-bottom: 12px;
+  box-shadow: 0 0 30px rgba(251, 191, 36, 0.3);
 }
 
 .character-name {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
 }
 
 .character-level {
-    font-size: 14px;
-    color: var(--text-secondary);
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
 /* 装备槽位 */
-.weapon-slot, .armor-slot, .ring-slot, .wing-slot, .mount-slot {
-    position: absolute;
-    width: 44px;
-    height: 44px;
-    background: var(--bg-glass);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-sm);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 20px;
-    cursor: pointer;
-    transition: all 0.2s;
+.weapon-slot,
+.armor-slot,
+.ring-slot,
+.wing-slot,
+.mount-slot {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.weapon-slot:hover, .armor-slot:hover, .ring-slot:hover, 
-.wing-slot:hover, .mount-slot:hover {
-    border-color: var(--accent-gold);
-    box-shadow: 0 0 15px rgba(251, 191, 36, 0.3);
+.weapon-slot:hover,
+.armor-slot:hover,
+.ring-slot:hover,
+.wing-slot:hover,
+.mount-slot:hover {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 15px rgba(251, 191, 36, 0.3);
 }
 
-.weapon-slot { top: 55px; left: 12px; }
-.armor-slot { top: 105px; left: 12px; }
-.ring-slot { top: 55px; right: 12px; }
-.wing-slot { top: 105px; right: 12px; }
-.mount-slot { bottom: 12px; right: 12px; }
+.weapon-slot {
+  top: 55px;
+  left: 12px;
+}
+.armor-slot {
+  top: 105px;
+  left: 12px;
+}
+.ring-slot {
+  top: 55px;
+  right: 12px;
+}
+.wing-slot {
+  top: 105px;
+  right: 12px;
+}
+.mount-slot {
+  bottom: 12px;
+  right: 12px;
+}
 
 .character-actions {
-    display: flex;
-    gap: 12px;
-    width: 100%;
-    justify-content: center;
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
 }
 
 .action-btn {
-    padding: 12px 24px;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-weight: 700;
-    font-size: 14px;
-    cursor: pointer;
-    color: var(--text-primary);
-    transition: all 0.2s;
+  padding: 12px 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.2s;
 }
 
 .action-btn.talent {
-    background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
-    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+  background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+  box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
 }
 
 .action-btn.upgrade {
-    background: linear-gradient(135deg, #f97316, #ea580c);
-    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4);
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4);
 }
 
 .action-btn:hover {
-    transform: translateY(-2px);
+  transform: translateY(-2px);
 }
 
 /* ============================================
@@ -1024,216 +1085,232 @@ body::before {
    ============================================ */
 .loading-screen,
 .game-loading-screen {
-    position: fixed;
-    inset: 0;
-    background: var(--bg-dark);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
+  position: fixed;
+  inset: 0;
+  background: var(--bg-dark);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
 }
 
 .loading-content {
-    text-align: center;
+  text-align: center;
 }
 
 .loading-spinner {
-    width: 48px;
-    height: 48px;
-    border: 3px solid var(--border-glass);
-    border-top-color: var(--accent-gold);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 16px;
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border-glass);
+  border-top-color: var(--accent-gold);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-text {
-    color: var(--text-secondary);
-    font-size: 14px;
-    font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 /* ============================================
    升级菜单弹出
    ============================================ */
 .upgrade-menu {
-    position: fixed;
-    background: var(--bg-card);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-md);
-    padding: 8px;
-    box-shadow: var(--shadow-card);
-    z-index: 3000;
+  position: fixed;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  box-shadow: var(--shadow-card);
+  z-index: 3000;
 }
 
 .upgrade-menu-content {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .upgrade-menu-btn {
-    padding: 10px 16px;
-    background: var(--bg-glass);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
+  padding: 10px 16px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .upgrade-menu-btn:hover {
-    background: var(--bg-glass-strong);
-    border-color: var(--primary);
+  background: var(--bg-glass-strong);
+  border-color: var(--primary);
 }
 
 .upgrade-menu-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ============================================
    Toast 和 Confirm 弹窗
    ============================================ */
 .toast-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .toast-message {
-    background: var(--bg-card);
-    color: var(--text-primary);
-    padding: 12px 20px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-glass);
-    box-shadow: var(--shadow-card);
-    animation: slideInRight 0.3s ease, fadeOut 0.3s ease 1.7s forwards;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-card);
+  animation: slideInRight 0.3s ease, fadeOut 0.3s ease 1.7s forwards;
 }
 
 @keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes fadeOut {
-    to {
-        opacity: 0;
-        transform: translateX(20px);
-    }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
 }
 
 .confirm-modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(5px);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 10000;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
 }
 
 .confirm-modal {
-    background: var(--bg-card);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-lg);
-    padding: 24px;
-    max-width: 320px;
-    width: 90%;
-    text-align: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 320px;
+  width: 90%;
+  text-align: center;
 }
 
 .confirm-message {
-    margin-bottom: 20px;
-    font-size: 15px;
-    line-height: 1.5;
+  margin-bottom: 20px;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .confirm-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
 }
 
 .confirm-btn {
-    padding: 10px 24px;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
+  padding: 10px 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .confirm-btn.cancel {
-    background: var(--bg-glass);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-glass);
+  background: var(--bg-glass);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-glass);
 }
 
 .confirm-btn.confirm {
-    background: linear-gradient(135deg, var(--accent-gold), #f59e0b);
-    color: var(--bg-dark);
+  background: linear-gradient(135deg, var(--accent-gold), #f59e0b);
+  color: var(--bg-dark);
 }
 
 .confirm-btn:hover {
-    transform: scale(1.05);
+  transform: scale(1.05);
 }
 
 /* ============================================
    动画效果
    ============================================ */
 @keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    20%, 60% { transform: translateX(-5px); }
-    40%, 80% { transform: translateX(5px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
 }
 
 /* ============================================
    响应式适配
    ============================================ */
 @media (max-height: 700px) {
-    .upgrade-panel-overlay {
-        height: 180px;
-    }
-    
-    .function-buttons-overlay {
-        bottom: 260px;
-    }
-    
-    .pet-deployment-overlay,
-    .total-power-overlay {
-        bottom: 210px;
-    }
+  .upgrade-panel-overlay {
+    height: 180px;
+  }
+
+  .function-buttons-overlay {
+    bottom: 260px;
+  }
+
+  .pet-deployment-overlay,
+  .total-power-overlay {
+    bottom: 210px;
+  }
 }
 
 @media (max-width: 380px) {
-    .game-container {
-        border-radius: 0;
-    }
-    
-    .currency-item {
-        font-size: 12px;
-        padding: 3px 8px;
-    }
+  .game-container {
+    border-radius: 0;
+  }
+
+  .currency-item {
+    font-size: 12px;
+    padding: 3px 8px;
+  }
 }

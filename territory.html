@@ -1,1595 +1,1754 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>领地 - Pet Plan</title>
-    <link rel="stylesheet" href="css/style.css?v=31">
-    <link rel="stylesheet" href="css/menu.css">
-    <link rel="stylesheet" href="css/character-management.css">
+    <link rel="stylesheet" href="css/style.css?v=31" />
+    <link rel="stylesheet" href="css/menu.css" />
+    <link rel="stylesheet" href="css/character-management.css" />
     <style>
-        /* 领地界面专用样式 - 现代化设计 */
-        .territory-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 25px 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            position: relative;
-            overflow: hidden;
-        }
+      /* 领地界面专用样式 - 现代化设计 */
+      .territory-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 25px 30px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        position: relative;
+        overflow: hidden;
+      }
 
-        .territory-header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="%23ffffff" opacity="0.03"/></svg>');
-            opacity: 0.1;
-        }
+      .territory-header::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="%23ffffff" opacity="0.03"/></svg>');
+        opacity: 0.1;
+      }
 
-        .territory-header h2 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 700;
-            color: white;
-            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            position: relative;
-            z-index: 1;
-        }
+      .territory-header h2 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 700;
+        color: white;
+        text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        position: relative;
+        z-index: 1;
+      }
 
-        .territory-header h2::before {
-            content: '🏰';
-            font-size: 32px;
-            animation: float 3s ease-in-out infinite;
-        }
+      .territory-header h2::before {
+        content: "🏰";
+        font-size: 32px;
+        animation: float 3s ease-in-out infinite;
+      }
 
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-5px); }
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0px);
         }
+        50% {
+          transform: translateY(-5px);
+        }
+      }
 
-        .territory-resources {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            position: relative;
-            z-index: 1;
-        }
+      .territory-resources {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        position: relative;
+        z-index: 1;
+      }
 
-        .resource-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.15);
-            padding: 8px 16px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
-        }
+      .resource-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.15);
+        padding: 8px 16px;
+        border-radius: 20px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+      }
 
-        .resource-item:hover {
-            background: rgba(255, 255, 255, 0.25);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
+      .resource-item:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
 
-        .resource-icon {
-            font-size: 20px;
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-        }
+      .resource-icon {
+        font-size: 20px;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+      }
 
-        .resource-value {
-            color: white;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-            font-weight: 700;
-        }
+      .resource-value {
+        color: white;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        font-weight: 700;
+      }
 
-        /* 确保领地内容区域正确布局 */
-        #territory-section {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            flex: 1;
-            position: relative;
-        }
+      /* 确保领地内容区域正确布局 */
+      #territory-section {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        flex: 1;
+        position: relative;
+      }
 
-        /* 游戏内加载动画样式 */
-        .game-loading-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            border-radius: 15px;
-        }
+      /* 游戏内加载动画样式 */
+      .game-loading-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        border-radius: 15px;
+      }
 
-        .loading-content {
-            text-align: center;
-            color: white;
-        }
+      .loading-content {
+        text-align: center;
+        color: white;
+      }
 
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid #4a90e2;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid #4a90e2;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px;
+      }
 
-        .loading-text {
-            font-size: 16px;
-            font-weight: bold;
-        }
+      .loading-text {
+        font-size: 16px;
+        font-weight: bold;
+      }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
         }
-        
-        .back-button {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            padding: 10px 20px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            position: relative;
-            z-index: 1;
+        100% {
+          transform: rotate(360deg);
         }
-        
-        .back-button:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateX(-5px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-        
-        .back-button:active {
-            transform: translateX(-3px) scale(0.98);
-        }
+      }
 
-        .back-button::before {
-            content: '←';
-            margin-right: 5px;
-            font-size: 16px;
-        }
+      .back-button {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        padding: 10px 20px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 1;
+      }
 
-        /* Canvas场景容器 */
-        .territory-scene-container {
-            position: relative;
-            flex: 1;
-            overflow: hidden;
-            background: linear-gradient(180deg, #87CEEB 0%, #98D8E8 50%, #90EE90 100%);
-            animation: sceneFadeIn 1s ease-out;
-        }
-        
-        @keyframes sceneFadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.95);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
+      .back-button:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateX(-5px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
 
-        .territory-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
+      .back-button:active {
+        transform: translateX(-3px) scale(0.98);
+      }
 
-        /* 领地网格样式 - 卡片式设计 */
-        .territory-grid {
-            position: absolute;
-            top: 58%; /* 对齐地平线稍下方 */
-            left: 5%;
-            right: 5%;
-            bottom: 20px;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-            grid-auto-rows: 110px;
-            gap: 15px;
-            padding: 15px;
-            overflow-y: auto;
-            pointer-events: auto; /* 确保可以交互 */
-            
-            /* 简单的透视感 */
-            transform: perspective(1000px) rotateX(10deg);
-            transform-origin: top center;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(2px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
+      .back-button::before {
+        content: "←";
+        margin-right: 5px;
+        font-size: 16px;
+      }
 
-        .territory-grid::-webkit-scrollbar {
-            width: 6px;
-        }
+      /* Canvas场景容器 */
+      .territory-scene-container {
+        position: relative;
+        flex: 1;
+        overflow: hidden;
+        background: linear-gradient(
+          180deg,
+          #87ceeb 0%,
+          #98d8e8 50%,
+          #90ee90 100%
+        );
+        animation: sceneFadeIn 1s ease-out;
+      }
 
-        .territory-grid::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
+      @keyframes sceneFadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.95);
         }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
 
-        .territory-grid::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-        }
+      .territory-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
 
-        .territory-slot {
-            /* aspect-ratio: 1.2; 移除，使用 grid-auto-rows 控制高度 */
-            background: rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(2px);
-            border-radius: 8px;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            overflow: hidden;
-            min-height: 0; /* 覆盖之前的 min-height */
-            box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.2);
-            border: 2px dashed rgba(255, 255, 255, 0.4);
-            pointer-events: auto;
-        }
+      /* 领地网格样式 - 卡片式设计 */
+      .territory-grid {
+        position: absolute;
+        top: 58%; /* 对齐地平线稍下方 */
+        left: 5%;
+        right: 5%;
+        bottom: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        grid-auto-rows: 110px;
+        gap: 15px;
+        padding: 15px;
+        overflow-y: auto;
+        pointer-events: auto; /* 确保可以交互 */
 
-        .territory-slot::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(circle at center, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
+        /* 简单的透视感 */
+        transform: perspective(1000px) rotateX(10deg);
+        transform-origin: top center;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(2px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
 
-        .territory-slot:hover {
-            background: rgba(255, 255, 255, 0.4);
-            border-color: rgba(255, 255, 255, 0.9);
-            border-style: solid;
-            transform: translateY(-2px);
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.3);
-            z-index: 10;
-        }
+      .territory-grid::-webkit-scrollbar {
+        width: 6px;
+      }
 
-        /* 状态类样式 */
-        .territory-slot.is-built {
-            border-style: solid;
-            border-color: rgba(255, 255, 255, 0.6);
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .territory-slot.is-unlocked {
-            border-style: dashed;
-            border-color: rgba(255, 255, 255, 0.6);
-        }
-        
-        .territory-slot.is-locked {
-            border-style: none;
-            background: transparent;
-        }
-        
-        .territory-slot.is-building {
-            border-style: solid;
-            border-color: #f1c40f;
-        }
+      .territory-grid::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+      }
 
-        .territory-slot:hover::before {
+      .territory-grid::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+      }
+
+      .territory-slot {
+        /* aspect-ratio: 1.2; 移除，使用 grid-auto-rows 控制高度 */
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(2px);
+        border-radius: 8px;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        overflow: hidden;
+        min-height: 0; /* 覆盖之前的 min-height */
+        box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.2);
+        border: 2px dashed rgba(255, 255, 255, 0.4);
+        pointer-events: auto;
+      }
+
+      .territory-slot::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(
+          circle at center,
+          rgba(255, 255, 255, 0.2) 0%,
+          transparent 70%
+        );
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .territory-slot:hover {
+        background: rgba(255, 255, 255, 0.4);
+        border-color: rgba(255, 255, 255, 0.9);
+        border-style: solid;
+        transform: translateY(-2px);
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.4),
+          inset 0 0 10px rgba(255, 255, 255, 0.3);
+        z-index: 10;
+      }
+
+      /* 状态类样式 */
+      .territory-slot.is-built {
+        border-style: solid;
+        border-color: rgba(255, 255, 255, 0.6);
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .territory-slot.is-unlocked {
+        border-style: dashed;
+        border-color: rgba(255, 255, 255, 0.6);
+      }
+
+      .territory-slot.is-locked {
+        border-style: none;
+        background: transparent;
+      }
+
+      .territory-slot.is-building {
+        border-style: solid;
+        border-color: #f1c40f;
+      }
+
+      .territory-slot:hover::before {
+        opacity: 1;
+      }
+
+      .slot-content {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+
+      /* 未解锁状态 - 迷雾感 */
+      .slot-content.locked {
+        background: rgba(44, 62, 80, 0.6);
+        position: relative;
+      }
+
+      .slot-content.locked::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.1),
+          transparent
+        );
+        animation: shimmer 3s infinite;
+      }
+
+      /* 已建造状态 - 稳固感 */
+      .slot-content.built {
+        background: rgba(255, 255, 255, 0.15);
+        box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2);
+      }
+
+      /* 建造中状态 */
+      .slot-content.building {
+        background: rgba(241, 196, 15, 0.2);
+        border: 1px solid rgba(241, 196, 15, 0.5);
+      }
+
+      @keyframes shimmer {
+        0% {
+          left: -100%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
+
+      /* 新增样式 */
+      .building-info-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 5px 8px;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        border-bottom-left-radius: 12px;
+        border-bottom-right-radius: 12px;
+      }
+
+      .building-name {
+        font-weight: bold;
+        font-size: 12px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+      }
+
+      .building-level-badge {
+        background: #f1c40f;
+        color: #2c3e50;
+        padding: 1px 4px;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        margin-top: 2px;
+      }
+
+      .empty-slot-hint {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.7);
+        transition: all 0.3s ease;
+        width: 100%;
+        height: 100%;
+      }
+
+      .plus-icon {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 50%;
+        border: 2px dashed rgba(255, 255, 255, 0.4);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+
+      .hint-text {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+
+      .territory-slot:hover .plus-icon {
+        background: #667eea;
+        color: white;
+        border-color: transparent;
+        transform: scale(1.1) rotate(90deg);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      .territory-slot:hover .empty-slot-hint {
+        color: white;
+        transform: translateY(-2px);
+      }
+
+      .building-status-badge {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: #e67e22;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        z-index: 2;
+      }
+
+      .building-name-preview {
+        font-size: 12px;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 5px;
+        text-align: center;
+      }
+
+      .building-progress-container {
+        width: 90%;
+        height: 6px;
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 2px;
+      }
+
+      .building-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #2ecc71, #27ae60);
+        transition: width 0.3s ease;
+      }
+
+      .building-timer {
+        font-size: 10px;
+        color: #7f8c8d;
+      }
+
+      .lock-icon {
+        font-size: 24px;
+        margin-bottom: 5px;
+      }
+
+      .lock-text {
+        font-size: 12px;
+        color: white;
+        font-weight: bold;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      }
+
+      .slot-content.building {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.8);
+      }
+
+      /* 浮动文字特效 */
+      .floating-text {
+        position: fixed;
+        color: #f1c40f;
+        font-weight: bold;
+        font-size: 16px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        pointer-events: none;
+        z-index: 9999;
+        animation: floatUp 1.5s ease-out forwards;
+      }
+
+      .floating-text.crystal {
+        color: #00d2ff;
+      }
+
+      @keyframes floatUp {
+        0% {
+            transform: translateY(0) scale(1);
             opacity: 1;
         }
-
-        .slot-content {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
+        50% {
+            transform: translateY(-30px) scale(1.2);
+            opacity: 0.8;
         }
-
-        /* 未解锁状态 - 迷雾感 */
-        .slot-content.locked {
-            background: rgba(44, 62, 80, 0.6);
-            position: relative;
-        }
-
-        .slot-content.locked::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-            animation: shimmer 3s infinite;
-        }
-
-        /* 已建造状态 - 稳固感 */
-        .slot-content.built {
-            background: rgba(255, 255, 255, 0.15);
-            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2);
-        }
-
-        /* 建造中状态 */
-        .slot-content.building {
-            background: rgba(241, 196, 15, 0.2);
-            border: 1px solid rgba(241, 196, 15, 0.5);
-        }
-
-        @keyframes shimmer {
-            0% { left: -100%; }
-            100% { left: 100%; }
-        }
-
-        /* 新增样式 */
-        .building-info-overlay {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 5px 8px;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-            color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
-        }
-
-        .building-name {
-            font-weight: bold;
-            font-size: 12px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            width: 100%;
-        }
-
-        .building-level-badge {
-            background: #f1c40f;
-            color: #2c3e50;
-            padding: 1px 4px;
-            border-radius: 8px;
-            font-size: 10px;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            margin-top: 2px;
-        }
-
-        .empty-slot-hint {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: rgba(255, 255, 255, 0.7);
-            transition: all 0.3s ease;
-            width: 100%;
-            height: 100%;
-        }
-
-        .plus-icon {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 8px;
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 50%;
-            border: 2px dashed rgba(255, 255, 255, 0.4);
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        .hint-text {
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-
-        .territory-slot:hover .plus-icon {
-            background: #667eea;
-            color: white;
-            border-color: transparent;
-            transform: scale(1.1) rotate(90deg);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .territory-slot:hover .empty-slot-hint {
-            color: white;
-            transform: translateY(-2px);
-        }
-
-        .building-status-badge {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: #e67e22;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 8px;
-            font-size: 10px;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            z-index: 2;
-        }
-
-        .building-name-preview {
-            font-size: 12px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 5px;
-            text-align: center;
-        }
-
-        .building-progress-container {
-            width: 90%;
-            height: 6px;
-            background: rgba(0,0,0,0.1);
-            border-radius: 3px;
-            overflow: hidden;
-            margin-bottom: 2px;
-        }
-
-        .building-progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #2ecc71, #27ae60);
-            transition: width 0.3s ease;
-        }
-
-        .building-timer {
-            font-size: 10px;
-            color: #7f8c8d;
-        }
-
-        .lock-icon {
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
-
-        .lock-text {
-            font-size: 12px;
-            color: white;
-            font-weight: bold;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-        }
-
-        .slot-content.building {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, 0.8);
-        }
-
-        /* 游戏内其他样式保持不变 */
-        /* ...existing styles... */
-
-        /* 建筑列表弹窗特殊样式 - 限制在游戏容器内 */
-        .building-list-modal {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(15px);
-            z-index: 1001;
-            visibility: hidden;
-            overflow-y: auto;
-            opacity: 0;
-            transition: opacity 0.4s ease, visibility 0.4s ease;
-        }
-
-        .building-list-modal.show {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .building-list-modal .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0.8) rotateX(10deg);
-            background: white;
-            border-radius: 25px;
-            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
-            min-width: 500px;
-            max-width: 85vw;
-            max-height: 75vh;
-            overflow: hidden;
-            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
+        100% {
+            transform: translateY(-60px) scale(1);
             opacity: 0;
         }
+      }
 
-        .building-list-modal.show .modal-content {
-            transform: translate(-50%, -50%) scale(1) rotateX(0deg);
-            opacity: 1;
+      /* 游戏内其他样式保持不变 */
+      /* ...existing styles... */
+
+      /* 建筑列表弹窗特殊样式 - 限制在游戏容器内 */
+      .building-list-modal {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(15px);
+        z-index: 1001;
+        visibility: hidden;
+        overflow-y: auto;
+        opacity: 0;
+        transition: opacity 0.4s ease, visibility 0.4s ease;
+      }
+
+      .building-list-modal.show {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .building-list-modal .modal-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.8) rotateX(10deg);
+        background: white;
+        border-radius: 25px;
+        box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
+        min-width: 500px;
+        max-width: 85vw;
+        max-height: 75vh;
+        overflow: hidden;
+        transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+          opacity 0.4s ease;
+        opacity: 0;
+      }
+
+      .building-list-modal.show .modal-content {
+        transform: translate(-50%, -50%) scale(1) rotateX(0deg);
+        opacity: 1;
+      }
+
+      /* 通用模态框样式 (用于建筑信息弹窗) */
+      .building-info-modal {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(15px);
+        z-index: 1001;
+        display: none; /* 默认隐藏 */
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.4s ease;
+      }
+
+      .building-info-modal.show {
+        opacity: 1;
+      }
+
+      .building-info-modal .modal-content {
+        background: linear-gradient(
+          180deg,
+          #ffffff 0%,
+          #f8f9fa 100%
+        ) !important;
+        border-radius: 25px;
+        box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
+        min-width: 380px;
+        max-width: 85vw;
+        max-height: 75vh;
+        overflow: hidden;
+        position: relative;
+        transform: scale(0.8) rotateX(10deg);
+        transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+          opacity 0.4s ease;
+        opacity: 0;
+      }
+
+      .building-info-modal.show .modal-content {
+        transform: scale(1) rotateX(0deg);
+        opacity: 1;
+      }
+
+      .building-info-modal .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 25px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-bottom: none;
+        position: relative;
+      }
+
+      .building-info-modal .modal-header h3 {
+        color: white;
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .building-info-modal .modal-body {
+        padding: 20px 25px;
+        color: #333;
+      }
+
+      /* 建筑信息内容样式 */
+      .building-info-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: rgba(102, 126, 234, 0.08);
+        border-radius: 12px;
+        border: 1px solid rgba(102, 126, 234, 0.15);
+      }
+
+      .building-info-icon {
+        width: 60px;
+        height: 60px;
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .building-info-icon svg {
+        width: 45px;
+        height: 45px;
+      }
+
+      .building-info-details h4 {
+        margin: 0 0 5px 0;
+        font-size: 18px;
+        color: #2c3e50;
+        font-weight: 700;
+      }
+
+      .building-info-details p {
+        margin: 0;
+        font-size: 14px;
+        color: #7f8c8d;
+      }
+
+      .building-info-stats {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      .stat-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        background: rgba(102, 126, 234, 0.05);
+        border-radius: 10px;
+        border: 1px solid rgba(102, 126, 234, 0.1);
+      }
+
+      .stat-label {
+        color: #555;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .stat-value {
+        color: #11998e;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      /* 升级所需资源样式 */
+      .upgrade-cost-section {
+        margin: 15px 0;
+        padding: 15px;
+        background: linear-gradient(
+          135deg,
+          rgba(102, 126, 234, 0.08) 0%,
+          rgba(118, 75, 162, 0.08) 100%
+        );
+        border-radius: 12px;
+        border: 1px solid rgba(102, 126, 234, 0.15);
+      }
+
+      .upgrade-cost-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 12px;
+      }
+
+      .upgrade-cost-items {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .cost-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 8px;
+      }
+
+      .cost-label {
+        font-size: 14px;
+        color: #555;
+        font-weight: 500;
+      }
+
+      .cost-value {
+        font-size: 14px;
+        font-weight: 700;
+        color: #11998e;
+      }
+
+      .cost-value.insufficient {
+        color: #e74c3c;
+      }
+
+      .building-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 15px;
+      }
+
+      .modal .modal-content {
+        background: white;
+        border-radius: 25px;
+        box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
+        min-width: 400px;
+        max-width: 85vw;
+        max-height: 75vh;
+        overflow: hidden;
+        position: relative;
+        animation: modalFadeIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+
+      @keyframes modalFadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.8) rotateX(10deg);
         }
-
-        /* 通用模态框样式 (用于建筑信息弹窗) */
-        .building-info-modal {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(15px);
-            z-index: 1001;
-            display: none; /* 默认隐藏 */
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.4s ease;
+        to {
+          opacity: 1;
+          transform: scale(1) rotateX(0deg);
         }
+      }
 
-        .building-info-modal.show {
-            opacity: 1;
-        }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 25px 30px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-bottom: none;
+        position: relative;
+      }
 
-        .building-info-modal .modal-content {
-            background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%) !important;
-            border-radius: 25px;
-            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
-            min-width: 380px;
-            max-width: 85vw;
-            max-height: 75vh;
-            overflow: hidden;
-            position: relative;
-            transform: scale(0.8) rotateX(10deg);
-            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
-            opacity: 0;
-        }
+      .modal-header::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.5),
+          transparent
+        );
+      }
 
-        .building-info-modal.show .modal-content {
-            transform: scale(1) rotateX(0deg);
-            opacity: 1;
-        }
+      .modal-header h3 {
+        color: white;
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
 
-        .building-info-modal .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 25px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-bottom: none;
-            position: relative;
-        }
+      .close-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 0;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+      }
 
-        .building-info-modal .modal-header h3 {
-            color: white;
-            margin: 0;
-            font-size: 20px;
-            font-weight: 700;
-        }
+      .close-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: rotate(90deg) scale(1.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
 
-        .building-info-modal .modal-body {
-            padding: 20px 25px;
-            color: #333;
-        }
+      .close-btn:active {
+        transform: rotate(90deg) scale(0.95);
+      }
 
-        /* 建筑信息内容样式 */
-        .building-info-header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: rgba(102, 126, 234, 0.08);
-            border-radius: 12px;
-            border: 1px solid rgba(102, 126, 234, 0.15);
-        }
+      .modal-body {
+        padding: 30px;
+        max-height: 65vh;
+        overflow-y: auto;
+        background: #f8f9fa;
+      }
 
-        .building-info-icon {
-            width: 60px;
-            height: 60px;
-            background: rgba(102, 126, 234, 0.1);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+      .modal-body::-webkit-scrollbar {
+        width: 8px;
+      }
 
-        .building-info-icon svg {
-            width: 45px;
-            height: 45px;
-        }
+      .modal-body::-webkit-scrollbar-track {
+        background: #e9ecef;
+        border-radius: 10px;
+      }
 
-        .building-info-details h4 {
-            margin: 0 0 5px 0;
-            font-size: 18px;
-            color: #2c3e50;
-            font-weight: 700;
-        }
+      .modal-body::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 10px;
+      }
 
-        .building-info-details p {
-            margin: 0;
-            font-size: 14px;
-            color: #7f8c8d;
-        }
+      .modal-body::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #764ba2, #667eea);
+      }
 
-        .building-info-stats {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+      /* 建筑选择信息样式 */
+      .building-selection-info {
+        background: linear-gradient(
+          135deg,
+          rgba(102, 126, 234, 0.1),
+          rgba(118, 75, 162, 0.1)
+        );
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 25px;
+        text-align: center;
+        border: 2px solid rgba(102, 126, 234, 0.2);
+      }
 
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 15px;
-            background: rgba(102, 126, 234, 0.05);
-            border-radius: 10px;
-            border: 1px solid rgba(102, 126, 234, 0.1);
-        }
+      .building-selection-info p {
+        color: #2c3e50;
+        margin: 0;
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 1.6;
+      }
 
-        .stat-label {
-            color: #555;
-            font-size: 14px;
-            font-weight: 500;
-        }
+      /* 建筑列表弹窗样式 */
+      .building-list-modal .modal-content {
+        min-width: 400px;
+        max-width: 500px;
+      }
 
-        .stat-value {
-            color: #11998e;
-            font-size: 16px;
-            font-weight: 700;
-        }
+      /* 建筑选项样式 */
+      .building-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 15px;
+      }
 
-        /* 升级所需资源样式 */
-        .upgrade-cost-section {
-            margin: 15px 0;
-            padding: 15px;
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
-            border-radius: 12px;
-            border: 1px solid rgba(102, 126, 234, 0.15);
-        }
-
-        .upgrade-cost-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #555;
-            margin-bottom: 12px;
-        }
-
-        .upgrade-cost-items {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .cost-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 12px;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 8px;
-        }
-
-        .cost-label {
-            font-size: 14px;
-            color: #555;
-            font-weight: 500;
-        }
-
-        .cost-value {
-            font-size: 14px;
-            font-weight: 700;
-            color: #11998e;
-        }
-
-        .cost-value.insufficient {
-            color: #e74c3c;
-        }
-
-        .building-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 15px;
-        }
-
-        .modal .modal-content {
-            background: white;
-            border-radius: 25px;
-            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
-            min-width: 400px;
-            max-width: 85vw;
-            max-height: 75vh;
-            overflow: hidden;
-            position: relative;
-            animation: modalFadeIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        @keyframes modalFadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.8) rotateX(10deg);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1) rotateX(0deg);
-            }
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 25px 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-bottom: none;
-            position: relative;
-        }
-
-        .modal-header::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
-        }
-
-        .modal-header h3 {
-            color: white;
-            margin: 0;
-            font-size: 22px;
-            font-weight: 700;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .close-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 0;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-        }
-
-        .close-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: rotate(90deg) scale(1.1);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-
-        .close-btn:active {
-            transform: rotate(90deg) scale(0.95);
-        }
-
-        .modal-body {
-            padding: 30px;
-            max-height: 65vh;
-            overflow-y: auto;
-            background: #f8f9fa;
-        }
-
-        .modal-body::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .modal-body::-webkit-scrollbar-track {
-            background: #e9ecef;
-            border-radius: 10px;
-        }
-
-        .modal-body::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            border-radius: 10px;
-        }
-
-        .modal-body::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(135deg, #764ba2, #667eea);
-        }
-
-        /* 建筑选择信息样式 */
-        .building-selection-info {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 25px;
-            text-align: center;
-            border: 2px solid rgba(102, 126, 234, 0.2);
-        }
-
-        .building-selection-info p {
-            color: #2c3e50;
-            margin: 0;
-            font-size: 15px;
-            font-weight: 500;
-            line-height: 1.6;
-        }
-
-        /* 建筑列表弹窗样式 */
-        .building-list-modal .modal-content {
-            min-width: 400px;
-            max-width: 500px;
-        }
-
-        /* 建筑选项样式 */
+      /* 响应式布局 - 在小屏幕上单列显示 */
+      @media (max-width: 480px) {
         .building-options {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 15px;
-        }
-
-        /* 响应式布局 - 在小屏幕上单列显示 */
-        @media (max-width: 480px) {
-            .building-options {
-                grid-template-columns: 1fr;
-            }
-            
-            .building-list-modal .modal-content {
-                min-width: 280px;
-                max-width: 90vw;
-            }
-        }
-
-        .building-option {
-            background: white;
-            border: 3px solid transparent;
-            border-radius: 18px;
-            padding: 20px 15px;
-            color: #2c3e50;
-            cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        }
-
-        .building-option::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .building-option:hover::before {
-            opacity: 1;
-        }
-
-        .building-option:hover {
-            transform: translateY(-8px) scale(1.05);
-            box-shadow: 0 12px 30px rgba(102, 126, 234, 0.3);
-            border-color: rgba(102, 126, 234, 0.5);
-        }
-
-        .building-option:disabled {
-            background: #ecf0f1;
-            cursor: not-allowed;
-            opacity: 0.5;
-            transform: none;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .building-option:disabled::before {
-            display: none;
-        }
-
-        .building-option:disabled:hover {
-            transform: none;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            border-color: transparent;
-        }
-
-        .building-option-icon {
-            width: 60px;
-            height: 60px;
-            margin: 0 auto 12px;
-            display: block;
-            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
-            position: relative;
-            z-index: 1;
-        }
-
-        .building-option-name {
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: #2c3e50;
-            position: relative;
-            z-index: 1;
-        }
-
-        .building-option-cost {
-            font-size: 13px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 12px;
-            display: inline-block;
-            font-weight: 600;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-            position: relative;
-            z-index: 1;
-        }
-
-        .building-option-description {
-            font-size: 12px;
-            opacity: 0.7;
-            margin-top: 8px;
-            color: #7f8c8d;
-            line-height: 1.4;
-            position: relative;
-            z-index: 1;
-        }
-
-        /* 建筑信息样式 */
-        .building-info-content {
-            color: #2c3e50;
-        }
-
-        .building-info-header {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            margin-bottom: 25px;
-            padding: 20px;
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-            border-radius: 15px;
-            border: 2px solid rgba(102, 126, 234, 0.2);
-        }
-
-        .building-info-icon {
-            width: 80px;
-            height: 80px;
-            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
-            animation: buildingInfoFloat 3s ease-in-out infinite;
-        }
-
-        @keyframes buildingInfoFloat {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-5px) rotate(5deg); }
-        }
-
-        .building-info-details h4 {
-            margin: 0 0 10px 0;
-            color: #2c3e50;
-            font-size: 24px;
-            font-weight: 700;
-        }
-
-        .building-info-stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .stat-item {
-            background: white;
-            padding: 15px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-            border: 2px solid rgba(102, 126, 234, 0.1);
-            transition: all 0.3s ease;
-        }
-
-        .stat-item:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.2);
-            border-color: rgba(102, 126, 234, 0.3);
-        }
-
-        .stat-label {
-            font-size: 13px;
-            color: #7f8c8d;
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-
-        .stat-value {
-            font-size: 20px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .building-actions {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            padding-top: 10px;
-        }
-
-        .action-btn {
-            padding: 14px 28px;
-            border: none;
-            border-radius: 15px;
-            cursor: pointer;
-            font-weight: 700;
-            font-size: 15px;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .action-btn::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3);
-            transition: width 0.6s, height 0.6s;
-        }
-
-        .action-btn:hover::before {
-            width: 300px;
-            height: 300px;
-        }
-
-        .upgrade-btn {
-            background: linear-gradient(135deg, #11998e, #38ef7d);
-            color: white;
-            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
-        }
-
-        .upgrade-btn:hover {
-            transform: translateY(-4px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
-        }
-
-        .upgrade-btn:active {
-            transform: translateY(-2px) scale(1.02);
-        }
-
-        .upgrade-btn:disabled {
-            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .upgrade-btn:disabled:hover {
-            transform: none;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .demolish-btn {
-            background: linear-gradient(135deg, #f093fb, #f5576c);
-            color: white;
-            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
-        }
-
-        .demolish-btn:hover {
-            transform: translateY(-4px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
-        }
-
-        .demolish-btn:active {
-            transform: translateY(-2px) scale(1.02);
-        }
-
-        /* ==================== 领地扩张按钮样式 ==================== */
-        .expand-territory-btn {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .expand-territory-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
-        }
-
-        .expand-territory-btn:active {
-            transform: translateY(0);
-        }
-
-        .expand-territory-btn.disabled {
-            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        .expand-territory-btn.disabled:hover {
-            transform: none;
-        }
-
-        .expand-territory-btn .expand-icon {
-            font-size: 16px;
-        }
-
-        .expand-territory-btn .expand-progress {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 12px;
-        }
-
-        /* ==================== 领地扩张弹窗样式 ==================== */
-        .expansion-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .expansion-modal.show {
-            opacity: 1;
-        }
-
-        .expansion-modal-content {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border-radius: 20px;
-            width: 90%;
-            max-width: 420px;
-            max-height: 80vh;
-            overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            transform: scale(0.9);
-            transition: transform 0.3s ease;
-        }
-
-        .expansion-modal.show .expansion-modal-content {
-            transform: scale(1);
-        }
-
-        .expansion-modal .modal-header {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            padding: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .expansion-modal .modal-header h3 {
-            margin: 0;
-            color: white;
-            font-size: 20px;
-        }
-
-        .expansion-modal .modal-body {
-            padding: 20px;
-        }
-
-        .expansion-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-
-        .expansion-icon {
-            font-size: 48px;
-        }
-
-        .expansion-status h4 {
-            margin: 0 0 8px 0;
-            color: #fff;
-            font-size: 18px;
-        }
-
-        .expansion-status p {
-            margin: 4px 0;
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 14px;
-        }
-
-        .expansion-preview {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-
-        .expansion-preview h5 {
-            margin: 0 0 12px 0;
-            color: #fff;
-            font-size: 16px;
-        }
-
-        .new-slots-preview {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .new-slot-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(255, 255, 255, 0.08);
-            padding: 10px 15px;
-            border-radius: 8px;
-            color: #fff;
-        }
-
-        .new-slot-item .slot-icon {
-            font-size: 20px;
-        }
-
-        .new-slot-item .unlock-requirement {
-            margin-left: auto;
-            font-size: 12px;
-            color: #38ef7d;
-            background: rgba(56, 239, 125, 0.2);
-            padding: 4px 8px;
-            border-radius: 10px;
-        }
-
-        .expansion-cost {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-
-        .expansion-cost h5 {
-            margin: 0 0 12px 0;
-            color: #fff;
-            font-size: 16px;
-        }
-
-        .cost-items {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .cost-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 15px;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 8px;
-            color: #fff;
-        }
-
-        .cost-item.insufficient {
-            background: rgba(245, 87, 108, 0.2);
-            border: 1px solid rgba(245, 87, 108, 0.5);
-        }
-
-        .cost-item.insufficient .cost-value {
-            color: #f5576c;
-        }
-
-        .cost-item .cost-icon {
-            font-size: 20px;
-        }
-
-        .cost-item .cost-value {
-            font-weight: 600;
-            font-size: 16px;
-        }
-
-        .cost-item .cost-current {
-            margin-left: auto;
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .expansion-warning {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(245, 87, 108, 0.2);
-            border: 1px solid rgba(245, 87, 108, 0.5);
-            padding: 12px 15px;
-            border-radius: 10px;
-            color: #f5576c;
-            margin-bottom: 20px;
-        }
-
-        .expansion-warning .warning-icon {
-            font-size: 20px;
-        }
-
-        .expansion-complete {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 20px;
-            background: linear-gradient(135deg, rgba(56, 239, 125, 0.2), rgba(17, 153, 142, 0.2));
-            border-radius: 12px;
-            color: #38ef7d;
-            font-size: 16px;
-        }
-
-        .expansion-complete .complete-icon {
-            font-size: 24px;
-        }
-
-        .expansion-actions {
-            display: flex;
-            justify-content: center;
-            margin-top: 10px;
-        }
-
-        .expansion-actions .confirm-btn {
-            background: linear-gradient(135deg, #11998e, #38ef7d);
-            color: white;
-            border: none;
-            padding: 12px 40px;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
-        }
-
-        .expansion-actions .confirm-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(17, 153, 142, 0.4);
-        }
-
-        .expansion-actions .confirm-btn:disabled {
-            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        /* 扩张地块特殊样式 */
-        .territory-slot[data-expanded="true"] {
-            border: 2px dashed rgba(240, 147, 251, 0.5);
-        }
-
-        .territory-slot[data-expanded="true"]::after {
-            content: '新';
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: linear-gradient(135deg, #f093fb, #f5576c);
-            color: white;
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 8px;
-            z-index: 10;
-        }
+          grid-template-columns: 1fr;
+        }
+
+        .building-list-modal .modal-content {
+          min-width: 280px;
+          max-width: 90vw;
+        }
+      }
+
+      .building-option {
+        background: white;
+        border: 3px solid transparent;
+        border-radius: 18px;
+        padding: 20px 15px;
+        color: #2c3e50;
+        cursor: pointer;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .building-option::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(
+          135deg,
+          rgba(102, 126, 234, 0.1),
+          rgba(118, 75, 162, 0.1)
+        );
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .building-option:hover::before {
+        opacity: 1;
+      }
+
+      .building-option:hover {
+        transform: translateY(-8px) scale(1.05);
+        box-shadow: 0 12px 30px rgba(102, 126, 234, 0.3);
+        border-color: rgba(102, 126, 234, 0.5);
+      }
+
+      .building-option:disabled {
+        background: #ecf0f1;
+        cursor: not-allowed;
+        opacity: 0.5;
+        transform: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      }
+
+      .building-option:disabled::before {
+        display: none;
+      }
+
+      .building-option:disabled:hover {
+        transform: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        border-color: transparent;
+      }
+
+      .building-option-icon {
+        width: 60px;
+        height: 60px;
+        margin: 0 auto 12px;
+        display: block;
+        filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+        position: relative;
+        z-index: 1;
+      }
+
+      .building-option-name {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #2c3e50;
+        position: relative;
+        z-index: 1;
+      }
+
+      .building-option-cost {
+        font-size: 13px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 12px;
+        display: inline-block;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        position: relative;
+        z-index: 1;
+      }
+
+      .building-option-description {
+        font-size: 12px;
+        opacity: 0.7;
+        margin-top: 8px;
+        color: #7f8c8d;
+        line-height: 1.4;
+        position: relative;
+        z-index: 1;
+      }
+
+      /* 建筑信息样式 */
+      .building-info-content {
+        color: #2c3e50;
+      }
+
+      .building-info-header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 25px;
+        padding: 20px;
+        background: linear-gradient(
+          135deg,
+          rgba(102, 126, 234, 0.1),
+          rgba(118, 75, 162, 0.1)
+        );
+        border-radius: 15px;
+        border: 2px solid rgba(102, 126, 234, 0.2);
+      }
+
+      .building-info-icon {
+        width: 80px;
+        height: 80px;
+        filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+        animation: buildingInfoFloat 3s ease-in-out infinite;
+      }
+
+      @keyframes buildingInfoFloat {
+        0%,
+        100% {
+          transform: translateY(0px) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-5px) rotate(5deg);
+        }
+      }
+
+      .building-info-details h4 {
+        margin: 0 0 10px 0;
+        color: #2c3e50;
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .building-info-stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+        margin-bottom: 25px;
+      }
+
+      .stat-item {
+        background: white;
+        padding: 15px;
+        border-radius: 15px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        border: 2px solid rgba(102, 126, 234, 0.1);
+        transition: all 0.3s ease;
+      }
+
+      .stat-item:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.2);
+        border-color: rgba(102, 126, 234, 0.3);
+      }
+
+      .stat-label {
+        font-size: 13px;
+        color: #7f8c8d;
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
+
+      .stat-value {
+        font-size: 20px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .building-actions {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        padding-top: 10px;
+      }
+
+      .action-btn {
+        padding: 14px 28px;
+        border: none;
+        border-radius: 15px;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 15px;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .action-btn::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transition: width 0.6s, height 0.6s;
+      }
+
+      .action-btn:hover::before {
+        width: 300px;
+        height: 300px;
+      }
+
+      .upgrade-btn {
+        background: linear-gradient(135deg, #11998e, #38ef7d);
+        color: white;
+        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+      }
+
+      .upgrade-btn:hover {
+        transform: translateY(-4px) scale(1.05);
+        box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+      }
+
+      .upgrade-btn:active {
+        transform: translateY(-2px) scale(1.02);
+      }
+
+      .upgrade-btn:disabled {
+        background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .upgrade-btn:disabled:hover {
+        transform: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .demolish-btn {
+        background: linear-gradient(135deg, #f093fb, #f5576c);
+        color: white;
+        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+      }
+
+      .demolish-btn:hover {
+        transform: translateY(-4px) scale(1.05);
+        box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
+      }
+
+      .demolish-btn:active {
+        transform: translateY(-2px) scale(1.02);
+      }
+
+      /* ==================== 领地扩张按钮样式 ==================== */
+      .expand-territory-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      .expand-territory-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
+      }
+
+      .expand-territory-btn:active {
+        transform: translateY(0);
+      }
+
+      .expand-territory-btn.disabled {
+        background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      .expand-territory-btn.disabled:hover {
+        transform: none;
+      }
+
+      .expand-territory-btn .expand-icon {
+        font-size: 16px;
+      }
+
+      .expand-territory-btn .expand-progress {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+      }
+
+      /* ==================== 领地扩张弹窗样式 ==================== */
+      .expansion-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .expansion-modal.show {
+        opacity: 1;
+      }
+
+      .expansion-modal-content {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border-radius: 20px;
+        width: 90%;
+        max-width: 420px;
+        max-height: 80vh;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        transform: scale(0.9);
+        transition: transform 0.3s ease;
+      }
+
+      .expansion-modal.show .expansion-modal-content {
+        transform: scale(1);
+      }
+
+      .expansion-modal .modal-header {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        padding: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .expansion-modal .modal-header h3 {
+        margin: 0;
+        color: white;
+        font-size: 20px;
+      }
+
+      .expansion-modal .modal-body {
+        padding: 20px;
+      }
+
+      .expansion-info {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+      }
+
+      .expansion-icon {
+        font-size: 48px;
+      }
+
+      .expansion-status h4 {
+        margin: 0 0 8px 0;
+        color: #fff;
+        font-size: 18px;
+      }
+
+      .expansion-status p {
+        margin: 4px 0;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 14px;
+      }
+
+      .expansion-preview {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+      }
+
+      .expansion-preview h5 {
+        margin: 0 0 12px 0;
+        color: #fff;
+        font-size: 16px;
+      }
+
+      .new-slots-preview {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .new-slot-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.08);
+        padding: 10px 15px;
+        border-radius: 8px;
+        color: #fff;
+      }
+
+      .new-slot-item .slot-icon {
+        font-size: 20px;
+      }
+
+      .new-slot-item .unlock-requirement {
+        margin-left: auto;
+        font-size: 12px;
+        color: #38ef7d;
+        background: rgba(56, 239, 125, 0.2);
+        padding: 4px 8px;
+        border-radius: 10px;
+      }
+
+      .expansion-cost {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+      }
+
+      .expansion-cost h5 {
+        margin: 0 0 12px 0;
+        color: #fff;
+        font-size: 16px;
+      }
+
+      .cost-items {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .cost-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 15px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        color: #fff;
+      }
+
+      .cost-item.insufficient {
+        background: rgba(245, 87, 108, 0.2);
+        border: 1px solid rgba(245, 87, 108, 0.5);
+      }
+
+      .cost-item.insufficient .cost-value {
+        color: #f5576c;
+      }
+
+      .cost-item .cost-icon {
+        font-size: 20px;
+      }
+
+      .cost-item .cost-value {
+        font-weight: 600;
+        font-size: 16px;
+      }
+
+      .cost-item .cost-current {
+        margin-left: auto;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+      }
+
+      .expansion-warning {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(245, 87, 108, 0.2);
+        border: 1px solid rgba(245, 87, 108, 0.5);
+        padding: 12px 15px;
+        border-radius: 10px;
+        color: #f5576c;
+        margin-bottom: 20px;
+      }
+
+      .expansion-warning .warning-icon {
+        font-size: 20px;
+      }
+
+      .expansion-complete {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 20px;
+        background: linear-gradient(
+          135deg,
+          rgba(56, 239, 125, 0.2),
+          rgba(17, 153, 142, 0.2)
+        );
+        border-radius: 12px;
+        color: #38ef7d;
+        font-size: 16px;
+      }
+
+      .expansion-complete .complete-icon {
+        font-size: 24px;
+      }
+
+      .expansion-actions {
+        display: flex;
+        justify-content: center;
+        margin-top: 10px;
+      }
+
+      .expansion-actions .confirm-btn {
+        background: linear-gradient(135deg, #11998e, #38ef7d);
+        color: white;
+        border: none;
+        padding: 12px 40px;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+      }
+
+      .expansion-actions .confirm-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(17, 153, 142, 0.4);
+      }
+
+      .expansion-actions .confirm-btn:disabled {
+        background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      /* 扩张地块特殊样式 */
+      .territory-slot[data-expanded="true"] {
+        border: 2px dashed rgba(240, 147, 251, 0.5);
+      }
+
+      .territory-slot[data-expanded="true"]::after {
+        content: "新";
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: linear-gradient(135deg, #f093fb, #f5576c);
+        color: white;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 8px;
+        z-index: 10;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="game-container">
-        <!-- 游戏内加载动画 -->
-        <div class="game-loading-screen" id="gameLoadingScreen" style="display: none;">
-            <div class="loading-content">
-                <div class="loading-spinner"></div>
-                <div class="loading-text">领地加载中...</div>
-            </div>
+      <!-- 游戏内加载动画 -->
+      <div
+        class="game-loading-screen"
+        id="gameLoadingScreen"
+        style="display: none"
+      >
+        <div class="loading-content">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">领地加载中...</div>
         </div>
+      </div>
 
-        <div class="game-area">
-            <!-- 领地界面 -->
-            <div id="territory-section">
-                <div class="territory-header">
-                    <h2>领地</h2>
-                    <div class="territory-resources">
-                        <div class="resource-item">
-                            <span class="resource-icon">💰</span>
-                            <span class="resource-value" id="territory-gold">1000</span>
-                        </div>
-                        <div class="resource-item">
-                            <span class="resource-icon">💎</span>
-                            <span class="resource-value" id="territory-crystal">100</span>
-                        </div>
-                        <button class="expand-territory-btn" id="expand-territory-btn" title="扩张领地">
-                            <span class="expand-icon">🏗️</span>
-                            <span class="expand-text">扩张</span>
-                            <span class="expand-progress" id="expansion-progress">6/12</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Canvas动画场景容器 -->
-                <div class="territory-scene-container">
-                    <canvas id="territory-canvas" class="territory-canvas"></canvas>
-                    
-                    <!-- 领地网格 -->
-                <div class="territory-grid">
-                    <div class="territory-slot" data-slot="0" data-unlock-level="0" data-always-unlocked="true">
-                        <div class="slot-content unlocked">
-                            <button class="build-button">+</button>
-                        </div>
-                    </div>
-                    <div class="territory-slot" data-slot="1" data-unlock-level="5">
-                        <div class="slot-content locked">
-                            <div class="unlock-condition">
-                                <div class="unlock-icon">🔒</div>
-                                <div class="unlock-text">等级 5 解锁</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="territory-slot" data-slot="2" data-unlock-level="10">
-                        <div class="slot-content locked">
-                            <div class="unlock-condition">
-                                <div class="unlock-icon">🔒</div>
-                                <div class="unlock-text">等级 10 解锁</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="territory-slot" data-slot="3" data-unlock-level="15">
-                        <div class="slot-content locked">
-                            <div class="unlock-condition">
-                                <div class="unlock-icon">🔒</div>
-                                <div class="unlock-text">等级 15 解锁</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="territory-slot" data-slot="4" data-unlock-level="20">
-                        <div class="slot-content locked">
-                            <div class="unlock-condition">
-                                <div class="unlock-icon">🔒</div>
-                                <div class="unlock-text">等级 20 解锁</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="territory-slot" data-slot="5" data-unlock-level="25">
-                        <div class="slot-content locked">
-                            <div class="unlock-condition">
-                                <div class="unlock-icon">🔒</div>
-                                <div class="unlock-text">等级 25 解锁</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                </div>
+      <div class="game-area">
+        <!-- 领地界面 -->
+        <div id="territory-section">
+          <div class="territory-header">
+            <h2>领地</h2>
+            <div class="territory-resources">
+              <div class="resource-item">
+                <span class="resource-icon">💰</span>
+                <span class="resource-value" id="territory-gold">1000</span>
+              </div>
+              <div class="resource-item">
+                <span class="resource-icon">💎</span>
+                <span class="resource-value" id="territory-crystal">100</span>
+              </div>
+              <button
+                class="expand-territory-btn"
+                id="expand-territory-btn"
+                title="扩张领地"
+              >
+                <span class="expand-icon">🏗️</span>
+                <span class="expand-text">扩张</span>
+                <span class="expand-progress" id="expansion-progress"
+                  >6/12</span
+                >
+              </button>
             </div>
-        </div>
+          </div>
 
-        <!-- 建筑列表弹窗 - 在游戏容器内 -->
-        <div id="building-list-modal" class="building-list-modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>🏗️ 选择建筑</h3>
-                    <button class="close-btn" id="close-building-list">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="building-selection-info">
-                        <p>为您的领地选择一座建筑，每座建筑都有独特的属性加成</p>
-                    </div>
-                    <div class="building-options" id="building-options">
-                        <!-- 建筑选项将动态生成 -->
-                    </div>
-                </div>
-            </div>
-        </div>
+          <!-- Canvas动画场景容器 -->
+          <div class="territory-scene-container">
+            <canvas id="territory-canvas" class="territory-canvas"></canvas>
 
-        <!-- 建筑属性弹窗 - 在游戏容器内 -->
-        <div id="building-info-modal" class="building-info-modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 id="building-info-title">建筑信息</h3>
-                    <button class="close-btn" id="close-building-info">×</button>
+            <!-- 领地网格 -->
+            <div class="territory-grid">
+              <div
+                class="territory-slot"
+                data-slot="0"
+                data-unlock-level="0"
+                data-always-unlocked="true"
+              >
+                <div class="slot-content unlocked">
+                  <button class="build-button">+</button>
                 </div>
-                <div class="modal-body">
-                    <div class="building-info-content" id="building-info-content">
-                        <!-- 建筑信息将动态生成 -->
-                    </div>
+              </div>
+              <div class="territory-slot" data-slot="1" data-unlock-level="5">
+                <div class="slot-content locked">
+                  <div class="unlock-condition">
+                    <div class="unlock-icon">🔒</div>
+                    <div class="unlock-text">等级 5 解锁</div>
+                  </div>
                 </div>
+              </div>
+              <div class="territory-slot" data-slot="2" data-unlock-level="10">
+                <div class="slot-content locked">
+                  <div class="unlock-condition">
+                    <div class="unlock-icon">🔒</div>
+                    <div class="unlock-text">等级 10 解锁</div>
+                  </div>
+                </div>
+              </div>
+              <div class="territory-slot" data-slot="3" data-unlock-level="15">
+                <div class="slot-content locked">
+                  <div class="unlock-condition">
+                    <div class="unlock-icon">🔒</div>
+                    <div class="unlock-text">等级 15 解锁</div>
+                  </div>
+                </div>
+              </div>
+              <div class="territory-slot" data-slot="4" data-unlock-level="20">
+                <div class="slot-content locked">
+                  <div class="unlock-condition">
+                    <div class="unlock-icon">🔒</div>
+                    <div class="unlock-text">等级 20 解锁</div>
+                  </div>
+                </div>
+              </div>
+              <div class="territory-slot" data-slot="5" data-unlock-level="25">
+                <div class="slot-content locked">
+                  <div class="unlock-condition">
+                    <div class="unlock-icon">🔒</div>
+                    <div class="unlock-text">等级 25 解锁</div>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
         </div>
+      </div>
 
-        <!-- 领地扩张弹窗 - 在游戏容器内 -->
-        <div id="expansion-modal" class="expansion-modal">
-            <div class="modal-content expansion-modal-content">
-                <div class="modal-header">
-                    <h3>🏗️ 领地扩张</h3>
-                    <button class="close-btn" id="close-expansion-modal">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="expansion-content" id="expansion-content">
-                        <!-- 扩张内容将动态生成 -->
-                    </div>
-                    <div class="expansion-actions">
-                        <button class="confirm-btn" id="confirm-expansion-btn">确认扩张</button>
-                    </div>
-                </div>
+      <!-- 建筑列表弹窗 - 在游戏容器内 -->
+      <div id="building-list-modal" class="building-list-modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>🏗️ 选择建筑</h3>
+            <button class="close-btn" id="close-building-list">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="building-selection-info">
+              <p>为您的领地选择一座建筑，每座建筑都有独特的属性加成</p>
             </div>
+            <div class="building-options" id="building-options">
+              <!-- 建筑选项将动态生成 -->
+            </div>
+          </div>
         </div>
+      </div>
 
-        <!-- 底部导航栏 -->
-        <div class="bottom-navigation">
-            <div class="nav-item" id="character-button">
-                <div class="nav-icon">👑</div>
-                <div class="nav-label">角色</div>
+      <!-- 建筑属性弹窗 - 在游戏容器内 -->
+      <div id="building-info-modal" class="building-info-modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="building-info-title">建筑信息</h3>
+            <button class="close-btn" id="close-building-info">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="building-info-content" id="building-info-content">
+              <!-- 建筑信息将动态生成 -->
             </div>
-            <div class="nav-item nav-close-btn" id="closeNavItem" style="display: none;">
-                <div class="nav-icon">×</div>
-                <div class="nav-label">关闭</div>
-            </div>
-            <div class="nav-item active" id="territory-button">
-                <div class="nav-icon">🥩</div>
-                <div class="nav-label">领地</div>
-            </div>
-            <div class="nav-item">
-                <div class="nav-icon">⚔️</div>
-                <div class="nav-label">副本</div>
-            </div>
-            <div class="nav-item">
-                <div class="nav-icon">🛡️</div>
-                <div class="nav-label">公会</div>
-            </div>
-            <div class="nav-item">
-                <div class="nav-icon">🔴</div>
-                <div class="nav-label">召唤</div>
-            </div>
+          </div>
         </div>
+      </div>
+
+      <!-- 领地扩张弹窗 - 在游戏容器内 -->
+      <div id="expansion-modal" class="expansion-modal">
+        <div class="modal-content expansion-modal-content">
+          <div class="modal-header">
+            <h3>🏗️ 领地扩张</h3>
+            <button class="close-btn" id="close-expansion-modal">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="expansion-content" id="expansion-content">
+              <!-- 扩张内容将动态生成 -->
+            </div>
+            <div class="expansion-actions">
+              <button class="confirm-btn" id="confirm-expansion-btn">
+                确认扩张
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 离线收益弹窗 -->
+      <div id="offline-gains-modal" class="expansion-modal">
+        <div class="modal-content expansion-modal-content">
+          <div
+            class="modal-header"
+            style="
+              background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            "
+          >
+            <h3>👋 欢迎回来!</h3>
+          </div>
+          <div class="modal-body">
+            <div class="expansion-info">
+              <div class="expansion-icon">🌙</div>
+              <div class="expansion-status">
+                <h4 id="offline-time-text">离线时长: 8小时30分钟</h4>
+                <p>您的领地在您离开期间持续产出了资源</p>
+              </div>
+            </div>
+
+            <div class="expansion-preview">
+              <h5>获得收益:</h5>
+              <div class="new-slots-preview">
+                <div class="new-slot-item">
+                  <span class="slot-icon">💰</span>
+                  <span id="offline-gold-value">0</span> 金币
+                </div>
+                <div class="new-slot-item">
+                  <span class="slot-icon">💎</span>
+                  <span id="offline-crystal-value">0</span> 水晶
+                </div>
+              </div>
+            </div>
+
+            <div class="expansion-actions">
+              <button class="confirm-btn" id="claim-offline-btn">
+                领取收益
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部导航栏 -->
+      <div class="bottom-navigation">
+        <div class="nav-item" id="character-button">
+          <div class="nav-icon">👑</div>
+          <div class="nav-label">角色</div>
+        </div>
+        <div
+          class="nav-item nav-close-btn"
+          id="closeNavItem"
+          style="display: none"
+        >
+          <div class="nav-icon">×</div>
+          <div class="nav-label">关闭</div>
+        </div>
+        <div class="nav-item active" id="territory-button">
+          <div class="nav-icon">🥩</div>
+          <div class="nav-label">领地</div>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">⚔️</div>
+          <div class="nav-label">副本</div>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">🛡️</div>
+          <div class="nav-label">公会</div>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">🔴</div>
+          <div class="nav-label">召唤</div>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="js/scenes/territory-scene.js?v=34"></script>
-</body>
+  </body>
 </html>

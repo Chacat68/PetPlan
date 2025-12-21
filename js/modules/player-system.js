@@ -102,12 +102,7 @@ class PlayerSystem {
         // 设置玩家Y坐标
         const mapSize = this.gameCore.getMapSize();
         this.player.y = mapSize.height / 2 - 25.5;
-
-        // 延迟绑定升级按钮事件，确保DOM完全加载
-        setTimeout(() => {
-            this.bindUpgradeEvents();
-            console.log('玩家系统初始化完成');
-        }, 200);
+        console.log('玩家系统初始化完成');
     }
 
     /**
@@ -177,11 +172,22 @@ class PlayerSystem {
     }
 
     /**
+     * 获取领地系统提供的属性加成
+     */
+    getTerritoryBonuses() {
+        if (this.territorySystem && this.territorySystem.getTotalAttributeBonuses) {
+            return this.territorySystem.getTotalAttributeBonuses();
+        }
+        return { attackBonus: 0, defenseBonus: 0, maxHpBonus: 0, healingRateBonus: 0, experienceBonus: 0 };
+    }
+
+    /**
      * 获取实际攻击力
-     * 公式：(基础攻击 + 装备攻击) * (1 + 宠物攻击加成)
+     * 公式：(基础攻击 + 装备攻击 + 领地加成) * (1 + 宠物攻击加成)
      */
     getActualAttack() {
         const bonuses = this.getTotalBonuses();
+        const territoryBonuses = this.getTerritoryBonuses();
 
         // 1. 基础攻击力（固有 + 升级）
         let baseAttack = this.player.attack;
@@ -189,24 +195,31 @@ class PlayerSystem {
         // 2. 加上装备攻击力
         baseAttack += bonuses.equip.attack;
 
-        // 3. 加上力量属性加成 (每点力量增加2点攻击)
+        // 3. 加上领地攻击加成
+        baseAttack += territoryBonuses.attackBonus;
+
+        // 4. 加上力量属性加成 (每点力量增加2点攻击)
         baseAttack += this.player.strength * 2;
 
-        // 4. 应用宠物百分比加成
+        // 5. 应用宠物百分比加成
         return Math.floor(baseAttack * (1 + bonuses.pet.attackPercent));
     }
 
     /**
      * 获取实际最大生命值
-     * 公式：(基础生命 + 装备生命) * (1 + 宠物生命加成)
+     * 公式：(基础生命 + 装备生命 + 领地加成) * (1 + 宠物生命加成)
      */
     getActualMaxHp() {
         const bonuses = this.getTotalBonuses();
+        const territoryBonuses = this.getTerritoryBonuses();
 
         let baseHp = this.player.maxHp;
 
         // 加上装备生命
         baseHp += bonuses.equip.hp;
+
+        // 加上领地生命加成
+        baseHp += territoryBonuses.maxHpBonus;
 
         // 加上力量属性加成 (每点力量增加10点生命)
         baseHp += this.player.strength * 10;
@@ -293,9 +306,9 @@ class PlayerSystem {
      * 获取实际生命回复
      */
     getActualRegen() {
-        // 暂时没有装备和宠物的特定加成，只受体质影响（如果有体质属性的话）
-        // 这里暂时只返回基础+升级值
-        return this.player.hpRegen;
+        const territoryBonuses = this.getTerritoryBonuses();
+        // 加上领地提供的治疗率加成
+        return this.player.hpRegen + territoryBonuses.healingRateBonus;
     }
 
     /**
@@ -311,11 +324,15 @@ class PlayerSystem {
      */
     getActualDefense() {
         const bonuses = this.getTotalBonuses();
+        const territoryBonuses = this.getTerritoryBonuses();
 
         let baseDefense = this.player.defense;
 
         // 加上装备防御
         baseDefense += bonuses.equip.defense;
+
+        // 加上领地防御加成
+        baseDefense += territoryBonuses.defenseBonus;
 
         // 加上宠物被动
         baseDefense += bonuses.pet.defense;
@@ -429,18 +446,21 @@ class PlayerSystem {
     /**
      * 升级属性
      */
+    /**
+     * 升级属性
+     * @returns {Object} { success: boolean, reason: string }
+     */
     upgradeAttribute(attribute, increase = null, silent = false) {
         // 如果没有提供 increase 参数，使用默认增量映射
         if (increase === null) {
             increase = this.attributeIncreases[attribute] || 1;
         }
         const cost = this.player.upgradeCosts[attribute];
-        const button = document.getElementById(`upgrade${attribute.charAt(0).toUpperCase() + attribute.slice(1)}`);
 
         if (this.resourceSystem.hasEnoughCoins(cost)) {
             // 检查各种属性限制
             if (!this.canUpgrade(attribute)) {
-                return;
+                return { success: false, reason: 'limit_reached' };
             }
 
             this.resourceSystem.spendCoins(cost);
@@ -463,25 +483,14 @@ class PlayerSystem {
             // 增加升级成本
             this.player.upgradeCosts[attribute] = Math.floor(cost * 1.5);
 
-            // 添加升级成功动画（批量升级时静默）
-            if (!silent && button) {
-                this.showUpgradeSuccess(button, attribute);
-            }
-
             // 触发成就事件
             if (!silent && this.achievementSystem) {
                 this.achievementSystem.onEvent('upgrade', 1);
             }
 
-            // 单次升级时立即刷新按钮状态
-            if (!silent) {
-                this.updateUpgradeButtons();
-            }
+            return { success: true };
         } else {
-            // 金币不足时的反馈（批量升级时静默）
-            if (!silent && button) {
-                this.showInsufficientCoins(button);
-            }
+            return { success: false, reason: 'insufficient_coins' };
         }
     }
 
@@ -511,21 +520,22 @@ class PlayerSystem {
     /**
      * 批量升级属性
      */
+    /**
+     * 批量升级属性
+     */
     bulkUpgradeAttribute(attribute, times) {
         const inc = this.attributeIncreases[attribute];
         const { totalCost, allowedTimes } = this.getBulkUpgradeCost(attribute, times);
 
         if (allowedTimes !== times || !this.resourceSystem.hasEnoughCoins(totalCost)) {
-            return; // 不满足条件，不执行
+            return { success: false }; // 不满足条件，不执行
         }
 
         for (let i = 0; i < times; i++) {
             this.upgradeAttribute(attribute, inc, true); // 静默升级
         }
-
-        // 统一刷新
-        this.updateUpgradeButtons();
-        this.updateUpgradeItems();
+        
+        return { success: true };
     }
 
     /**
@@ -657,532 +667,7 @@ class PlayerSystem {
     /**
      * 更新总战力显示
      */
-    updateTotalPower() {
-        const totalPower = this.calculateTotalPower();
-        const totalPowerElement = document.getElementById('totalPower');
-        if (totalPowerElement) {
-            totalPowerElement.textContent = this.resourceSystem.formatNumber(totalPower);
-        }
-    }
 
-    /**
-     * 更新升级按钮状态
-     */
-    updateUpgradeButtons() {
-        const buttons = {
-            'upgradeAttack': { cost: this.player.upgradeCosts.attack, attribute: 'attack' },
-            'upgradeHp': { cost: this.player.upgradeCosts.hp, attribute: 'hp' },
-            'upgradeHpRegen': { cost: this.player.upgradeCosts.hpRegen, attribute: 'hpRegen' },
-            'upgradeCritDamage': { cost: this.player.upgradeCosts.critDamage, attribute: 'critDamage' },
-            'upgradeAttackSpeed': { cost: this.player.upgradeCosts.attackSpeed, attribute: 'attackSpeed' },
-            'upgradeCrit': { cost: this.player.upgradeCosts.crit, attribute: 'crit' },
-            'upgradeMultiShot': { cost: this.player.upgradeCosts.multiShot, attribute: 'multiShot' },
-            'upgradeTripleShot': { cost: this.player.upgradeCosts.tripleShot, attribute: 'tripleShot' }
-        };
-
-        for (const [id, { cost, attribute }] of Object.entries(buttons)) {
-            const button = document.getElementById(id);
-            const btnCost = button?.querySelector('.btn-cost');
-            const btnText = button?.querySelector('.btn-text');
-
-            if (!button) continue;
-
-            // 计算当前金币能升级的最高等级数量
-            const maxAffordable = this.getMaxAffordableUpgrades(attribute);
-
-            // 特殊处理各种按钮状态
-            if (id === 'upgradeMultiShot') {
-                const currentLevel = Math.floor((this.player.multiShot - 1) / 1) + 1;
-                const isMaxValue = this.player.multiShot >= 100;
-                const isMaxLevel = currentLevel >= 1001;
-
-                if (isMaxValue || isMaxLevel) {
-                    button.disabled = true;
-                    if (btnCost) {
-                        btnCost.textContent = isMaxValue ? '已满' : '已满级';
-                    }
-                    if (btnText) {
-                        btnText.textContent = '强化';
-                    }
-                } else {
-                    button.disabled = !this.resourceSystem.hasEnoughCoins(cost);
-                    if (btnCost) {
-                        btnCost.textContent = `💰 ${this.resourceSystem.formatNumber(cost)}`;
-                    }
-                    if (btnText) {
-                        btnText.textContent = maxAffordable > 0 ? `强化 +${maxAffordable}` : '强化';
-                    }
-                }
-            } else {
-                if (btnCost) {
-                    btnCost.textContent = `💰 ${this.resourceSystem.formatNumber(cost)}`;
-                }
-                if (btnText) {
-                    btnText.textContent = maxAffordable > 0 ? `强化 +${maxAffordable}` : '强化';
-                }
-                button.disabled = !this.resourceSystem.hasEnoughCoins(cost);
-            }
-        }
-    }
-
-    /**
-     * 更新升级项目显示
-     */
-    updateUpgradeItems() {
-        const passives = this.getPassiveBonuses();
-
-        // 更新攻击力
-        const attackLevel = document.querySelector('#upgradeAttack')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const attackValue = document.querySelector('#upgradeAttack')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentAttackLevel = Math.floor((this.player.attack - 20) / 5) + 1;
-        if (attackLevel) attackLevel.textContent = `Lv.${currentAttackLevel}`;
-        if (attackValue) {
-            const actual = this.getActualAttack();
-            if (actual > this.player.attack) {
-                attackValue.innerHTML = `${this.resourceSystem.formatNumber(this.player.attack)} <span style="color:#2ed573;font-size:0.8em;">+${this.resourceSystem.formatNumber(actual - this.player.attack)}</span>`;
-            } else {
-                attackValue.textContent = this.resourceSystem.formatNumber(this.player.attack);
-            }
-        }
-
-        // 更新生命
-        const hpLevel = document.querySelector('#upgradeHp')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const hpValue = document.querySelector('#upgradeHp')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentHpLevel = Math.floor((this.player.maxHp - 100) / 10) + 1;
-        if (hpLevel) hpLevel.textContent = `Lv.${currentHpLevel}`;
-        if (hpValue) {
-            const actual = this.getActualMaxHp();
-            if (actual > this.player.maxHp) {
-                hpValue.innerHTML = `${this.resourceSystem.formatNumber(this.player.maxHp)} <span style="color:#2ed573;font-size:0.8em;">+${this.resourceSystem.formatNumber(actual - this.player.maxHp)}</span>`;
-            } else {
-                hpValue.textContent = this.resourceSystem.formatNumber(this.player.maxHp);
-            }
-        }
-
-        // 更新生命恢复
-        const regenLevel = document.querySelector('#upgradeHpRegen')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const regenValue = document.querySelector('#upgradeHpRegen')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentRegenLevel = Math.floor((this.player.hpRegen - 1) / 1) + 1;
-        if (regenLevel) regenLevel.textContent = `Lv.${currentRegenLevel}`;
-        if (regenValue) {
-            const actual = this.getActualRegen();
-            if (actual > this.player.hpRegen) {
-                regenValue.innerHTML = `${this.player.hpRegen} <span style="color:#2ed573;font-size:0.8em;">+${(actual - this.player.hpRegen).toFixed(1)}</span>`;
-            } else {
-                regenValue.textContent = this.player.hpRegen;
-            }
-        }
-
-        // 更新暴击伤害
-        const cdLevel = document.querySelector('#upgradeCritDamage')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const cdValue = document.querySelector('#upgradeCritDamage')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentCdLevel = Math.floor((this.player.critDamage - 150) / 10) + 1;
-        if (cdLevel) cdLevel.textContent = `Lv.${currentCdLevel}`;
-        if (cdValue) {
-            const actual = this.getActualCritDamage();
-            if (actual > this.player.critDamage) {
-                cdValue.innerHTML = `${this.player.critDamage}% <span style="color:#2ed573;font-size:0.8em;">+${actual - this.player.critDamage}%</span>`;
-            } else {
-                cdValue.textContent = `${this.player.critDamage}%`;
-            }
-        }
-
-        // 更新防御力
-        const defenseLevel = document.querySelector('#upgradeDefense')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const defenseValue = document.querySelector('#upgradeDefense')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentDefenseLevel = Math.floor((this.player.defense - 5) / 2) + 1;
-        if (defenseLevel) defenseLevel.textContent = `Lv.${currentDefenseLevel}`;
-        if (defenseValue) {
-            const actual = this.getActualDefense();
-            if (actual > this.player.defense) {
-                defenseValue.innerHTML = `${this.player.defense} <span style="color:#2ed573;font-size:0.8em;">+${actual - this.player.defense}</span>`;
-            } else {
-                defenseValue.textContent = this.player.defense;
-            }
-        }
-
-        // 更新攻速
-        const asLevel = document.querySelector('#upgradeAttackSpeed')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const asValue = document.querySelector('#upgradeAttackSpeed')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentAsLevel = Math.floor((this.player.attackSpeed - 1.0) / 0.1) + 1;
-        if (asLevel) asLevel.textContent = `Lv.${currentAsLevel}`;
-        if (asValue) {
-            const actual = this.getActualAttackSpeed();
-            if (actual > this.player.attackSpeed) {
-                asValue.innerHTML = `${this.player.attackSpeed.toFixed(1)} <span style="color:#2ed573;font-size:0.8em;">+${(actual - this.player.attackSpeed).toFixed(1)}</span>`;
-            } else {
-                asValue.textContent = this.player.attackSpeed.toFixed(1);
-            }
-        }
-
-        // 更新暴击率
-        const critLevel = document.querySelector('#upgradeCrit')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const critValue = document.querySelector('#upgradeCrit')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentCritLevel = Math.floor((this.player.crit - 5) / 1) + 1;
-        if (critLevel) critLevel.textContent = `Lv.${currentCritLevel}`;
-        if (critValue) {
-            const actual = this.getActualCrit();
-            if (actual > this.player.crit) {
-                critValue.innerHTML = `${this.player.crit.toFixed(0)}% <span style="color:#2ed573;font-size:0.8em;">+${(actual - this.player.crit).toFixed(0)}%</span>`;
-            } else {
-                critValue.textContent = `${this.player.crit.toFixed(0)}%`;
-            }
-        }
-
-        // 连射和三连射暂时没有被动加成，保持原样逻辑...
-        const multiShotLevel = document.querySelector('#upgradeMultiShot')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const multiShotValue = document.querySelector('#upgradeMultiShot')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentMultiShotLevel = Math.floor((this.player.multiShot - 1) / 1) + 1;
-        if (multiShotLevel) {
-            multiShotLevel.textContent = currentMultiShotLevel >= 1001 ? 'MAX' : `Lv.${currentMultiShotLevel}`;
-        }
-        if (multiShotValue) multiShotValue.textContent = this.player.multiShot.toFixed(0);
-
-        const tripleShotLevel = document.querySelector('#upgradeTripleShot')?.closest('.upgrade-item')?.querySelector('.upgrade-icon-container .upgrade-level');
-        const tripleShotValue = document.querySelector('#upgradeTripleShot')?.closest('.upgrade-item')?.querySelector('.upgrade-value');
-        const currentTripleShotLevel = Math.floor((this.player.tripleShot - 0) / 5) + 1;
-        if (tripleShotLevel) {
-            tripleShotLevel.textContent = currentTripleShotLevel >= 1001 ? 'MAX' : `Lv.${currentTripleShotLevel}`;
-        }
-        if (tripleShotValue) tripleShotValue.textContent = `${this.player.tripleShot}%`;
-
-        this.updateTotalPower();
-    }
-
-    /**
-     * 绑定升级事件
-     */
-    bindUpgradeEvents() {
-        // 升级按钮事件 - 支持长按
-        this.bindUpgradeButton('upgradeAttack', 'attack', 5);
-        this.bindUpgradeButton('upgradeHp', 'hp', 20);
-        this.bindUpgradeButton('upgradeDefense', 'defense', 2);
-        this.bindUpgradeButton('upgradeHpRegen', 'hpRegen', 1);
-        this.bindUpgradeButton('upgradeCritDamage', 'critDamage', 10);
-        this.bindUpgradeButton('upgradeAttackSpeed', 'attackSpeed', 0.1);
-        this.bindUpgradeButton('upgradeCrit', 'crit', 1);
-        this.bindUpgradeButton('upgradeMultiShot', 'multiShot', 1);
-        this.bindUpgradeButton('upgradeTripleShot', 'tripleShot', 5);
-
-        // 绑定长按升级菜单功能
-        this.bindLongPressUpgradeMenu();
-    }
-
-    /**
-     * 绑定升级按钮的长按功能
-     */
-    bindUpgradeButton(buttonId, attribute, increase) {
-        const button = document.getElementById(buttonId);
-        if (!button) return;
-
-        let longPressTimer = null;
-        let isLongPressing = false;
-        let repeatTimer = null;
-
-        // 开始长按
-        const startLongPress = () => {
-            // 先执行一次升级
-            this.upgradeAttribute(attribute, increase);
-
-            // 设置长按定时器
-            longPressTimer = setTimeout(() => {
-                isLongPressing = true;
-                // 开始重复升级
-                repeatTimer = setInterval(() => {
-                    this.upgradeAttribute(attribute, increase);
-                }, 150); // 每150ms升级一次
-            }, 500); // 长按500ms后开始重复
-        };
-
-        // 停止长按
-        const stopLongPress = () => {
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
-            if (repeatTimer) {
-                clearInterval(repeatTimer);
-                repeatTimer = null;
-            }
-            isLongPressing = false;
-        };
-
-        // 鼠标事件
-        button.addEventListener('mousedown', startLongPress);
-        button.addEventListener('mouseup', stopLongPress);
-        button.addEventListener('mouseleave', stopLongPress);
-
-        // 触摸事件
-        button.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            startLongPress();
-        });
-        button.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            stopLongPress();
-        });
-        button.addEventListener('touchcancel', (e) => {
-            e.preventDefault();
-            stopLongPress();
-        });
-
-        // 防止右键菜单
-        button.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-        });
-    }
-
-    /**
-     * 绑定长按升级菜单功能
-     */
-    bindLongPressUpgradeMenu() {
-        const upgradeButtons = [
-            { id: 'upgradeAttack', attribute: 'attack' },
-            { id: 'upgradeHp', attribute: 'hp' },
-            { id: 'upgradeHpRegen', attribute: 'hpRegen' },
-            { id: 'upgradeCritDamage', attribute: 'critDamage' },
-            { id: 'upgradeAttackSpeed', attribute: 'attackSpeed' },
-            { id: 'upgradeCrit', attribute: 'crit' },
-            { id: 'upgradeMultiShot', attribute: 'multiShot' },
-            { id: 'upgradeTripleShot', attribute: 'tripleShot' }
-        ];
-
-        upgradeButtons.forEach(({ id, attribute }) => {
-            const button = document.getElementById(id);
-            if (button) {
-                let longPressTimer = null;
-                let isLongPress = false;
-
-                // 鼠标/触摸开始事件
-                const startLongPress = (e) => {
-                    e.preventDefault();
-                    isLongPress = false;
-                    longPressTimer = setTimeout(() => {
-                        isLongPress = true;
-                        this.showUpgradeMenu(button, attribute, e);
-                    }, 500); // 长按500毫秒触发
-                };
-
-                // 鼠标/触摸结束事件
-                const endLongPress = (e) => {
-                    if (longPressTimer) {
-                        clearTimeout(longPressTimer);
-                        longPressTimer = null;
-                    }
-
-                    // 如果不是长按，执行升级操作
-                    if (!isLongPress) {
-                        const maxAffordable = this.getMaxAffordableUpgrades(attribute);
-
-                        if (maxAffordable > 1) {
-                            this.bulkUpgradeAttribute(attribute, maxAffordable);
-                        } else if (maxAffordable === 1) {
-                            this.upgradeAttribute(attribute);
-                        }
-                    }
-                    isLongPress = false;
-                };
-
-                // 绑定事件
-                button.addEventListener('mousedown', startLongPress);
-                button.addEventListener('mouseup', endLongPress);
-                button.addEventListener('mouseleave', endLongPress);
-                button.addEventListener('touchstart', startLongPress);
-                button.addEventListener('touchend', endLongPress);
-                button.addEventListener('touchcancel', endLongPress);
-            }
-        });
-
-        // 绑定子菜单按钮事件
-        this.bindUpgradeMenuButtons();
-    }
-
-    /**
-     * 显示升级子菜单
-     */
-    showUpgradeMenu(button, attribute, event) {
-        const menu = document.getElementById('upgradeMenu');
-        if (!menu) return;
-
-        // 计算菜单位置
-        const rect = button.getBoundingClientRect();
-        menu.style.left = `${rect.left}px`;
-        menu.style.top = `${rect.bottom + 5}px`;
-
-        // 更新菜单按钮状态
-        this.updateUpgradeMenuButtons(attribute);
-
-        // 显示菜单
-        menu.style.display = 'block';
-        menu.dataset.currentAttribute = attribute;
-
-        // 点击其他地方关闭菜单
-        setTimeout(() => {
-            document.addEventListener('click', this.hideUpgradeMenu.bind(this), { once: true });
-        }, 100);
-    }
-
-    /**
-     * 隐藏升级子菜单
-     */
-    hideUpgradeMenu() {
-        const menu = document.getElementById('upgradeMenu');
-        if (menu) {
-            menu.style.display = 'none';
-            delete menu.dataset.currentAttribute;
-        }
-    }
-
-    /**
-     * 绑定子菜单按钮事件
-     */
-    bindUpgradeMenuButtons() {
-        const menuButtons = document.querySelectorAll('.upgrade-menu-btn');
-        menuButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const times = parseInt(btn.dataset.times);
-                const menu = document.getElementById('upgradeMenu');
-                const attribute = menu.dataset.currentAttribute;
-
-                if (attribute && times) {
-                    if (times === 1) {
-                        this.upgradeAttribute(attribute);
-                    } else {
-                        this.bulkUpgradeAttribute(attribute, times);
-                    }
-                }
-
-                this.hideUpgradeMenu();
-            });
-        });
-    }
-
-    /**
-     * 更新子菜单按钮状态
-     */
-    updateUpgradeMenuButtons(attribute) {
-        const menuButtons = document.querySelectorAll('.upgrade-menu-btn');
-        menuButtons.forEach(btn => {
-            const times = parseInt(btn.dataset.times);
-            const canUpgrade = this.canUpgrade(attribute, times);
-            const { totalCost, allowedTimes } = this.getBulkUpgradeCost(attribute, times);
-
-            btn.disabled = !canUpgrade || allowedTimes === 0;
-
-            if (times === 1) {
-                btn.textContent = '+1';
-            } else {
-                btn.textContent = `+${Math.min(times, allowedTimes)}`;
-            }
-        });
-    }
-
-    /**
-     * 显示升级成功动画
-     */
-    showUpgradeSuccess(button, attribute) {
-        // 添加成功动画
-        button.style.animation = 'pulse 0.6s ease';
-
-        // 创建成功提示
-        const successText = document.createElement('div');
-        successText.textContent = '升级成功!';
-        successText.style.cssText = `
-            position: absolute;
-            background: linear-gradient(135deg, #4CAF50, #45a049);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: bold;
-            z-index: 1000;
-            pointer-events: none;
-            opacity: 0;
-            transition: all 0.3s ease;
-        `;
-
-        const rect = button.getBoundingClientRect();
-        successText.style.left = rect.left + 'px';
-        successText.style.top = rect.top - 30 + 'px';
-
-        document.body.appendChild(successText);
-
-        // 显示动画
-        setTimeout(() => {
-            successText.style.opacity = '1';
-            successText.style.transform = 'translateY(-10px)';
-        }, 10);
-
-        // 移除动画
-        setTimeout(() => {
-            successText.style.opacity = '0';
-            successText.style.transform = 'translateY(-20px)';
-            setTimeout(() => {
-                if (successText.parentNode) {
-                    successText.parentNode.removeChild(successText);
-                }
-            }, 300);
-        }, 1500);
-
-        // 重置按钮动画
-        setTimeout(() => {
-            button.style.animation = '';
-        }, 600);
-    }
-
-    /**
-     * 显示金币不足动画
-     */
-    showInsufficientCoins(button) {
-        // 添加震动动画
-        button.style.animation = 'shake 0.5s ease';
-
-        // 创建金币不足提示
-        const errorText = document.createElement('div');
-        errorText.textContent = '金币不足!';
-        errorText.style.cssText = `
-            position: absolute;
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: bold;
-            z-index: 1000;
-            pointer-events: none;
-            opacity: 0;
-            transition: all 0.3s ease;
-        `;
-
-        const rect = button.getBoundingClientRect();
-        errorText.style.left = rect.left + 'px';
-        errorText.style.top = rect.top - 30 + 'px';
-
-        document.body.appendChild(errorText);
-
-        // 显示动画
-        setTimeout(() => {
-            errorText.style.opacity = '1';
-            errorText.style.transform = 'translateY(-10px)';
-        }, 10);
-
-        // 移除动画
-        setTimeout(() => {
-            errorText.style.opacity = '0';
-            errorText.style.transform = 'translateY(-20px)';
-            setTimeout(() => {
-                if (errorText.parentNode) {
-                    errorText.parentNode.removeChild(errorText);
-                }
-            }, 300);
-        }, 1500);
-
-        // 重置按钮动画
-        setTimeout(() => {
-            button.style.animation = '';
-        }, 500);
-    }
 
     /**
      * 获取玩家数据
@@ -1262,9 +747,10 @@ class PlayerSystem {
             }
 
             // 更新UI显示
-            this.updateUpgradeButtons();
-            this.updateUpgradeItems();
-            this.updateTotalPower();
+            // 移除直接调用，由外部控制UI更新
+            // this.updateUpgradeButtons();
+            // this.updateUpgradeItems();
+            // this.updateTotalPower();
             console.log('玩家系统存档数据已加载');
         }
     }
