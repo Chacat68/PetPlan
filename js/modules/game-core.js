@@ -1,362 +1,448 @@
 /**
- * 游戏核心模块
- * 负责游戏循环、渲染管理、事件处理等核心功能
+ * GameCore - 游戏核心
+ * 负责游戏循环、场景渲染、帧率控制
  */
 
-class GameCore {
+let instance = null;
+
+export class GameCore {
     constructor(canvas) {
         this.canvas = canvas;
-        this.ctx = canvas.getContext('2d', {
-            alpha: false,  // 禁用alpha通道提升性能
-            desynchronized: true  // 降低延迟
-        });
-        if (!this.ctx) {
-            console.error('无法获取画布上下文');
-            return;
-        }
-
-        // 优化Canvas渲染
-        this.ctx.imageSmoothingEnabled = false;  // 禁用图像平滑
-
-        // 游戏状态
-        this.isRunning = true;
+        this.ctx = canvas.getContext('2d', { alpha: false });
+        
+        // 配置
+        this.config = {
+            baseWidth: 750,
+            baseHeight: 1800,
+            width: 750,
+            height: 1800,
+            targetFps: 60,
+            autoSaveInterval: 30000
+        };
+        
+        // 状态
+        this.isRunning = false;
         this.lastTime = 0;
-        this.fps = 60;
-        this.frameInterval = 1000 / this.fps;
-        this.then = Date.now();
-
-        // 地图边界
-        this.mapWidth = this.canvas.width;
-        this.mapHeight = this.canvas.height;
-
-        // 子系统引用
-        this.playerSystem = null;
-        this.combatSystem = null;
-        this.uiSystem = null;
-        this.resourceSystem = null;
-
-        // 场景装饰元素
-        this.clouds = [];
-        this.grassDecorations = [];
-        this.mountains = [];
+        this.deltaTime = 0;
+        this.frameCount = 0;
+        
+        // 缩放比例
+        this.scale = 1;
+        
+        // 系统引用
+        this.systems = {};
+        
+        // 自动保存计时器
+        this.autoSaveTimer = 0;
+        
+        // 场景元素
+        this.clouds = this.generateClouds();
+        
+        // 初始化 Canvas 尺寸（固定尺寸，不随窗口变化）
+        this.resizeCanvas();
+        
+        console.log('[GameCore] 初始化完成');
     }
-
+    
     /**
-     * 初始化游戏核心
+     * 调整 Canvas 尺寸
      */
-    init() {
-        this.initSceneElements();
-        console.log('游戏核心初始化完成');
+    resizeCanvas() {
+        const container = this.canvas.parentElement;
+        if (!container) return;
+        
+        // 获取容器尺寸
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+        
+        // 如果尺寸为0，跳过
+        if (containerWidth === 0 || containerHeight === 0) return;
+        
+        // 直接设置 Canvas 尺寸（简化版，不使用 DPR 缩放）
+        this.canvas.width = containerWidth;
+        this.canvas.height = containerHeight;
+        
+        // 更新配置
+        this.config.width = containerWidth;
+        this.config.height = containerHeight;
+        
+        // 更新战斗系统的地图尺寸
+        if (this.systems.combat) {
+            this.systems.combat.mapWidth = containerWidth;
+            this.systems.combat.mapHeight = containerHeight;
+        }
+        
+        console.log(`[GameCore] Canvas 调整为 ${containerWidth}x${containerHeight}`);
     }
-
+    
     /**
-     * 初始化场景元素
+     * 设置系统引用
      */
-    initSceneElements() {
-        // 初始化云朵
+    setSystems(systems) {
+        this.systems = systems;
+    }
+    
+    /**
+     * 生成云朵
+     */
+    generateClouds() {
+        const clouds = [];
         for (let i = 0; i < 5; i++) {
-            this.clouds.push({
-                x: Math.random() * this.mapWidth,
-                y: 30 + Math.random() * 100,
-                speed: 0.2 + Math.random() * 0.3,
-                size: 0.8 + Math.random() * 0.4
+            clouds.push({
+                x: Math.random() * this.config.width,
+                y: 30 + Math.random() * 60,
+                size: 20 + Math.random() * 30,
+                speed: 10 + Math.random() * 20
             });
         }
-
-        // 初始化装饰元素 (Glowing Particles / Dark Rocks)
-        for (let i = 0; i < 40; i++) {
-            this.grassDecorations.push({
-                x: Math.random() * this.mapWidth,
-                y: this.mapHeight - 50 + Math.random() * 40,
-                height: 2 + Math.random() * 5, // Smaller, more like particles or small rocks
-                color: Math.random() > 0.5 ? '#4c1d95' : '#5b21b6', // Dark Purple
-                alpha: 0.3 + Math.random() * 0.5
-            });
-        }
-
-        // 初始化远景山脉 (Dark Silhouettes)
-        this.mountains = [];
-        let x = 0;
-        while (x < this.mapWidth) {
-            const width = 100 + Math.random() * 150;
-            const height = 100 + Math.random() * 150; // Taller, more imposing
-            this.mountains.push({
-                x: x,
-                y: this.mapHeight - 40,
-                width: width,
-                height: height,
-                color: '#1e1b2e' // Very dark blue/purple
-            });
-            x += width * 0.6;
-        }
+        return clouds;
     }
-
+    
     /**
-     * 设置子系统引用
+     * 启动游戏循环
      */
-    setSystems(playerSystem, combatSystem, uiSystem, resourceSystem, territorySystem, saveSystem, petSystem, equipmentSystem, achievementSystem) {
-        this.playerSystem = playerSystem;
-        this.combatSystem = combatSystem;
-        this.uiSystem = uiSystem;
-        this.resourceSystem = resourceSystem;
-        this.territorySystem = territorySystem;
-        this.saveSystem = saveSystem;
-        this.petSystem = petSystem;
-        this.equipmentSystem = equipmentSystem;
-        this.achievementSystem = achievementSystem;
-
-        // 确保PlayerSystem也能访问EquipmentSystem
-        if (this.playerSystem) {
-            this.playerSystem.setEquipmentSystem(this.equipmentSystem);
-        }
+    start() {
+        if (this.isRunning) return;
+        
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        console.log('[GameCore] 游戏启动');
+        
+        requestAnimationFrame((time) => this.gameLoop(time));
     }
-
+    
+    /**
+     * 停止游戏循环
+     */
+    stop() {
+        this.isRunning = false;
+        console.log('[GameCore] 游戏停止');
+    }
+    
     /**
      * 游戏主循环
      */
-    gameLoop(currentTime = 0) {
-        requestAnimationFrame((time) => this.gameLoop(time));
-
-        if (!this.isRunning) {
-            return;
-        }
-
-        // 帧率控制
-        const now = Date.now();
-        const elapsed = now - this.then;
-
-        if (elapsed < this.frameInterval) {
-            return;
-        }
-
-        this.then = now - (elapsed % this.frameInterval);
-
-        const deltaTime = currentTime - this.lastTime;
+    gameLoop(currentTime) {
+        if (!this.isRunning) return;
+        
+        // 计算 deltaTime
+        this.deltaTime = currentTime - this.lastTime;
         this.lastTime = currentTime;
-
-        this.update(deltaTime);
+        
+        // 帧率限制
+        const targetFrameTime = 1000 / this.config.targetFps;
+        if (this.deltaTime < targetFrameTime) {
+            requestAnimationFrame((time) => this.gameLoop(time));
+            return;
+        }
+        
+        // 更新逻辑
+        this.update(this.deltaTime);
+        
+        // 渲染画面
         this.render();
+        
+        // 继续循环
+        requestAnimationFrame((time) => this.gameLoop(time));
     }
-
+    
     /**
      * 更新游戏逻辑
      */
     update(deltaTime) {
-        // 更新云朵位置
-        this.clouds.forEach(cloud => {
-            cloud.x += cloud.speed;
-            if (cloud.x > this.mapWidth + 100) {
-                cloud.x = -100;
-                cloud.y = 30 + Math.random() * 100;
+        // 更新各系统
+        if (this.systems.player) {
+            this.systems.player.update(deltaTime);
+        }
+        
+        if (this.systems.combat) {
+            this.systems.combat.update(deltaTime);
+        }
+        
+        // 更新云朵
+        this.updateClouds(deltaTime);
+        
+        // 自动保存
+        this.autoSaveTimer += deltaTime;
+        if (this.autoSaveTimer >= this.config.autoSaveInterval) {
+            this.autoSaveTimer = 0;
+            if (this.systems.save) {
+                this.systems.save.saveGame(1);
             }
-        });
-
-        // 更新玩家系统
-        if (this.playerSystem) {
-            this.playerSystem.update(deltaTime);
-        }
-
-        // 更新战斗系统（宠物战斗也在这里更新）
-        if (this.combatSystem) {
-            this.combatSystem.update(deltaTime);
-        }
-
-        // 更新UI系统
-        if (this.uiSystem) {
-            this.uiSystem.update(deltaTime);
-        }
-
-        // 更新领地系统（处理资源产出）
-        if (this.territorySystem) {
-            this.territorySystem.update(deltaTime);
-        }
-
-        // 更新存档系统（自动保存）
-        if (this.saveSystem) {
-            this.saveSystem.updateAutoSave(deltaTime);
         }
     }
-
+    
+    /**
+     * 更新云朵位置
+     */
+    updateClouds(deltaTime) {
+        const dt = deltaTime / 1000;
+        this.clouds.forEach(cloud => {
+            cloud.x += cloud.speed * dt;
+            if (cloud.x > this.config.width + cloud.size) {
+                cloud.x = -cloud.size;
+                cloud.y = 30 + Math.random() * 60;
+            }
+        });
+    }
+    
     /**
      * 渲染游戏画面
      */
     render() {
-        // 绘制天空背景
-        this.drawSky();
-
-        // 绘制远景山脉
-        this.drawMountains();
-
-        // 绘制地面
-        this.drawGround();
-
-        // 绘制装饰性草丛
-        this.drawGrassTexture();
-
-        // 绘制云朵
-        this.drawClouds();
-
-        // 渲染各个系统
-        if (this.playerSystem) {
-            this.playerSystem.render(this.ctx);
-        }
-
-        // 渲染宠物（在玩家之后，战斗系统之前）
-        if (this.petSystem) {
-            this.petSystem.render(this.ctx);
-        }
-
-        if (this.combatSystem) {
-            this.combatSystem.render(this.ctx);
-        }
-    }
-
-    /**
-     * 绘制天空 (Dark Fantasy Night)
-     */
-    drawSky() {
-        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.mapHeight);
-        gradient.addColorStop(0, '#0f0e17'); // Pitch black/Deep purple
-        gradient.addColorStop(1, '#2d2b42'); // Dark horizon
-        this.ctx.fillStyle = gradient;
-        this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
-
-        // Optional: Add stars
-        // (Assuming simple random stars could be added in init or draw, but for now gradient is key)
-    }
-
-    /**
-     * 绘制山脉
-     */
-    /**
-     * 绘制山脉 (Silhouettes)
-     */
-    drawMountains() {
-        this.ctx.save();
-        this.mountains.forEach(mountain => {
-            this.ctx.fillStyle = mountain.color;
-            this.ctx.beginPath();
-            // Simple triangle shape
-            this.ctx.moveTo(mountain.x, mountain.y);
-            this.ctx.lineTo(mountain.x + mountain.width / 2, mountain.y - mountain.height);
-            this.ctx.lineTo(mountain.x + mountain.width, mountain.y);
-            this.ctx.closePath();
-            this.ctx.fill();
+        const ctx = this.ctx;
+        
+        // 清空画布
+        ctx.clearRect(0, 0, this.config.width, this.config.height);
+        
+        // 绘制背景
+        this.renderBackground(ctx);
+        
+        // 绘制玩家
+        if (this.systems.player) {
+            this.systems.player.render(ctx);
             
-            // Faint rim light instead of snow
-            this.ctx.strokeStyle = 'rgba(99, 102, 241, 0.1)'; // Faint purple/blue rim
-            this.ctx.lineWidth = 1;
-            this.ctx.stroke();
+            // 绘制宠物（围绕玩家）
+            if (this.systems.pet) {
+                const player = this.systems.player.player;
+                this.systems.pet.render(ctx, player.x + player.width / 2, player.y + player.height / 2);
+            }
+        }
+        
+        // 绘制战斗元素
+        if (this.systems.combat) {
+            this.systems.combat.render(ctx);
+        }
+    }
+    
+    /**
+     * 渲染背景
+     */
+    renderBackground(ctx) {
+        const { width, height } = this.config;
+        const time = Date.now() * 0.001;
+        
+        // 夜空渐变
+        const skyGradient = ctx.createLinearGradient(0, 0, 0, height * 0.65);
+        skyGradient.addColorStop(0, '#0a0e17');
+        skyGradient.addColorStop(0.4, '#1a2540');
+        skyGradient.addColorStop(0.8, '#2a3f5f');
+        skyGradient.addColorStop(1, '#3d5a80');
+        ctx.fillStyle = skyGradient;
+        ctx.fillRect(0, 0, width, height);
+        
+        // 星星
+        this.drawStars(ctx, width, height, time);
+        
+        // 月亮
+        this.drawMoon(ctx, width * 0.8, 50, 25);
+        
+        // 远山层1 (最远)
+        ctx.fillStyle = '#1a2540';
+        ctx.beginPath();
+        ctx.moveTo(0, height * 0.45);
+        ctx.bezierCurveTo(80, height * 0.35, 120, height * 0.4, 180, height * 0.38);
+        ctx.bezierCurveTo(240, height * 0.35, 300, height * 0.3, 350, height * 0.35);
+        ctx.lineTo(width, height * 0.4);
+        ctx.lineTo(width, height);
+        ctx.lineTo(0, height);
+        ctx.closePath();
+        ctx.fill();
+        
+        // 远山层2 (中等)
+        ctx.fillStyle = '#243352';
+        ctx.beginPath();
+        ctx.moveTo(0, height * 0.5);
+        ctx.bezierCurveTo(50, height * 0.42, 100, height * 0.48, 150, height * 0.44);
+        ctx.bezierCurveTo(200, height * 0.4, 280, height * 0.45, 320, height * 0.42);
+        ctx.lineTo(width, height * 0.48);
+        ctx.lineTo(width, height);
+        ctx.lineTo(0, height);
+        ctx.closePath();
+        ctx.fill();
+        
+        // 近山层 (最近)
+        const hillGradient = ctx.createLinearGradient(0, height * 0.55, 0, height);
+        hillGradient.addColorStop(0, '#2d4a3e');
+        hillGradient.addColorStop(0.5, '#1a3d2e');
+        hillGradient.addColorStop(1, '#0d2818');
+        ctx.fillStyle = hillGradient;
+        ctx.beginPath();
+        ctx.moveTo(0, height * 0.58);
+        ctx.bezierCurveTo(60, height * 0.52, 100, height * 0.56, 160, height * 0.54);
+        ctx.bezierCurveTo(220, height * 0.52, 300, height * 0.58, 360, height * 0.55);
+        ctx.lineTo(width, height * 0.6);
+        ctx.lineTo(width, height);
+        ctx.lineTo(0, height);
+        ctx.closePath();
+        ctx.fill();
+        
+        // 草地
+        const grassGradient = ctx.createLinearGradient(0, height * 0.7, 0, height);
+        grassGradient.addColorStop(0, '#1a4d2e');
+        grassGradient.addColorStop(0.5, '#0d3d1f');
+        grassGradient.addColorStop(1, '#082810');
+        ctx.fillStyle = grassGradient;
+        ctx.fillRect(0, height * 0.7, width, height * 0.3);
+        
+        // 地面装饰线
+        ctx.strokeStyle = 'rgba(77, 171, 247, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, height * 0.7);
+        ctx.lineTo(width, height * 0.7);
+        ctx.stroke();
+        
+        // 云朵 (半透明)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        this.clouds.forEach(cloud => {
+            this.drawCloud(ctx, cloud.x, cloud.y, cloud.size);
         });
-        this.ctx.restore();
     }
-
+    
     /**
-     * 绘制地面
+     * 绘制星星
      */
-    /**
-     * 绘制地面 (Dark Terrain)
-     */
-    drawGround() {
-        const groundY = this.mapHeight - 50;
-
-        // 地面渐变
-        const gradient = this.ctx.createLinearGradient(0, groundY, 0, this.mapHeight);
-        gradient.addColorStop(0, '#1a1a2e'); // Dark Blue/Black
-        gradient.addColorStop(1, '#0f0e17'); // Almost black
-
-        this.ctx.fillStyle = gradient;
-        this.ctx.fillRect(0, groundY, this.mapWidth, 50);
-
-        // 地面边缘线 (Glowing)
-        this.ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)'; // Faint purple glow
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.moveTo(0, groundY);
-        this.ctx.lineTo(this.mapWidth, groundY);
-        this.ctx.stroke();
-    }
-
-    /**
-     * 绘制草地纹理
-     */
-    /**
-     * 绘制地面装饰 (Mystical Particles/Rocks)
-     */
-    drawGrassTexture() {
-        this.grassDecorations.forEach(item => {
-            this.ctx.fillStyle = item.color;
-            this.ctx.globalAlpha = item.alpha || 0.5;
-            this.ctx.beginPath();
-            // Small diamond/rock shapes
-            this.ctx.moveTo(item.x, item.y);
-            this.ctx.lineTo(item.x - 2, item.y - item.height / 2);
-            this.ctx.lineTo(item.x, item.y - item.height);
-            this.ctx.lineTo(item.x + 2, item.y - item.height / 2);
-            this.ctx.closePath();
-            this.ctx.fill();
-            this.ctx.globalAlpha = 1.0;
+    drawStars(ctx, width, height, time) {
+        // 使用固定的随机种子绘制星星
+        const stars = [
+            { x: 30, y: 40, size: 1.5 },
+            { x: 80, y: 25, size: 2 },
+            { x: 120, y: 60, size: 1 },
+            { x: 170, y: 35, size: 1.8 },
+            { x: 220, y: 50, size: 1.2 },
+            { x: 260, y: 20, size: 2.2 },
+            { x: 300, y: 45, size: 1.5 },
+            { x: 340, y: 30, size: 1 },
+            { x: 380, y: 55, size: 1.8 },
+            { x: 50, y: 80, size: 1.2 },
+            { x: 150, y: 90, size: 1.5 },
+            { x: 280, y: 75, size: 1 },
+            { x: 360, y: 85, size: 1.3 }
+        ];
+        
+        stars.forEach((star, i) => {
+            const twinkle = Math.sin(time * 2 + i) * 0.3 + 0.7;
+            ctx.fillStyle = `rgba(255, 255, 255, ${twinkle})`;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            ctx.fill();
         });
     }
-
+    
+    /**
+     * 绘制月亮
+     */
+    drawMoon(ctx, x, y, radius) {
+        // 月亮光晕
+        const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, radius * 2.5);
+        glowGradient.addColorStop(0, 'rgba(255, 248, 220, 0.3)');
+        glowGradient.addColorStop(0.5, 'rgba(255, 248, 220, 0.1)');
+        glowGradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = glowGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 月亮本体
+        const moonGradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, 0, x, y, radius);
+        moonGradient.addColorStop(0, '#fffef0');
+        moonGradient.addColorStop(0.7, '#f5e6c8');
+        moonGradient.addColorStop(1, '#e8d5a8');
+        ctx.fillStyle = moonGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 月球表面纹理（简单的陨石坑）
+        ctx.fillStyle = 'rgba(200, 180, 140, 0.3)';
+        ctx.beginPath();
+        ctx.arc(x - radius * 0.3, y + radius * 0.2, radius * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + radius * 0.2, y - radius * 0.3, radius * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
     /**
      * 绘制云朵
      */
-    /**
-     * 绘制云朵 (Mist/Fog)
-     */
-    drawClouds() {
-        this.ctx.fillStyle = '#6366f1'; // faint purple/blue mist
-        this.ctx.globalAlpha = 0.05; // Very subtle
-
-        this.clouds.forEach(cloud => {
-            this.ctx.save();
-            this.ctx.translate(cloud.x, cloud.y);
-            this.ctx.scale(cloud.size, cloud.size * 0.6); // Flattened like fog
-
-            this.ctx.beginPath();
-            this.ctx.arc(0, 0, 30, 0, Math.PI * 2);
-            this.ctx.arc(40, 10, 40, 0, Math.PI * 2);
-            this.ctx.arc(80, 0, 30, 0, Math.PI * 2);
-            this.ctx.fill();
-
-            this.ctx.restore();
-        });
-
-        this.ctx.globalAlpha = 1;
+    drawCloud(ctx, x, y, size) {
+        ctx.beginPath();
+        ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+        ctx.arc(x + size * 0.4, y - size * 0.15, size * 0.4, 0, Math.PI * 2);
+        ctx.arc(x + size * 0.8, y, size * 0.45, 0, Math.PI * 2);
+        ctx.arc(x + size * 0.5, y + size * 0.15, size * 0.35, 0, Math.PI * 2);
+        ctx.fill();
     }
-
+    
     /**
-     * 启动游戏
+     * 设置分辨率
+     * @param {number|null} width - 宽度，null 表示自动
+     * @param {number|null} height - 高度，null 表示自动
      */
-    start() {
-        this.isRunning = true;
-        this.gameLoop();
+    setResolution(width, height) {
+        if (width === null || height === null) {
+            // 自动模式：使用容器尺寸
+            this.fixedResolution = null;
+            this.resizeCanvas();
+            console.log('[GameCore] 分辨率设置为自动模式');
+        } else {
+            // 固定分辨率模式
+            this.fixedResolution = { width, height };
+            
+            const container = this.canvas.parentElement;
+            if (!container) return;
+            
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            
+            // 计算缩放比例，保持宽高比
+            const scaleX = containerWidth / width;
+            const scaleY = containerHeight / height;
+            const scale = Math.min(scaleX, scaleY);
+            
+            // 设置 Canvas 的内部分辨率
+            this.canvas.width = width;
+            this.canvas.height = height;
+            
+            // 用 CSS 缩放 Canvas 以适应容器
+            const displayWidth = width * scale;
+            const displayHeight = height * scale;
+            this.canvas.style.width = `${displayWidth}px`;
+            this.canvas.style.height = `${displayHeight}px`;
+            
+            // 更新配置
+            this.config.width = width;
+            this.config.height = height;
+            
+            // 更新战斗系统的地图尺寸
+            if (this.systems.combat) {
+                this.systems.combat.mapWidth = width;
+                this.systems.combat.mapHeight = height;
+            }
+            
+            console.log(`[GameCore] 分辨率设置为 ${width}x${height}`);
+        }
     }
-
-    /**
-     * 停止游戏
-     */
-    stop() {
-        this.isRunning = false;
-    }
-
-    /**
-     * 获取画布上下文
-     */
-    getContext() {
-        return this.ctx;
-    }
-
+    
     /**
      * 获取地图尺寸
      */
     getMapSize() {
         return {
-            width: this.mapWidth,
-            height: this.mapHeight
+            width: this.config.width,
+            height: this.config.height
         };
     }
 }
 
-export default GameCore;
+/**
+ * 获取单例实例
+ */
+export function getGameCoreInstance(canvas) {
+    if (!instance && canvas) {
+        instance = new GameCore(canvas);
+    }
+    return instance;
+}

@@ -1,446 +1,476 @@
 /**
- * Pet Plan - 主入口文件
- * 负责初始化游戏和协调各个模块
+ * PetPlan - 游戏主入口
+ * 负责初始化和协调所有子系统
  */
 
-import GameCore from './modules/game-core.js';
-import PlayerSystem from './modules/player-system.js';
-import CombatController from './modules/combat/CombatController.js';
-import UISystem, { uiSystem } from './modules/ui-system.js';
-import ResourceSystem from './modules/resource-system.js';
-import { getSaveSystemInstance } from './modules/save-system.js';
-import { getTerritorySystemInstance } from './modules/territory-system.js';
-import SaveUI from './modules/save-ui.js';
-import { getPetSystemInstance } from './modules/pet-system.js';
-import { getPetUIInstance } from './modules/pet-ui.js';
-import AchievementSystem from './modules/achievement-system.js';
-import AchievementUI from './modules/achievement-ui.js';
-import { getEquipmentSystemInstance } from './modules/equipment-system.js';
-import { getEquipmentUIInstance } from './modules/equipment-ui.js';
-import OfflineSystem from './modules/offline-system.js';
-import PlayerUI from './modules/player-ui.js';
+import { GameCore, getGameCoreInstance } from "./modules/game-core.js";
+import {
+  ResourceSystem,
+  getResourceSystemInstance,
+} from "./modules/resource-system.js";
+import {
+  PlayerSystem,
+  getPlayerSystemInstance,
+} from "./modules/player-system.js";
+import {
+  CombatSystem,
+  getCombatSystemInstance,
+} from "./modules/combat-system.js";
+import { SaveSystem, getSaveSystemInstance } from "./modules/save-system.js";
+import { UISystem, getUISystemInstance } from "./modules/ui-system.js";
+import { PetSystem, getPetSystemInstance } from "./modules/pet-system.js";
 
 class Game {
-    constructor() {
-        console.log('[Game] 开始构造 Game 实例...');
-        this.canvas = document.getElementById('gameCanvas');
-        if (!this.canvas) {
-            console.error('[Game] ❌ 无法找到游戏画布元素');
-            return;
-        }
-        console.log('[Game] ✓ Canvas 元素已找到');
+  constructor() {
+    console.log("[Game] 初始化游戏...");
 
-        // 初始化各个系统
-        this.gameCore = new GameCore(this.canvas);
-        this.resourceSystem = ResourceSystem.getInstance();
-        this.territorySystem = getTerritorySystemInstance(this.resourceSystem);
-        this.equipmentSystem = getEquipmentSystemInstance(this.resourceSystem);
-        this.petSystem = getPetSystemInstance(this.gameCore, this.resourceSystem);
-        this.playerSystem = new PlayerSystem(this.gameCore, this.resourceSystem);
-        // 使用新的 CombatController
-        this.combatSystem = new CombatController(this.gameCore, this.playerSystem, this.resourceSystem);
-        this.uiSystem = uiSystem; // 使用单例实例
-        this.saveSystem = getSaveSystemInstance();
-        this.saveUI = null; // 稍后初始化
-        this.petUI = null; // 稍后初始化
-        this.achievementSystem = new AchievementSystem(this.resourceSystem);
-        this.achievementUI = new AchievementUI(this.achievementSystem, document.body);
-        this.equipmentUI = null; // 稍后初始化
-        this.playerUI = new PlayerUI(this.playerSystem, this.resourceSystem); // 初始化玩家UI
-        this.offlineSystem = null; // 稍后初始化
-
-        // 设置宠物系统和战斗系统的双向引用
-        this.combatSystem.setPetSystem(this.petSystem);
-        this.petSystem.setCombatSystem(this.combatSystem);
-
-        // 设置系统间的引用
-        this.gameCore.setSystems(this.playerSystem, this.combatSystem, this.uiSystem, this.resourceSystem, this.territorySystem, this.saveSystem, this.petSystem, null, this.achievementSystem);
-        this.saveSystem.setSystems(this.playerSystem, this.territorySystem, this.resourceSystem, this.combatSystem, this.petSystem, null, this.achievementSystem);
-
-        // 绑定成就系统到其他系统 (如果支持)
-        if (this.combatSystem.setAchievementSystem) this.combatSystem.setAchievementSystem(this.achievementSystem);
-        if (this.resourceSystem.setAchievementSystem) this.resourceSystem.setAchievementSystem(this.achievementSystem);
-        if (this.playerSystem.setAchievementSystem) this.playerSystem.setAchievementSystem(this.achievementSystem);
-        this.playerUI.setAchievementSystem(this.achievementSystem);
-
-        // 游戏状态
-        this.isInitialized = false;
+    // 获取 Canvas
+    this.canvas = document.getElementById("gameCanvas");
+    if (!this.canvas) {
+      console.error("[Game] ❌ 无法找到游戏画布");
+      return;
     }
 
-    /**
-     * 初始化游戏
-     */
-    async init() {
-        try {
-            console.log('[Game] 开始初始化游戏...');
-            // 已移除加载界面显示，直接进入初始化流程
+    this.ctx = this.canvas.getContext("2d");
+    this.isInitialized = false;
+  }
 
-            // 等待DOM完全加载
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // 加载资源数据
-            console.log('[Game] 加载资源数据...');
-            this.resourceSystem.loadFromLocalStorage();
-
-            // 初始化各个系统
-            console.log('[Game] 初始化游戏核心...');
-            this.gameCore.init();
-            console.log('[Game] ✓ 游戏核心初始化完成');
-
-            console.log('[Game] 初始化玩家系统...');
-            this.playerSystem.init();
-            this.playerUI.init();
-            console.log('[Game] ✓ 玩家系统初始化完成');
-
-            console.log('[Game] 初始化UI系统...');
-            this.uiSystem.init();
-            console.log('[Game] ✓ UI系统初始化完成');
-
-            // 初始化存档UI
-            console.log('[Game] 初始化存档UI...');
-            this.saveUI = new SaveUI(this.saveSystem);
-            console.log('[Game] ✓ 存档UI初始化完成');
-
-            // 初始化宠物UI
-            console.log('[Game] 初始化宠物UI...');
-            this.petUI = getPetUIInstance(this.petSystem, this.resourceSystem);
-            console.log('[Game] ✓ 宠物UI初始化完成');
-
-            console.log('[Game] 初始化成就UI...');
-            this.achievementSystem.init();
-            this.achievementUI.init();
-
-            // 初始化装备UI
-            console.log('[Game] 初始化装备UI...');
-            this.equipmentUI = getEquipmentUIInstance(this.equipmentSystem, this.resourceSystem);
-            console.log('[Game] ✓ 装备UI初始化完成');
-
-            // 初始化离线系统
-            console.log('[Game] 初始化离线系统...');
-            this.offlineSystem = new OfflineSystem(this.territorySystem, this.resourceSystem, this.uiSystem, this.saveSystem);
-            this.offlineSystem.init();
-            console.log('[Game] ✓ 离线系统初始化完成');
-
-            // 等待系统初始化完成
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-            // 不再显示或隐藏加载界面，保持主界面直接呈现
-
-            // 启动游戏
-            console.log('[Game] 启动游戏循环...');
-            this.gameCore.start();
-            console.log('[Game] ✓ 游戏循环已启动');
-
-            // 触发主界面淡入动画
-            console.log('[Game] 开始移除 initial-fade 类...');
-            const container = document.querySelector('.game-container');
-            if (container) {
-                console.log('[Game] Container 当前类名:', container.className);
-                console.log('[Game] Container 当前透明度:', getComputedStyle(container).opacity);
-                container.classList.remove('initial-fade');
-                container.classList.add('fade-in');
-                console.log('[Game] Container 更新后类名:', container.className);
-                console.log('[Game] ✓ 淡入动画已触发');
-            } else {
-                console.error('[Game] ❌ 未找到 game-container 元素！');
-            }
-
-            this.isInitialized = true;
-            console.log('[Game] ✓ 游戏初始化完成');
-
-        } catch (error) {
-            console.error('[Game] ❌ 游戏初始化失败:', error);
-            console.error('[Game] 错误堆栈:', error.stack);
-
-            // 即使初始化失败也要显示界面
-            const container = document.querySelector('.game-container');
-            if (container) {
-                console.log('[Game] 强制显示容器（初始化失败）');
-                container.classList.remove('initial-fade');
-                container.classList.add('fade-in');
-            }
-
-            this.showError('游戏初始化失败，请刷新页面重试');
-            // 初始化失败仍不显示加载覆盖层
-        }
-    }
-
-    /**
-     * 显示加载界面
-     */
-    showLoadingScreen() {
-        const gameLoadingScreen = document.getElementById('gameLoadingScreen');
-        if (gameLoadingScreen) {
-            gameLoadingScreen.style.display = 'flex';
-        }
-    }
-
-    /**
-     * 隐藏加载界面
-     */
-    hideLoadingScreen() {
-        const gameLoadingScreen = document.getElementById('gameLoadingScreen');
-        if (gameLoadingScreen) {
-            gameLoadingScreen.style.display = 'none';
-        }
-    }
-
-    /**
-     * 显示错误信息
-     */
-    showError(message) {
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #e74c3c;
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            font-size: 16px;
-            z-index: 10000;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        `;
-        errorDiv.textContent = message;
-        document.body.appendChild(errorDiv);
-    }
-
-    /**
-     * 保存游戏数据（快速保存到槽位1）
-     */
-    saveGame() {
-        return this.saveSystem.quickSave();
-    }
-
-    /**
-     * 加载游戏数据（快速加载槽位1）
-     */
-    loadGame() {
-        return this.saveSystem.quickLoad();
-    }
-
-    /**
-     * 保存到指定槽位
-     */
-    saveToSlot(slot) {
-        return this.saveSystem.saveGame(slot);
-    }
-
-    /**
-     * 从指定槽位加载
-     */
-    loadFromSlot(slot) {
-        return this.saveSystem.loadGame(slot);
-    }
-
-    /**
-     * 获取所有存档信息
-     */
-    getAllSaves() {
-        return this.saveSystem.getAllSaves();
-    }
-
-    /**
-     * 删除存档
-     */
-    deleteSave(slot) {
-        return this.saveSystem.deleteSave(slot);
-    }
-
-    /**
-     * 导出存档
-     */
-    exportSave(slot) {
-        this.saveSystem.exportSave(slot);
-    }
-
-    /**
-     * 导入存档
-     */
-    async importSave(file, slot) {
-        return await this.saveSystem.importSave(file, slot);
-    }
-
-    /**
-     * 重置游戏数据
-     */
-    resetGame() {
-        import('./modules/ui-system.js').then(({ showConfirm }) => {
-            showConfirm('确定要重置游戏数据吗？此操作不可撤销！', () => {
-                // 清除本地存储
-                localStorage.removeItem('pet-plan-resources');
-                localStorage.removeItem('pet-plan-player');
-
-                // 重新加载页面
-                location.reload();
-            });
-        });
-    }
-
-    /**
-     * 暂停游戏
-     */
-    pause() {
-        this.gameCore.stop();
-        console.log('游戏已暂停');
-    }
-
-    /**
-     * 恢复游戏
-     */
-    resume() {
-        this.gameCore.start();
-        console.log('游戏已恢复');
-    }
-
-    /**
-     * 获取游戏状态
-     */
-    getGameState() {
-        return {
-            isInitialized: this.isInitialized,
-            isRunning: this.gameCore.isRunning,
-            playerData: this.playerSystem.getPlayerData(),
-            resourceData: this.resourceSystem.getResourceData(),
-            monsterCount: this.combatSystem.getMonsterCount(),
-            bulletCount: this.combatSystem.getBulletCount()
-        };
-    }
-}
-
-// 全局游戏实例
-let game = null;
-
-// 页面加载完成后初始化游戏
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[Main] DOMContentLoaded 事件触发');
-
-    // 领地按钮跳转
-    const territoryBtn = document.getElementById('territory-button');
-    console.log('[Main] 领地按钮元素:', territoryBtn);
-    if (territoryBtn) {
-        territoryBtn.addEventListener('click', (e) => {
-            console.log('[Main] 领地按钮被点击');
-            e.preventDefault();
-            e.stopPropagation();
-            window.location.href = 'territory.html';
-        });
-        console.log('[Main] 领地按钮点击事件已绑定');
-    } else {
-        console.error('[Main] ❌ 未找到领地按钮元素 #territory-button');
-    }
-
-    const dailyBtn = document.getElementById('dailyBtn');
-    if (dailyBtn) {
-        dailyBtn.addEventListener('click', () => {
-            if (window.game && window.game.achievementUI) {
-                window.game.achievementUI.show();
-            }
-        });
-    }
-
-    // 菜单/设置按钮逻辑
-    const settingsBtn = document.getElementById('settingsBtn');
-    const characterModal = document.getElementById('characterModal');
-    const closeModal = document.getElementById('closeModal');
-
-    if (settingsBtn && characterModal) {
-        settingsBtn.addEventListener('click', () => {
-            characterModal.style.display = 'block';
-        });
-    }
-
-    if (closeModal && characterModal) {
-        closeModal.addEventListener('click', () => {
-            characterModal.style.display = 'none';
-        });
-    }
-
-    // 点击遮罩层关闭菜单
-    if (characterModal) {
-        characterModal.addEventListener('click', (e) => {
-            if (e.target === characterModal) {
-                characterModal.style.display = 'none';
-            }
-        });
-    }
+  /**
+   * 初始化所有系统
+   */
+  async init() {
+    console.log("[Game] 初始化系统...");
 
     try {
-        // 确保DOM完全加载后再创建游戏实例
-        await new Promise(resolve => setTimeout(resolve, 100));
-        console.log('[Main] 开始创建 Game 实例...');
-        game = new Game();
-        console.log('[Main] Game 实例创建完成，开始初始化...');
-        await game.init();
-        window.game = game;
-        console.log('[Main] ✓ 游戏初始化成功完成');
+      // 1. 初始化资源系统（最先，其他系统依赖）
+      this.resourceSystem = getResourceSystemInstance();
 
-        // 自动保存在存档系统内部处理（通过gameCore的update调用）
-        // 添加快捷键支持
-        window.addEventListener('keydown', (e) => {
-            if (game && game.isInitialized) {
-                // F5 - 快速保存
-                if (e.key === 'F5') {
-                    e.preventDefault();
-                    game.saveGame();
-                    console.log('快速保存完成');
-                }
-                // F9 - 快速加载
-                if (e.key === 'F9') {
-                    e.preventDefault();
-                    game.loadGame();
-                    console.log('快速加载完成');
-                }
-            }
-        });
+      // 2. 初始化玩家系统
+      this.playerSystem = getPlayerSystemInstance();
+      this.playerSystem.setResourceSystem(this.resourceSystem);
 
-        // 页面卸载前保存数据
-        window.addEventListener('beforeunload', () => {
-            if (game && game.isInitialized) {
-                game.saveGame();
-            }
-        });
-
-        // 页面可见性变化时暂停/恢复游戏
-        document.addEventListener('visibilitychange', () => {
-            if (game && game.isInitialized) {
-                if (document.hidden) {
-                    game.pause();
-                } else {
-                    game.resume();
-                }
-            }
-        });
-
-
-
-    } catch (error) {
-        console.error('[Main] ❌ 游戏启动失败:', error);
-        console.error('[Main] 错误堆栈:', error.stack);
-
-        // 即使出错也要显示界面
-        const container = document.querySelector('.game-container');
-        if (container && container.classList.contains('initial-fade')) {
-            console.log('[Main] 强制显示容器（启动失败）');
-            container.classList.remove('initial-fade');
-            container.style.opacity = '1';
+      // 3. 初始化宠物系统
+      this.petSystem = getPetSystemInstance();
+      this.petSystem.setResourceSystem(this.resourceSystem);
+      this.petSystem.setPlayerSystem(this.playerSystem);
+      
+      // 默认解锁一只火焰犬作为示例
+      if (this.petSystem.unlockedPets.length === 0) {
+        this.petSystem.unlockPet(1);  // 火焰犬
+        if (this.petSystem.unlockedPets.length > 0) {
+          this.petSystem.equipPet(this.petSystem.unlockedPets[0].instanceId);
         }
+      }
+
+      // 4. 初始化战斗系统
+      this.combatSystem = getCombatSystemInstance();
+      this.combatSystem.setPlayerSystem(this.playerSystem);
+      this.combatSystem.setResourceSystem(this.resourceSystem);
+
+      // 5. 初始化存档系统
+      this.saveSystem = getSaveSystemInstance();
+      this.saveSystem.setGameSystems({
+        player: this.playerSystem,
+        resource: this.resourceSystem,
+        combat: this.combatSystem,
+        pet: this.petSystem,
+      });
+
+      // 6. 初始化 UI 系统
+      this.uiSystem = getUISystemInstance();
+
+      // 7. 初始化游戏核心
+      this.gameCore = getGameCoreInstance(this.canvas);
+      this.gameCore.setSystems({
+        player: this.playerSystem,
+        combat: this.combatSystem,
+        resource: this.resourceSystem,
+        ui: this.uiSystem,
+        save: this.saveSystem,
+        pet: this.petSystem,
+      });
+
+      // 绑定事件
+      this.bindEvents();
+
+      // 尝试加载存档
+      await this.saveSystem.loadGame(1);
+
+      // 更新 UI
+      this.updateUI();
+
+      // 启动游戏循环
+      this.gameCore.start();
+
+      this.isInitialized = true;
+      console.log("[Game] ✅ 游戏初始化完成");
+    } catch (error) {
+      console.error("[Game] ❌ 初始化失败:", error);
     }
+  }
+
+  /**
+   * 绑定事件
+   */
+  bindEvents() {
+    // 升级按钮事件
+    document.querySelectorAll(".upgrade-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const attr = e.currentTarget.dataset.attr;
+        this.handleUpgrade(attr);
+      });
+    });
+
+    // 底部导航事件
+    document.querySelectorAll(".nav-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const tab = e.currentTarget.dataset.tab;
+        this.handleNavigation(tab);
+      });
+    });
+
+    // 快捷键
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "F5") {
+        e.preventDefault();
+        this.quickSave();
+      } else if (e.key === "F9") {
+        e.preventDefault();
+        this.quickLoad();
+      } else if (e.key === "Escape") {
+        this.closePlayerModal();
+      }
+    });
+
+    // 玩家信息弹窗事件
+    this.bindPlayerModalEvents();
+  }
+
+  /**
+   * 绑定玩家信息弹窗事件
+   */
+  bindPlayerModalEvents() {
+    const playerInfo = document.querySelector(".player-info");
+    const modalOverlay = document.getElementById("player-modal-overlay");
+    const closeBtn = document.getElementById("player-modal-close");
+    const settingsBtn = document.getElementById("settings-btn");
+    const saveBtn = document.getElementById("save-game-btn");
+
+    console.log("[Game] 绑定玩家弹窗事件, playerInfo:", playerInfo);
+
+    // 点击左上角头像打开弹窗
+    if (playerInfo) {
+      playerInfo.addEventListener("click", (e) => {
+        console.log("[Game] 头像被点击!", e);
+        this.openPlayerModal();
+      });
+      console.log("[Game] ✅ 头像点击事件已绑定");
+    } else {
+      console.error("[Game] ❌ 找不到 .player-info 元素");
+    }
+
+    // 关闭按钮
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => {
+        this.closePlayerModal();
+      });
+    }
+
+    // 点击遮罩层关闭
+    if (modalOverlay) {
+      modalOverlay.addEventListener("click", (e) => {
+        if (e.target === modalOverlay) {
+          this.closePlayerModal();
+        }
+      });
+    }
+
+    // 设置按钮
+    if (settingsBtn) {
+      settingsBtn.addEventListener("click", () => {
+        this.closePlayerModal();
+        this.openSettingsModal();
+      });
+    }
+
+    // 存档按钮
+    if (saveBtn) {
+      saveBtn.addEventListener("click", async () => {
+        await this.quickSave();
+        this.closePlayerModal();
+      });
+    }
+
+    // 绑定设置弹窗事件
+    this.bindSettingsModalEvents();
+  }
+
+  /**
+   * 绑定设置弹窗事件
+   */
+  bindSettingsModalEvents() {
+    const settingsOverlay = document.getElementById("settings-modal-overlay");
+    const settingsClose = document.getElementById("settings-modal-close");
+    const settingsSave = document.getElementById("settings-save-btn");
+
+    // 关闭按钮
+    if (settingsClose) {
+      settingsClose.addEventListener("click", () => {
+        this.closeSettingsModal();
+      });
+    }
+
+    // 点击遮罩层关闭
+    if (settingsOverlay) {
+      settingsOverlay.addEventListener("click", (e) => {
+        if (e.target === settingsOverlay) {
+          this.closeSettingsModal();
+        }
+      });
+    }
+
+    // 保存设置按钮
+    if (settingsSave) {
+      settingsSave.addEventListener("click", () => {
+        this.saveSettings();
+        this.closeSettingsModal();
+        this.uiSystem.showToast("设置已保存", "success");
+      });
+    }
+
+    // 加载已保存的设置
+    this.loadSettings();
+  }
+
+  /**
+   * 打开玩家信息弹窗
+   */
+  openPlayerModal() {
+    const modalOverlay = document.getElementById("player-modal-overlay");
+    if (!modalOverlay) return;
+
+    // 更新弹窗中的玩家信息
+    this.updatePlayerModalInfo();
+    
+    modalOverlay.classList.add("active");
+  }
+
+  /**
+   * 关闭玩家信息弹窗
+   */
+  closePlayerModal() {
+    const modalOverlay = document.getElementById("player-modal-overlay");
+    if (modalOverlay) {
+      modalOverlay.classList.remove("active");
+    }
+  }
+
+  /**
+   * 打开设置弹窗
+   */
+  openSettingsModal() {
+    const modalOverlay = document.getElementById("settings-modal-overlay");
+    if (modalOverlay) {
+      modalOverlay.classList.add("active");
+    }
+  }
+
+  /**
+   * 关闭设置弹窗
+   */
+  closeSettingsModal() {
+    const modalOverlay = document.getElementById("settings-modal-overlay");
+    if (modalOverlay) {
+      modalOverlay.classList.remove("active");
+    }
+  }
+
+  /**
+   * 加载设置
+   */
+  loadSettings() {
+    try {
+      const savedSettings = localStorage.getItem("petplan_settings");
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        
+        // 设置分辨率单选按钮
+        if (settings.resolution) {
+          const radio = document.querySelector(`input[name="resolution"][value="${settings.resolution}"]`);
+          if (radio) {
+            radio.checked = true;
+          }
+        }
+        
+        // 应用分辨率设置
+        this.applyResolution(settings.resolution || "auto");
+        
+        console.log("[Game] 设置已加载:", settings);
+      }
+    } catch (error) {
+      console.error("[Game] 加载设置失败:", error);
+    }
+  }
+
+  /**
+   * 保存设置
+   */
+  saveSettings() {
+    const resolution = document.querySelector('input[name="resolution"]:checked')?.value || "auto";
+    
+    const settings = {
+      resolution,
+    };
+    
+    try {
+      localStorage.setItem("petplan_settings", JSON.stringify(settings));
+      
+      // 应用分辨率设置
+      this.applyResolution(resolution);
+      
+      console.log("[Game] 设置已保存:", settings);
+    } catch (error) {
+      console.error("[Game] 保存设置失败:", error);
+    }
+  }
+
+  /**
+   * 应用分辨率设置
+   */
+  applyResolution(resolution) {
+    if (!this.gameCore) return;
+    
+    let width, height;
+    
+    switch (resolution) {
+      case "720":
+        width = 1280;
+        height = 720;
+        break;
+      case "1080":
+        width = 1920;
+        height = 1080;
+        break;
+      case "auto":
+      default:
+        // 自动模式：使用容器尺寸
+        width = null;
+        height = null;
+        break;
+    }
+    
+    // 调用 GameCore 的分辨率设置方法
+    if (this.gameCore.setResolution) {
+      this.gameCore.setResolution(width, height);
+    }
+    
+    console.log(`[Game] 分辨率设置: ${resolution} (${width || 'auto'}×${height || 'auto'})`);
+  }
+
+  /**
+   * 更新弹窗中的玩家信息
+   */
+  updatePlayerModalInfo() {
+    const player = this.playerSystem?.player;
+    
+    // 空值检查
+    if (!player || !this.resourceSystem) {
+      console.warn("[Game] 玩家或资源系统尚未初始化");
+      return;
+    }
+    
+    const power = this.playerSystem.calculateTotalPower();
+    // ResourceSystem 的货币直接存储在实例上，不是 resources 对象
+    const coins = this.resourceSystem.coins || 0;
+    const crystals = this.resourceSystem.crystals || 0;
+
+    const nicknameEl = document.getElementById("modal-nickname");
+    const levelEl = document.getElementById("modal-level");
+    const powerEl = document.getElementById("modal-power");
+    const coinsEl = document.getElementById("modal-coins");
+    const crystalsEl = document.getElementById("modal-crystals");
+
+    if (nicknameEl) nicknameEl.textContent = player.name || "勇者";
+    if (levelEl) levelEl.textContent = `Lv.${player.level}`;
+    if (powerEl) powerEl.textContent = this.resourceSystem.formatNumber(power);
+    if (coinsEl) coinsEl.textContent = this.resourceSystem.formatNumber(coins);
+    if (crystalsEl) crystalsEl.textContent = this.resourceSystem.formatNumber(crystals);
+  }
+
+  /**
+   * 处理属性升级
+   */
+  handleUpgrade(attr) {
+    const result = this.playerSystem.upgradeAttribute(attr);
+    if (result.success) {
+      this.uiSystem.showToast(result.message, "success");
+      this.updateUI();
+    } else {
+      this.uiSystem.showToast(result.message, "error");
+    }
+  }
+
+  /**
+   * 处理导航切换
+   */
+  handleNavigation(tab) {
+    // 更新按钮状态
+    document.querySelectorAll(".nav-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.tab === tab);
+    });
+
+    // TODO: 切换面板显示
+    console.log("[Game] 切换到:", tab);
+  }
+
+  /**
+   * 快速保存
+   */
+  async quickSave() {
+    const result = await this.saveSystem.saveGame(1);
+    if (result) {
+      this.uiSystem.showToast("已保存", "success");
+    }
+  }
+
+  /**
+   * 快速加载
+   */
+  async quickLoad() {
+    const result = await this.saveSystem.loadGame(1);
+    if (result) {
+      this.updateUI();
+      this.uiSystem.showToast("已加载", "success");
+    }
+  }
+
+  /**
+   * 更新 UI 显示
+   */
+  updateUI() {
+    // 更新货币显示
+    this.resourceSystem.updateDisplay();
+
+    // 更新玩家属性显示
+    this.playerSystem.updateDisplay();
+
+    // 更新战力显示
+    const power = this.playerSystem.calculateTotalPower();
+    const powerDisplay = document.getElementById("power-display");
+    if (powerDisplay) {
+      powerDisplay.textContent = this.resourceSystem.formatNumber(power);
+    }
+
+    // 更新等级显示
+    const levelDisplay = document.querySelector(".player-level");
+    if (levelDisplay) {
+      levelDisplay.textContent = `Lv.${this.playerSystem.player.level}`;
+    }
+  }
+}
+
+// 启动游戏
+document.addEventListener("DOMContentLoaded", () => {
+  window.game = new Game();
+  window.game.init();
 });
-
-// 安全网：3秒后如果界面还没显示，强制显示
-setTimeout(() => {
-    const container = document.querySelector('.game-container');
-    if (container && container.classList.contains('initial-fade')) {
-        console.warn('[Safety] ⚠️ 检测到界面仍未显示，强制显示...');
-        container.classList.remove('initial-fade');
-        container.style.opacity = '1';
-        console.warn('[Safety] ✓ 界面已强制显示');
-    }
-}, 3000);
-
-// 导出Game类供其他模块使用
-export default Game;
