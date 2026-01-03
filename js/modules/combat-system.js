@@ -206,7 +206,8 @@ export class CombatSystem {
         const monster = {
             templateId: template.id,
             x: this.mapWidth + 20,
-            y: 250 + Math.random() * 100,
+            // 根据地图高度动态计算 y 位置（在地图高度的 55% - 75% 范围内）
+            y: this.mapHeight * 0.55 + Math.random() * (this.mapHeight * 0.2),
             width: template.size,
             height: template.size,
             hp: Math.floor(template.baseHp * levelScale),

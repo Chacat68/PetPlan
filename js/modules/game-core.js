@@ -474,6 +474,20 @@ export class GameCore {
         this.systems.combat.mapHeight = height;
       }
 
+      // 更新玩家位置以适应新分辨率
+      if (this.systems.player) {
+        const player = this.systems.player.player;
+        // 玩家 x 位置保持在左侧（画布宽度的 10%）
+        player.x = Math.min(player.x, width * 0.15);
+        // 玩家 y 位置保持在画布可见区域内（垂直居中偏下）
+        player.y = Math.min(player.y, height * 0.75 - player.height);
+        // 确保不小于最小值
+        player.y = Math.max(player.y, height * 0.55);
+      }
+
+      // 重新生成云朵以适应新尺寸
+      this.clouds = this.generateClouds();
+
       console.log(`[GameCore] 分辨率设置为 ${width}x${height}`);
     }
   }
