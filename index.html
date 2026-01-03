@@ -1,218 +1,238 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
     <div class="game-container">
-        <!-- 顶部状态栏 -->
-        <header class="top-bar">
-            <div class="player-info">
-                <div class="avatar">👤</div>
-                <span class="player-level">Lv.1</span>
-            </div>
-            <div class="currency-bar">
-                <div class="currency coins">
-                    <span class="icon">💰</span>
-                    <span class="value" id="coins-display">1,000</span>
-                </div>
-                <div class="currency rubies">
-                    <span class="icon">🔴</span>
-                    <span class="value" id="rubies-display">50</span>
-                </div>
-                <div class="currency crystals">
-                    <span class="icon">💎</span>
-                    <span class="value" id="crystals-display">100</span>
-                </div>
-            </div>
-        </header>
-
-        <!-- 游戏画布区域 -->
-        <main class="game-area">
-            <canvas id="gameCanvas" width="750" height="1800"></canvas>
-            
-            <!-- 游戏UI覆盖层 -->
-            <div class="game-ui-overlay">
-                <div class="power-display">
-                    <span class="label">战力</span>
-                    <span class="value" id="power-display">0</span>
-                </div>
-            </div>
-        </main>
-
-        <!-- 升级面板 -->
-        <section class="upgrade-panel" id="upgrade-panel">
-            <h3>属性升级</h3>
-            <div class="upgrade-list">
-                <div class="upgrade-item" data-attr="attack">
-                    <span class="name">⚔️ 攻击力</span>
-                    <span class="value" id="attack-value">20</span>
-                    <button class="upgrade-btn" data-attr="attack">
-                        +5 <span class="cost">10💰</span>
-                    </button>
-                </div>
-                <div class="upgrade-item" data-attr="maxHp">
-                    <span class="name">❤️ 生命值</span>
-                    <span class="value" id="maxHp-value">100</span>
-                    <button class="upgrade-btn" data-attr="maxHp">
-                        +20 <span class="cost">15💰</span>
-                    </button>
-                </div>
-                <div class="upgrade-item" data-attr="hpRegen">
-                    <span class="name">💚 生命恢复</span>
-                    <span class="value" id="hpRegen-value">1</span>
-                    <button class="upgrade-btn" data-attr="hpRegen">
-                        +1 <span class="cost">20💰</span>
-                    </button>
-                </div>
-                <div class="upgrade-item" data-attr="critDamage">
-                    <span class="name">💥 暴击伤害</span>
-                    <span class="value" id="critDamage-value">150%</span>
-                    <button class="upgrade-btn" data-attr="critDamage">
-                        +10% <span class="cost">25💰</span>
-                    </button>
-                </div>
-                <div class="upgrade-item" data-attr="attackSpeed">
-                    <span class="name">⚡ 攻击速度</span>
-                    <span class="value" id="attackSpeed-value">1.0</span>
-                    <button class="upgrade-btn" data-attr="attackSpeed">
-                        +0.1 <span class="cost">30💰</span>
-                    </button>
-                </div>
-                <div class="upgrade-item" data-attr="crit">
-                    <span class="name">🎯 暴击率</span>
-                    <span class="value" id="crit-value">5%</span>
-                    <button class="upgrade-btn" data-attr="crit">
-                        +1% <span class="cost">35💰</span>
-                    </button>
-                </div>
-                <div class="upgrade-item" data-attr="multiShot">
-                    <span class="name">🌀 多重射击</span>
-                    <span class="value" id="multiShot-value">1</span>
-                    <button class="upgrade-btn" data-attr="multiShot">
-                        +1 <span class="cost">40💰</span>
-                    </button>
-                </div>
-            </div>
-        </section>
-
-        <!-- 底部导航栏 -->
-        <nav class="bottom-nav">
-            <button class="nav-btn" data-tab="character">
-                <span class="icon">👤</span>
-                <span class="label">角色</span>
-            </button>
-            <button class="nav-btn" data-tab="pet">
-                <span class="icon">🐾</span>
-                <span class="label">宠物</span>
-            </button>
-            <button class="nav-btn active" data-tab="dungeon">
-                <span class="icon">⚔️</span>
-                <span class="label">副本</span>
-            </button>
-            <button class="nav-btn" data-tab="territory">
-                <span class="icon">🏰</span>
-                <span class="label">领地</span>
-            </button>
-            <button class="nav-btn" data-tab="achievement">
-                <span class="icon">🏆</span>
-                <span class="label">成就</span>
-            </button>
-        </nav>
-
-        <!-- 弹窗容器 -->
-        <div class="modal-container" id="modal-container"></div>
-
-        <!-- 玩家信息弹窗 -->
-        <div class="player-modal-overlay" id="player-modal-overlay">
-            <div class="player-modal">
-                <button class="modal-close" id="player-modal-close">✕</button>
-                <div class="modal-header">
-                    <div class="modal-avatar">👤</div>
-                    <h2>玩家信息</h2>
-                </div>
-                <div class="modal-content">
-                    <div class="info-row">
-                        <span class="info-label">昵称</span>
-                        <span class="info-value" id="modal-nickname">勇者</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">等级</span>
-                        <span class="info-value" id="modal-level">Lv.1</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">战力</span>
-                        <span class="info-value" id="modal-power">0</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">金币</span>
-                        <span class="info-value" id="modal-coins">1,000</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">钻石</span>
-                        <span class="info-value" id="modal-crystals">100</span>
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button class="modal-btn settings-btn" id="settings-btn">
-                        <span class="btn-icon">⚙️</span>
-                        <span>设置</span>
-                    </button>
-                    <button class="modal-btn save-btn" id="save-game-btn">
-                        <span class="btn-icon">💾</span>
-                        <span>存档</span>
-                    </button>
-                </div>
-            </div>
+      <!-- 顶部状态栏 -->
+      <header class="top-bar">
+        <div class="player-info">
+          <div class="avatar">👤</div>
+          <span class="player-level">Lv.1</span>
         </div>
-
-        <!-- 设置弹窗 -->
-        <div class="settings-modal-overlay" id="settings-modal-overlay">
-            <div class="settings-modal">
-                <button class="modal-close" id="settings-modal-close">✕</button>
-                <div class="modal-header">
-                    <span class="modal-icon">⚙️</span>
-                    <h2>设置</h2>
-                </div>
-                <div class="settings-content">
-                    <div class="settings-section">
-                        <h3>📐 画质设置</h3>
-                        <div class="resolution-options">
-                            <label class="resolution-option">
-                                <input type="radio" name="resolution" value="auto" checked>
-                                <span class="option-label">自动适配</span>
-                                <span class="option-desc">推荐</span>
-                            </label>
-                            <label class="resolution-option">
-                                <input type="radio" name="resolution" value="720">
-                                <span class="option-label">720p</span>
-                                <span class="option-desc">1280×720</span>
-                            </label>
-                            <label class="resolution-option">
-                                <input type="radio" name="resolution" value="1080">
-                                <span class="option-label">1080p</span>
-                                <span class="option-desc">1920×1080</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="settings-actions">
-                    <button class="settings-save-btn" id="settings-save-btn">
-                        <span class="btn-icon">✓</span>
-                        <span>保存设置</span>
-                    </button>
-                </div>
-            </div>
+        <div class="currency-bar">
+          <div class="currency coins">
+            <span class="icon">💰</span>
+            <span class="value" id="coins-display">1,000</span>
+          </div>
+          <div class="currency rubies">
+            <span class="icon">🔴</span>
+            <span class="value" id="rubies-display">50</span>
+          </div>
+          <div class="currency crystals">
+            <span class="icon">💎</span>
+            <span class="value" id="crystals-display">100</span>
+          </div>
         </div>
+      </header>
 
-        <!-- Toast 提示 -->
-        <div class="toast-container" id="toast-container"></div>
+      <!-- 游戏画布区域 -->
+      <main class="game-area">
+        <canvas id="gameCanvas" width="750" height="1800"></canvas>
+
+        <!-- 游戏UI覆盖层 -->
+        <div class="game-ui-overlay">
+          <div class="power-display">
+            <span class="label">战力</span>
+            <span class="value" id="power-display">0</span>
+          </div>
+        </div>
+      </main>
+
+      <!-- 升级面板 -->
+      <section class="upgrade-panel" id="upgrade-panel">
+        <h3>属性升级</h3>
+        <div class="upgrade-list">
+          <div class="upgrade-item" data-attr="attack">
+            <span class="name">⚔️ 攻击力</span>
+            <span class="value" id="attack-value">20</span>
+            <button class="upgrade-btn" data-attr="attack">
+              +5 <span class="cost">10💰</span>
+            </button>
+          </div>
+          <div class="upgrade-item" data-attr="maxHp">
+            <span class="name">❤️ 生命值</span>
+            <span class="value" id="maxHp-value">100</span>
+            <button class="upgrade-btn" data-attr="maxHp">
+              +20 <span class="cost">15💰</span>
+            </button>
+          </div>
+          <div class="upgrade-item" data-attr="hpRegen">
+            <span class="name">💚 生命恢复</span>
+            <span class="value" id="hpRegen-value">1</span>
+            <button class="upgrade-btn" data-attr="hpRegen">
+              +1 <span class="cost">20💰</span>
+            </button>
+          </div>
+          <div class="upgrade-item" data-attr="critDamage">
+            <span class="name">💥 暴击伤害</span>
+            <span class="value" id="critDamage-value">150%</span>
+            <button class="upgrade-btn" data-attr="critDamage">
+              +10% <span class="cost">25💰</span>
+            </button>
+          </div>
+          <div class="upgrade-item" data-attr="attackSpeed">
+            <span class="name">⚡ 攻击速度</span>
+            <span class="value" id="attackSpeed-value">1.0</span>
+            <button class="upgrade-btn" data-attr="attackSpeed">
+              +0.1 <span class="cost">30💰</span>
+            </button>
+          </div>
+          <div class="upgrade-item" data-attr="crit">
+            <span class="name">🎯 暴击率</span>
+            <span class="value" id="crit-value">5%</span>
+            <button class="upgrade-btn" data-attr="crit">
+              +1% <span class="cost">35💰</span>
+            </button>
+          </div>
+          <div class="upgrade-item" data-attr="multiShot">
+            <span class="name">🌀 多重射击</span>
+            <span class="value" id="multiShot-value">1</span>
+            <button class="upgrade-btn" data-attr="multiShot">
+              +1 <span class="cost">40💰</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 底部导航栏 -->
+      <nav class="bottom-nav">
+        <button class="nav-btn" data-tab="character">
+          <span class="icon">👤</span>
+          <span class="label">角色</span>
+        </button>
+        <button class="nav-btn" data-tab="pet">
+          <span class="icon">🐾</span>
+          <span class="label">宠物</span>
+        </button>
+        <button class="nav-btn active" data-tab="dungeon">
+          <span class="icon">⚔️</span>
+          <span class="label">副本</span>
+        </button>
+        <button class="nav-btn" data-tab="territory">
+          <span class="icon">🏰</span>
+          <span class="label">领地</span>
+        </button>
+        <button class="nav-btn" data-tab="achievement">
+          <span class="icon">🏆</span>
+          <span class="label">成就</span>
+        </button>
+      </nav>
+
+      <!-- 弹窗容器 -->
+      <div class="modal-container" id="modal-container"></div>
+
+      <!-- 玩家信息弹窗 -->
+      <div class="player-modal-overlay" id="player-modal-overlay">
+        <div class="player-modal">
+          <button class="modal-close" id="player-modal-close">✕</button>
+          <div class="modal-header">
+            <div class="modal-avatar">👤</div>
+            <h2>玩家信息</h2>
+          </div>
+          <div class="modal-content">
+            <div class="info-row">
+              <span class="info-label">昵称</span>
+              <span class="info-value" id="modal-nickname">勇者</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">等级</span>
+              <span class="info-value" id="modal-level">Lv.1</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">战力</span>
+              <span class="info-value" id="modal-power">0</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">金币</span>
+              <span class="info-value" id="modal-coins">1,000</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">钻石</span>
+              <span class="info-value" id="modal-crystals">100</span>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="modal-btn settings-btn" id="settings-btn">
+              <span class="btn-icon">⚙️</span>
+              <span>设置</span>
+            </button>
+            <button class="modal-btn save-btn" id="save-game-btn">
+              <span class="btn-icon">💾</span>
+              <span>存档</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 设置弹窗 -->
+      <div class="settings-modal-overlay" id="settings-modal-overlay">
+        <div class="settings-modal">
+          <button class="modal-close" id="settings-modal-close">✕</button>
+          <div class="modal-header">
+            <span class="modal-icon">⚙️</span>
+            <h2>设置</h2>
+          </div>
+          <div class="settings-content">
+            <div class="settings-section">
+              <h3>📐 画质设置</h3>
+              <div class="resolution-options">
+                <label class="resolution-option">
+                  <input type="radio" name="resolution" value="auto" checked />
+                  <span class="option-label">自动适配</span>
+                  <span class="option-desc">推荐</span>
+                </label>
+                <label class="resolution-option">
+                  <input type="radio" name="resolution" value="480" />
+                  <span class="option-label">480p</span>
+                  <span class="option-desc">854×480</span>
+                </label>
+                <label class="resolution-option">
+                  <input type="radio" name="resolution" value="720" />
+                  <span class="option-label">720p</span>
+                  <span class="option-desc">1280×720</span>
+                </label>
+                <label class="resolution-option">
+                  <input type="radio" name="resolution" value="900" />
+                  <span class="option-label">900p</span>
+                  <span class="option-desc">1600×900</span>
+                </label>
+                <label class="resolution-option">
+                  <input type="radio" name="resolution" value="1080" />
+                  <span class="option-label">1080p</span>
+                  <span class="option-desc">1920×1080</span>
+                </label>
+                <label class="resolution-option">
+                  <input type="radio" name="resolution" value="1440" />
+                  <span class="option-label">2K</span>
+                  <span class="option-desc">2560×1440</span>
+                </label>
+                <label class="resolution-option">
+                  <input type="radio" name="resolution" value="2160" />
+                  <span class="option-label">4K</span>
+                  <span class="option-desc">3840×2160</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button class="settings-save-btn" id="settings-save-btn">
+              <span class="btn-icon">✓</span>
+              <span>保存设置</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast 提示 -->
+      <div class="toast-container" id="toast-container"></div>
     </div>
 
     <!-- 模块脚本 -->
     <script type="module" src="js/main.js"></script>
-</body>
+  </body>
 </html>

@@ -343,13 +343,29 @@ class Game {
     let width, height;
     
     switch (resolution) {
+      case "480":
+        width = 854;
+        height = 480;
+        break;
       case "720":
         width = 1280;
         height = 720;
         break;
+      case "900":
+        width = 1600;
+        height = 900;
+        break;
       case "1080":
         width = 1920;
         height = 1080;
+        break;
+      case "1440":
+        width = 2560;
+        height = 1440;
+        break;
+      case "2160":
+        width = 3840;
+        height = 2160;
         break;
       case "auto":
       default:
