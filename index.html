@@ -32,7 +32,35 @@
 
       <!-- 游戏画布区域 -->
       <main class="game-area">
-        <canvas id="gameCanvas" width="750" height="1800"></canvas>
+        <!-- 战斗场景 -->
+        <div class="scene-container" id="battle-scene">
+          <canvas id="gameCanvas" width="750" height="1800"></canvas>
+        </div>
+
+        <!-- 领地场景 -->
+        <div class="scene-container" id="territory-scene" style="display: none;">
+          <div class="territory-header">
+            <h2>🏰 领地</h2>
+            <div class="territory-resources">
+              <div class="resource-item">
+                <span class="resource-icon">💰</span>
+                <span class="resource-value" id="territory-gold">0</span>
+              </div>
+              <div class="resource-item">
+                <span class="resource-icon">💎</span>
+                <span class="resource-value" id="territory-crystal">0</span>
+              </div>
+              <button class="expand-btn" id="expand-territory-btn">
+                🏗️ 扩张 <span id="expansion-progress">6/12</span>
+              </button>
+            </div>
+          </div>
+          <div class="territory-content">
+            <div class="territory-grid" id="territory-grid">
+              <!-- 地块将动态生成 -->
+            </div>
+          </div>
+        </div>
 
         <!-- 游戏UI覆盖层 -->
         <div class="game-ui-overlay">
@@ -42,6 +70,7 @@
           </div>
         </div>
       </main>
+
 
       <!-- 升级面板 -->
       <section class="upgrade-panel" id="upgrade-panel">
