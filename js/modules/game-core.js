@@ -434,62 +434,51 @@ export class GameCore {
    * @param {number|null} height - 高度，null 表示自动
    */
   setResolution(width, height) {
-    if (width === null || height === null) {
-      // 自动模式：使用容器尺寸
-      this.fixedResolution = null;
-      this.resizeCanvas();
-      console.log("[GameCore] 分辨率设置为自动模式");
-    } else {
-      // 固定分辨率模式
-      this.fixedResolution = { width, height };
+    // 等待 CSS 变量更新后再调整 Canvas
+    requestAnimationFrame(() => {
+      if (width === null || height === null) {
+        // 自动模式：使用容器尺寸
+        this.fixedResolution = null;
+        this.canvas.style.width = "";
+        this.canvas.style.height = "";
+        this.resizeCanvas();
+        console.log("[GameCore] 分辨率设置为自动模式");
+      } else {
+        // 固定分辨率模式
+        this.fixedResolution = { width, height };
 
-      const container = this.canvas.parentElement;
-      if (!container) return;
+        // 设置 Canvas 的内部分辨率
+        this.canvas.width = width;
+        this.canvas.height = height;
 
-      const containerWidth = container.clientWidth;
-      const containerHeight = container.clientHeight;
+        // 让 Canvas 填满容器（容器尺寸由 CSS 变量控制）
+        this.canvas.style.width = "100%";
+        this.canvas.style.height = "100%";
 
-      // 计算缩放比例，保持宽高比
-      const scaleX = containerWidth / width;
-      const scaleY = containerHeight / height;
-      const scale = Math.min(scaleX, scaleY);
+        // 更新配置
+        this.config.width = width;
+        this.config.height = height;
 
-      // 设置 Canvas 的内部分辨率
-      this.canvas.width = width;
-      this.canvas.height = height;
+        // 更新战斗系统的地图尺寸
+        if (this.systems.combat) {
+          this.systems.combat.mapWidth = width;
+          this.systems.combat.mapHeight = height;
+        }
 
-      // 用 CSS 缩放 Canvas 以适应容器
-      const displayWidth = width * scale;
-      const displayHeight = height * scale;
-      this.canvas.style.width = `${displayWidth}px`;
-      this.canvas.style.height = `${displayHeight}px`;
+        // 更新玩家位置以适应新分辨率
+        if (this.systems.player) {
+          const player = this.systems.player.player;
+          // 玩家位置保持在合理范围内
+          player.x = Math.max(20, Math.min(player.x, width * 0.15));
+          player.y = Math.max(height * 0.55, Math.min(player.y, height * 0.75 - player.height));
+        }
 
-      // 更新配置
-      this.config.width = width;
-      this.config.height = height;
+        // 重新生成云朵以适应新尺寸
+        this.clouds = this.generateClouds();
 
-      // 更新战斗系统的地图尺寸
-      if (this.systems.combat) {
-        this.systems.combat.mapWidth = width;
-        this.systems.combat.mapHeight = height;
+        console.log(`[GameCore] 分辨率设置为 ${width}x${height}`);
       }
-
-      // 更新玩家位置以适应新分辨率
-      if (this.systems.player) {
-        const player = this.systems.player.player;
-        // 玩家 x 位置保持在左侧（画布宽度的 10%）
-        player.x = Math.min(player.x, width * 0.15);
-        // 玩家 y 位置保持在画布可见区域内（垂直居中偏下）
-        player.y = Math.min(player.y, height * 0.75 - player.height);
-        // 确保不小于最小值
-        player.y = Math.max(player.y, height * 0.55);
-      }
-
-      // 重新生成云朵以适应新尺寸
-      this.clouds = this.generateClouds();
-
-      console.log(`[GameCore] 分辨率设置为 ${width}x${height}`);
-    }
+    });
   }
 
   /**

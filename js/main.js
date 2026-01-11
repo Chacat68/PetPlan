@@ -19,7 +19,10 @@ import {
 import { SaveSystem, getSaveSystemInstance } from "./modules/save-system.js";
 import { UISystem, getUISystemInstance } from "./modules/ui-system.js";
 import { PetSystem, getPetSystemInstance } from "./modules/pet-system.js";
-import { TerritorySystem, getTerritorySystemInstance } from "./modules/territory-system.js";
+import {
+  TerritorySystem,
+  getTerritorySystemInstance,
+} from "./modules/territory-system.js";
 
 class Game {
   constructor() {
@@ -34,7 +37,7 @@ class Game {
 
     this.ctx = this.canvas.getContext("2d");
     this.isInitialized = false;
-    
+
     // 当前场景
     this.currentScene = "dungeon";
   }
@@ -57,10 +60,10 @@ class Game {
       this.petSystem = getPetSystemInstance();
       this.petSystem.setResourceSystem(this.resourceSystem);
       this.petSystem.setPlayerSystem(this.playerSystem);
-      
+
       // 默认解锁一只火焰犬作为示例
       if (this.petSystem.unlockedPets.length === 0) {
-        this.petSystem.unlockPet(1);  // 火焰犬
+        this.petSystem.unlockPet(1); // 火焰犬
         if (this.petSystem.unlockedPets.length > 0) {
           this.petSystem.equipPet(this.petSystem.unlockedPets[0].instanceId);
         }
@@ -267,7 +270,7 @@ class Game {
 
     // 更新弹窗中的玩家信息
     this.updatePlayerModalInfo();
-    
+
     modalOverlay.classList.add("active");
   }
 
@@ -309,18 +312,20 @@ class Game {
       const savedSettings = localStorage.getItem("petplan_settings");
       if (savedSettings) {
         const settings = JSON.parse(savedSettings);
-        
+
         // 设置分辨率单选按钮
         if (settings.resolution) {
-          const radio = document.querySelector(`input[name="resolution"][value="${settings.resolution}"]`);
+          const radio = document.querySelector(
+            `input[name="resolution"][value="${settings.resolution}"]`
+          );
           if (radio) {
             radio.checked = true;
           }
         }
-        
+
         // 应用分辨率设置
         this.applyResolution(settings.resolution || "auto");
-        
+
         console.log("[Game] 设置已加载:", settings);
       }
     } catch (error) {
@@ -332,18 +337,20 @@ class Game {
    * 保存设置
    */
   saveSettings() {
-    const resolution = document.querySelector('input[name="resolution"]:checked')?.value || "auto";
-    
+    const resolution =
+      document.querySelector('input[name="resolution"]:checked')?.value ||
+      "auto";
+
     const settings = {
       resolution,
     };
-    
+
     try {
       localStorage.setItem("petplan_settings", JSON.stringify(settings));
-      
+
       // 应用分辨率设置
       this.applyResolution(resolution);
-      
+
       console.log("[Game] 设置已保存:", settings);
     } catch (error) {
       console.error("[Game] 保存设置失败:", error);
@@ -355,48 +362,66 @@ class Game {
    */
   applyResolution(resolution) {
     if (!this.gameCore) return;
-    
+
     let width, height;
-    
+
+    // 分辨率对应的窗口尺寸（手机游戏常见竖屏分辨率）
+    // 这里的 width 是游戏容器宽度，height 是游戏画布区域高度
     switch (resolution) {
-      case "480":
-        width = 854;
-        height = 480;
+      case "540":
+        // HD: 540×960 (16:9)
+        width = 540;
+        height = 960;
         break;
       case "720":
-        width = 1280;
-        height = 720;
-        break;
-      case "900":
-        width = 1600;
-        height = 900;
+        // HD+: 720×1280 (16:9)
+        width = 720;
+        height = 1280;
         break;
       case "1080":
-        width = 1920;
-        height = 1080;
+        // FHD: 1080×1920 (16:9)
+        width = 1080;
+        height = 1920;
+        break;
+      case "1080x2340":
+        // FHD+: 1080×2340 (19.5:9 刘海屏)
+        width = 1080;
+        height = 2340;
         break;
       case "1440":
-        width = 2560;
-        height = 1440;
-        break;
-      case "2160":
-        width = 3840;
-        height = 2160;
+        // QHD+: 1440×3200 (20:9)
+        width = 1440;
+        height = 3200;
         break;
       case "auto":
       default:
-        // 自动模式：使用容器尺寸
+        // 自动模式：使用默认 CSS 变量值
         width = null;
         height = null;
         break;
     }
-    
-    // 调用 GameCore 的分辨率设置方法
+
+    // 更新 CSS 变量以改变游戏窗口实际尺寸
+    const root = document.documentElement;
+    if (width && height) {
+      root.style.setProperty("--game-width", `${width}px`);
+      root.style.setProperty("--canvas-height", `${height}px`);
+    } else {
+      // 自动模式：恢复默认值
+      root.style.setProperty("--game-width", "750px");
+      root.style.setProperty("--canvas-height", "1350px");
+    }
+
+    // 调用 GameCore 的分辨率设置方法（处理 Canvas 内部尺寸）
     if (this.gameCore.setResolution) {
       this.gameCore.setResolution(width, height);
     }
-    
-    console.log(`[Game] 分辨率设置: ${resolution} (${width || 'auto'}×${height || 'auto'})`);
+
+    console.log(
+      `[Game] 分辨率设置: ${resolution} (${width || "auto"}×${
+        height || "auto"
+      })`
+    );
   }
 
   /**
@@ -404,13 +429,13 @@ class Game {
    */
   updatePlayerModalInfo() {
     const player = this.playerSystem?.player;
-    
+
     // 空值检查
     if (!player || !this.resourceSystem) {
       console.warn("[Game] 玩家或资源系统尚未初始化");
       return;
     }
-    
+
     const power = this.playerSystem.calculateTotalPower();
     // ResourceSystem 的货币直接存储在实例上，不是 resources 对象
     const coins = this.resourceSystem.coins || 0;
@@ -426,7 +451,8 @@ class Game {
     if (levelEl) levelEl.textContent = `Lv.${player.level}`;
     if (powerEl) powerEl.textContent = this.resourceSystem.formatNumber(power);
     if (coinsEl) coinsEl.textContent = this.resourceSystem.formatNumber(coins);
-    if (crystalsEl) crystalsEl.textContent = this.resourceSystem.formatNumber(crystals);
+    if (crystalsEl)
+      crystalsEl.textContent = this.resourceSystem.formatNumber(crystals);
   }
 
   /**
@@ -453,22 +479,22 @@ class Game {
 
     // 切换场景
     this.currentScene = tab;
-    
+
     const battleScene = document.getElementById("battle-scene");
     const territoryScene = document.getElementById("territory-scene");
     const upgradePanel = document.getElementById("upgrade-panel");
     const gameUIOverlay = document.querySelector(".game-ui-overlay");
-    
+
     if (tab === "territory") {
       // 显示领地场景
       if (battleScene) battleScene.style.display = "none";
       if (territoryScene) territoryScene.style.display = "flex";
       if (upgradePanel) upgradePanel.style.display = "none";
       if (gameUIOverlay) gameUIOverlay.style.display = "none";
-      
+
       // 暂停战斗场景
       if (this.gameCore) this.gameCore.stop();
-      
+
       // 更新领地显示
       this.updateTerritoryDisplay();
     } else {
@@ -477,13 +503,13 @@ class Game {
       if (territoryScene) territoryScene.style.display = "none";
       if (upgradePanel) upgradePanel.style.display = "block";
       if (gameUIOverlay) gameUIOverlay.style.display = "block";
-      
+
       // 恢复战斗场景
       if (this.gameCore && !this.gameCore.isRunning) {
         this.gameCore.start();
       }
     }
-    
+
     console.log("[Game] 切换到:", tab);
   }
 
@@ -538,7 +564,7 @@ class Game {
   initTerritoryUI() {
     // 生成领地网格
     this.renderTerritoryGrid();
-    
+
     // 绑定扩张按钮
     const expandBtn = document.getElementById("expand-territory-btn");
     if (expandBtn) {
@@ -552,19 +578,19 @@ class Game {
   renderTerritoryGrid() {
     const grid = document.getElementById("territory-grid");
     if (!grid || !this.territorySystem) return;
-    
+
     grid.innerHTML = "";
-    
+
     const maxSlots = this.territorySystem.slotConfig.maxSlots;
-    
+
     for (let i = 0; i < maxSlots; i++) {
       const slot = document.createElement("div");
       slot.className = "territory-slot";
       slot.dataset.slot = i;
-      
+
       const state = this.territorySystem.getSlotState(i);
       const building = this.territorySystem.getBuildingAt(i);
-      
+
       if (state === "locked") {
         slot.classList.add("locked");
         const unlockLevel = this.territorySystem.slots[i]?.unlockLevel || 0;
@@ -595,7 +621,7 @@ class Game {
         `;
         slot.addEventListener("click", () => this.openBuildingInfoModal(i));
       }
-      
+
       grid.appendChild(slot);
     }
   }
@@ -605,26 +631,32 @@ class Game {
    */
   updateTerritoryDisplay() {
     if (!this.territorySystem || !this.resourceSystem) return;
-    
+
     // 更新资源显示
     const goldEl = document.getElementById("territory-gold");
     const crystalEl = document.getElementById("territory-crystal");
-    
-    if (goldEl) goldEl.textContent = this.resourceSystem.formatNumber(this.resourceSystem.coins);
-    if (crystalEl) crystalEl.textContent = this.resourceSystem.formatNumber(this.resourceSystem.crystals);
-    
+
+    if (goldEl)
+      goldEl.textContent = this.resourceSystem.formatNumber(
+        this.resourceSystem.coins
+      );
+    if (crystalEl)
+      crystalEl.textContent = this.resourceSystem.formatNumber(
+        this.resourceSystem.crystals
+      );
+
     // 更新扩张进度
     const progressEl = document.getElementById("expansion-progress");
     if (progressEl) {
       progressEl.textContent = `${this.territorySystem.unlockedSlots}/${this.territorySystem.slotConfig.maxSlots}`;
     }
-    
+
     // 收集资源
     const collected = this.territorySystem.collectResources();
     if (collected.coins > 0 || collected.crystals > 0) {
       this.resourceSystem.updateDisplay();
     }
-    
+
     // 重新渲染网格
     this.renderTerritoryGrid();
   }
@@ -634,7 +666,7 @@ class Game {
    */
   openBuildModal(slotIndex) {
     this.selectedSlot = slotIndex;
-    
+
     // 创建弹窗
     let modal = document.getElementById("build-modal");
     if (!modal) {
@@ -651,24 +683,28 @@ class Game {
         </div>
       `;
       document.getElementById("territory-scene")?.appendChild(modal);
-      
-      document.getElementById("close-build-modal")?.addEventListener("click", () => {
-        modal.classList.remove("show");
-      });
-      
+
+      document
+        .getElementById("close-build-modal")
+        ?.addEventListener("click", () => {
+          modal.classList.remove("show");
+        });
+
       modal.addEventListener("click", (e) => {
         if (e.target === modal) modal.classList.remove("show");
       });
     }
-    
+
     // 生成建筑选项
     const optionsEl = document.getElementById("building-options");
     optionsEl.innerHTML = "";
-    
-    for (const [type, data] of Object.entries(this.territorySystem.buildingData)) {
+
+    for (const [type, data] of Object.entries(
+      this.territorySystem.buildingData
+    )) {
       const canBuild = this.territorySystem.canBuild(type, slotIndex);
       const cost = this.territorySystem.calculateBuildCost(type);
-      
+
       const option = document.createElement("button");
       option.className = "building-option";
       option.disabled = !canBuild.success;
@@ -679,15 +715,23 @@ class Game {
           <div class="building-option-desc">${data.description}</div>
         </div>
         <div class="building-option-cost">
-          ${cost.coins > 0 ? `💰${this.resourceSystem.formatNumber(cost.coins)}` : ""}
-          ${cost.crystals > 0 ? ` 💎${this.resourceSystem.formatNumber(cost.crystals)}` : ""}
+          ${
+            cost.coins > 0
+              ? `💰${this.resourceSystem.formatNumber(cost.coins)}`
+              : ""
+          }
+          ${
+            cost.crystals > 0
+              ? ` 💎${this.resourceSystem.formatNumber(cost.crystals)}`
+              : ""
+          }
         </div>
       `;
-      
+
       option.addEventListener("click", () => this.handleBuild(type));
       optionsEl.appendChild(option);
     }
-    
+
     modal.classList.add("show");
   }
 
@@ -695,10 +739,16 @@ class Game {
    * 处理建造
    */
   handleBuild(buildingType) {
-    const result = this.territorySystem.buildBuilding(buildingType, this.selectedSlot);
-    
+    const result = this.territorySystem.buildBuilding(
+      buildingType,
+      this.selectedSlot
+    );
+
     if (result.success) {
-      this.uiSystem.showToast(`✅ 建造成功: ${this.territorySystem.buildingData[buildingType].name}`, "success");
+      this.uiSystem.showToast(
+        `✅ 建造成功: ${this.territorySystem.buildingData[buildingType].name}`,
+        "success"
+      );
       this.updateTerritoryDisplay();
       this.resourceSystem.updateDisplay();
       document.getElementById("build-modal")?.classList.remove("show");
@@ -713,11 +763,14 @@ class Game {
   openBuildingInfoModal(slotIndex) {
     const building = this.territorySystem.getBuildingAt(slotIndex);
     if (!building) return;
-    
+
     const data = this.territorySystem.buildingData[building.type];
     const canUpgrade = this.territorySystem.canUpgrade(slotIndex);
-    const upgradeCost = this.territorySystem.calculateUpgradeCost(building.type, building.level);
-    
+    const upgradeCost = this.territorySystem.calculateUpgradeCost(
+      building.type,
+      building.level
+    );
+
     // 创建弹窗
     let modal = document.getElementById("building-info-modal");
     if (!modal) {
@@ -726,7 +779,7 @@ class Game {
       modal.className = "territory-modal";
       document.getElementById("territory-scene")?.appendChild(modal);
     }
-    
+
     // 计算效果描述
     let effectText = "";
     if (data.effects) {
@@ -738,18 +791,22 @@ class Game {
           effectText = `防御力 +${data.effects.value * building.level}`;
           break;
         case "combatBonus":
-          effectText = `攻击 +${data.effects.attack * building.level}, 防御 +${data.effects.defense * building.level}`;
+          effectText = `攻击 +${data.effects.attack * building.level}, 防御 +${
+            data.effects.defense * building.level
+          }`;
           break;
         case "production":
           const amount = data.effects.value * building.level;
-          effectText = `每${data.productionInterval / 1000}秒产出 ${amount} ${data.effects.resource === "coins" ? "💰" : "💎"}`;
+          effectText = `每${data.productionInterval / 1000}秒产出 ${amount} ${
+            data.effects.resource === "coins" ? "💰" : "💎"
+          }`;
           break;
         case "expBonus":
           effectText = `经验 +${data.effects.value * building.level}%`;
           break;
       }
     }
-    
+
     modal.innerHTML = `
       <div class="territory-modal-content">
         <div class="territory-modal-header">
@@ -760,45 +817,67 @@ class Game {
           <div class="building-stats">
             <div class="building-stat">
               <span class="building-stat-label">当前等级</span>
-              <span class="building-stat-value">Lv.${building.level} / ${data.maxLevel}</span>
+              <span class="building-stat-value">Lv.${building.level} / ${
+      data.maxLevel
+    }</span>
             </div>
             <div class="building-stat">
               <span class="building-stat-label">当前效果</span>
               <span class="building-stat-value">${effectText || "无"}</span>
             </div>
-            ${building.level < data.maxLevel ? `
+            ${
+              building.level < data.maxLevel
+                ? `
               <div class="building-stat">
                 <span class="building-stat-label">升级费用</span>
-                <span class="building-stat-value">💰${this.resourceSystem.formatNumber(upgradeCost.coins)} 💎${this.resourceSystem.formatNumber(upgradeCost.crystals)}</span>
+                <span class="building-stat-value">💰${this.resourceSystem.formatNumber(
+                  upgradeCost.coins
+                )} 💎${this.resourceSystem.formatNumber(
+                    upgradeCost.crystals
+                  )}</span>
               </div>
-            ` : ""}
+            `
+                : ""
+            }
           </div>
           <div class="building-actions">
-            <button class="btn-upgrade" ${!canUpgrade.success ? "disabled" : ""} id="btn-upgrade-building">
+            <button class="btn-upgrade" ${
+              !canUpgrade.success ? "disabled" : ""
+            } id="btn-upgrade-building">
               ${building.level >= data.maxLevel ? "已满级" : "升级"}
             </button>
-            ${building.type !== "main_base" ? `<button class="btn-demolish" id="btn-demolish-building">拆除</button>` : ""}
+            ${
+              building.type !== "main_base"
+                ? `<button class="btn-demolish" id="btn-demolish-building">拆除</button>`
+                : ""
+            }
           </div>
         </div>
       </div>
     `;
-    
-    document.getElementById("close-info-modal")?.addEventListener("click", () => {
-      modal.classList.remove("show");
-    });
-    
+
+    document
+      .getElementById("close-info-modal")
+      ?.addEventListener("click", () => {
+        modal.classList.remove("show");
+      });
+
     modal.addEventListener("click", (e) => {
       if (e.target === modal) modal.classList.remove("show");
     });
-    
-    document.getElementById("btn-upgrade-building")?.addEventListener("click", () => {
-      this.handleUpgradeBuilding(slotIndex);
-    });
-    
-    document.getElementById("btn-demolish-building")?.addEventListener("click", () => {
-      this.handleDemolish(slotIndex);
-    });
-    
+
+    document
+      .getElementById("btn-upgrade-building")
+      ?.addEventListener("click", () => {
+        this.handleUpgradeBuilding(slotIndex);
+      });
+
+    document
+      .getElementById("btn-demolish-building")
+      ?.addEventListener("click", () => {
+        this.handleDemolish(slotIndex);
+      });
+
     modal.classList.add("show");
   }
 
@@ -807,10 +886,13 @@ class Game {
    */
   handleUpgradeBuilding(slotIndex) {
     const result = this.territorySystem.upgradeBuilding(slotIndex);
-    
+
     if (result.success) {
       const data = this.territorySystem.buildingData[result.building.type];
-      this.uiSystem.showToast(`✅ ${data.name} 升级至 Lv.${result.building.level}`, "success");
+      this.uiSystem.showToast(
+        `✅ ${data.name} 升级至 Lv.${result.building.level}`,
+        "success"
+      );
       this.updateTerritoryDisplay();
       this.resourceSystem.updateDisplay();
       document.getElementById("building-info-modal")?.classList.remove("show");
@@ -824,11 +906,14 @@ class Game {
    */
   handleDemolish(slotIndex) {
     if (!confirm("确定要拆除这个建筑吗？将返还50%的建造成本。")) return;
-    
+
     const result = this.territorySystem.demolishBuilding(slotIndex);
-    
+
     if (result.success) {
-      this.uiSystem.showToast(`✅ 拆除成功，返还 💰${result.refund.coins} 💎${result.refund.crystals}`, "success");
+      this.uiSystem.showToast(
+        `✅ 拆除成功，返还 💰${result.refund.coins} 💎${result.refund.crystals}`,
+        "success"
+      );
       this.updateTerritoryDisplay();
       this.resourceSystem.updateDisplay();
       document.getElementById("building-info-modal")?.classList.remove("show");
@@ -842,19 +927,23 @@ class Game {
    */
   handleExpand() {
     const canExpand = this.territorySystem.canExpand();
-    
+
     if (!canExpand.success) {
       this.uiSystem.showToast(`❌ ${canExpand.reason}`, "error");
       return;
     }
-    
+
     const cost = this.territorySystem.getNextExpansionCost();
-    if (!confirm(`确定扩张领地吗？\n费用: 💰${cost.coins} 💎${cost.crystals}`)) return;
-    
+    if (!confirm(`确定扩张领地吗？\n费用: 💰${cost.coins} 💎${cost.crystals}`))
+      return;
+
     const result = this.territorySystem.expandTerritory();
-    
+
     if (result.success) {
-      this.uiSystem.showToast(`✅ 领地扩张成功！当前地块: ${result.unlockedSlots}`, "success");
+      this.uiSystem.showToast(
+        `✅ 领地扩张成功！当前地块: ${result.unlockedSlots}`,
+        "success"
+      );
       this.updateTerritoryDisplay();
       this.resourceSystem.updateDisplay();
     }
