@@ -16,7 +16,7 @@ export class TerritorySystem {
             main_base: {
                 name: '主基地',
                 icon: '🏰',
-                description: '控制建筑上限，升级可解锁更多地块',
+                description: '领地核心，提供扩张与循环节奏锚点',
                 baseCost: { coins: 0, crystals: 0 },
                 costMultiplier: 2.0,
                 maxLevel: 5,
@@ -24,12 +24,17 @@ export class TerritorySystem {
                     type: 'slotUnlock',
                     value: 2  // 每级解锁2个额外地块
                 },
-                productionInterval: 0  // 不产出资源
+                productionInterval: 0,  // 不产出资源
+                unlock: {
+                    stage: 1,
+                    pulse: 0,
+                    label: '初始开放'
+                }
             },
             training_ground: {
                 name: '训练场',
                 icon: '🏋️',
-                description: '提升攻击力加成',
+                description: '把命运循环转化为主角攻击训练',
                 baseCost: { coins: 500, crystals: 50 },
                 costMultiplier: 1.5,
                 maxLevel: 20,
@@ -37,12 +42,17 @@ export class TerritorySystem {
                     type: 'attackBonus',
                     value: 5  // 每级+5攻击
                 },
-                productionInterval: 0
+                productionInterval: 0,
+                unlock: {
+                    stage: 2,
+                    pulse: 8,
+                    label: '循环脉冲 8'
+                }
             },
             temple: {
                 name: '神庙',
                 icon: '🏛️',
-                description: '提升防御力加成',
+                description: '稳定循环收益，提升防御加成',
                 baseCost: { coins: 500, crystals: 50 },
                 costMultiplier: 1.5,
                 maxLevel: 20,
@@ -50,12 +60,17 @@ export class TerritorySystem {
                     type: 'defenseBonus',
                     value: 5  // 每级+5防御
                 },
-                productionInterval: 0
+                productionInterval: 0,
+                unlock: {
+                    stage: 4,
+                    pulse: 42,
+                    label: '循环脉冲 42'
+                }
             },
             barracks: {
                 name: '兵营',
                 icon: '⚔️',
-                description: '提升攻击和防御综合加成',
+                description: '战斗循环成型后开放，提升攻防',
                 baseCost: { coins: 800, crystals: 80 },
                 costMultiplier: 1.5,
                 maxLevel: 15,
@@ -64,12 +79,17 @@ export class TerritorySystem {
                     attack: 3,
                     defense: 3
                 },
-                productionInterval: 0
+                productionInterval: 0,
+                unlock: {
+                    stage: 5,
+                    pulse: 64,
+                    label: '循环脉冲 64'
+                }
             },
             workshop: {
                 name: '工坊',
                 icon: '🔨',
-                description: '定期产出金币',
+                description: '第一座资源建筑，按节拍产出金币',
                 baseCost: { coins: 1000, crystals: 100 },
                 costMultiplier: 1.8,
                 maxLevel: 10,
@@ -78,12 +98,17 @@ export class TerritorySystem {
                     resource: 'coins',
                     value: 50  // 基础产出
                 },
-                productionInterval: 60000  // 60秒产出一次
+                productionInterval: 45000,  // 45秒产出一次
+                unlock: {
+                    stage: 3,
+                    pulse: 24,
+                    label: '循环脉冲 24'
+                }
             },
             crystal_mine: {
                 name: '水晶矿',
                 icon: '💎',
-                description: '定期产出水晶',
+                description: '资源循环稳定后开放，按节拍产出水晶',
                 baseCost: { coins: 2000, crystals: 200 },
                 costMultiplier: 2.0,
                 maxLevel: 10,
@@ -92,12 +117,17 @@ export class TerritorySystem {
                     resource: 'crystals',
                     value: 10  // 基础产出
                 },
-                productionInterval: 120000  // 120秒产出一次
+                productionInterval: 90000,  // 90秒产出一次
+                unlock: {
+                    stage: 6,
+                    pulse: 88,
+                    label: '循环脉冲 88'
+                }
             },
             library: {
                 name: '图书馆',
                 icon: '📚',
-                description: '提升经验获取加成',
+                description: '后段成长建筑，提升经验获取',
                 baseCost: { coins: 1500, crystals: 150 },
                 costMultiplier: 1.6,
                 maxLevel: 10,
@@ -105,15 +135,20 @@ export class TerritorySystem {
                     type: 'expBonus',
                     value: 5  // 每级+5%经验
                 },
-                productionInterval: 0
+                productionInterval: 0,
+                unlock: {
+                    stage: 7,
+                    pulse: 118,
+                    label: '循环脉冲 118'
+                }
             }
         };
         
         // ==================== 地块配置 ====================
         this.slotConfig = {
-            initialSlots: 6,
+            initialSlots: 1,
             maxSlots: 12,
-            unlockLevels: [0, 5, 10, 15, 20, 25]  // 每个地块的解锁等级
+            unlockPulses: [0, 8, 18, 32, 50, 72, 98, 130, 166, 206, 250, 300]
         };
         
         // ==================== 扩张成本配置 ====================
@@ -126,9 +161,10 @@ export class TerritorySystem {
         // ==================== 领地状态 ====================
         this.slots = [];           // 地块数组
         this.buildings = [];       // 已建造的建筑
-        this.unlockedSlots = 6;    // 已解锁地块数
+        this.unlockedSlots = this.slotConfig.initialSlots;    // 已解锁地块数
         this.expansionCount = 0;   // 扩张次数
         this.lastProductionTime = Date.now();  // 上次产出时间
+        this.progressContext = this.createDefaultProgressContext();
         
         // 存储键
         this.storageKey = 'petplan_territory';
@@ -147,7 +183,7 @@ export class TerritorySystem {
         for (let i = 0; i < this.slotConfig.maxSlots; i++) {
             this.slots.push({
                 index: i,
-                unlockLevel: this.slotConfig.unlockLevels[i] || 0,
+                unlockPulse: this.getSlotUnlockPulse(i),
                 building: null
             });
         }
@@ -163,6 +199,176 @@ export class TerritorySystem {
     setPlayerSystem(playerSystem) {
         this.playerSystem = playerSystem;
     }
+
+    createDefaultProgressContext() {
+        return {
+            totalFlips: 0,
+            fateCoins: 1,
+            assistants: 0,
+            goldCoins: 0,
+            heroTrainingLevel: 0,
+            playerLevel: 1,
+            equippedPets: 0,
+            petLevelTotal: 0,
+            buildings: this.buildings?.length || 0,
+            expansionCount: this.expansionCount || 0,
+            unlockedSlots: this.unlockedSlots || this.slotConfig.initialSlots
+        };
+    }
+
+    setProgressContext(context = {}) {
+        this.progressContext = {
+            ...this.createDefaultProgressContext(),
+            ...this.progressContext,
+            ...context,
+            buildings: this.buildings.length,
+            expansionCount: this.expansionCount,
+            unlockedSlots: this.getEffectiveUnlockedSlots({
+                ...this.progressContext,
+                ...context
+            })
+        };
+
+        return this.getProgressSummary();
+    }
+
+    getLoopPulse(context = this.progressContext) {
+        const safe = {
+            ...this.createDefaultProgressContext(),
+            ...context
+        };
+        const extraPetLevels = Math.max(0, safe.petLevelTotal - safe.equippedPets);
+
+        return Math.floor(
+            safe.totalFlips +
+            Math.max(0, safe.fateCoins - 1) * 24 +
+            safe.assistants * 26 +
+            safe.goldCoins * 12 +
+            safe.heroTrainingLevel * 16 +
+            safe.equippedPets * 18 +
+            extraPetLevels * 6 +
+            safe.buildings * 14 +
+            safe.expansionCount * 20
+        );
+    }
+
+    getSlotUnlockPulse(slotIndex) {
+        return this.slotConfig.unlockPulses[slotIndex] ?? slotIndex * 32;
+    }
+
+    getLoopUnlockedSlotCount(context = this.progressContext) {
+        const pulse = this.getLoopPulse(context);
+        return Math.min(
+            this.slotConfig.maxSlots,
+            this.slotConfig.unlockPulses.filter((requiredPulse) => pulse >= requiredPulse).length
+        );
+    }
+
+    getEffectiveUnlockedSlots(context = this.progressContext) {
+        return Math.min(
+            this.slotConfig.maxSlots,
+            Math.max(this.unlockedSlots, this.getLoopUnlockedSlotCount(context))
+        );
+    }
+
+    getBuildingEntries() {
+        return Object.entries(this.buildingData).sort(([, a], [, b]) => {
+            const stageDiff = (a.unlock?.stage || 0) - (b.unlock?.stage || 0);
+            if (stageDiff !== 0) return stageDiff;
+            return (a.unlock?.pulse || 0) - (b.unlock?.pulse || 0);
+        });
+    }
+
+    getBuildingUnlockState(buildingType, context = this.progressContext) {
+        const data = this.buildingData[buildingType];
+        if (!data) {
+            return {
+                unlocked: false,
+                reason: '无效建筑',
+                pulse: this.getLoopPulse(context),
+                requiredPulse: 0,
+                stage: 0
+            };
+        }
+
+        const pulse = this.getLoopPulse(context);
+        const requiredPulse = data.unlock?.pulse || 0;
+        const unlocked = pulse >= requiredPulse;
+
+        return {
+            unlocked,
+            pulse,
+            requiredPulse,
+            stage: data.unlock?.stage || 1,
+            label: data.unlock?.label || `循环脉冲 ${requiredPulse}`,
+            reason: unlocked ? '已开放' : `需要循环脉冲 ${requiredPulse}`
+        };
+    }
+
+    isBuildingTypeUnlocked(buildingType, context = this.progressContext) {
+        return this.getBuildingUnlockState(buildingType, context).unlocked;
+    }
+
+    getUnlockedBuildingTypes(context = this.progressContext) {
+        return this.getBuildingEntries()
+            .filter(([type]) => this.isBuildingTypeUnlocked(type, context))
+            .map(([type]) => type);
+    }
+
+    getNextBuildingUnlock(context = this.progressContext) {
+        return this.getBuildingEntries()
+            .map(([type, data]) => ({
+                type,
+                data,
+                state: this.getBuildingUnlockState(type, context)
+            }))
+            .find((entry) => !entry.state.unlocked) || null;
+    }
+
+    getNextSlotUnlock(context = this.progressContext) {
+        const pulse = this.getLoopPulse(context);
+        const index = this.slotConfig.unlockPulses.findIndex((requiredPulse) => pulse < requiredPulse);
+        if (index === -1) return null;
+
+        return {
+            index,
+            requiredPulse: this.getSlotUnlockPulse(index),
+            pulse
+        };
+    }
+
+    getProgressSummary(context = this.progressContext) {
+        const pulse = this.getLoopPulse(context);
+        const nextBuilding = this.getNextBuildingUnlock(context);
+        const nextSlot = this.getNextSlotUnlock(context);
+        const nextTargetPulse = nextBuilding
+            ? nextBuilding.state.requiredPulse
+            : nextSlot
+                ? nextSlot.requiredPulse
+                : pulse;
+        const previousTargetPulse = Math.max(
+            0,
+            ...this.getBuildingEntries()
+                .map(([type]) => this.getBuildingUnlockState(type, context).requiredPulse)
+                .filter((requiredPulse) => requiredPulse <= pulse)
+        );
+        const span = Math.max(1, nextTargetPulse - previousTargetPulse);
+        const progress = nextTargetPulse <= pulse
+            ? 1
+            : Math.max(0, Math.min(1, (pulse - previousTargetPulse) / span));
+
+        return {
+            pulse,
+            stage: this.getUnlockedBuildingTypes(context).length,
+            unlockedSlots: this.getEffectiveUnlockedSlots(context),
+            maxSlots: this.slotConfig.maxSlots,
+            unlockedBuildingTypes: this.getUnlockedBuildingTypes(context),
+            nextBuilding,
+            nextSlot,
+            nextTargetPulse,
+            progress
+        };
+    }
     
     // ==================== 地块状态查询 ====================
     
@@ -171,17 +377,8 @@ export class TerritorySystem {
      */
     isSlotUnlocked(slotIndex) {
         if (slotIndex < 0 || slotIndex >= this.slots.length) return false;
-        
-        const slot = this.slots[slotIndex];
-        const playerLevel = this.playerSystem?.player?.level || 1;
-        
-        // 前6个地块根据等级解锁，后面的需要扩张
-        if (slotIndex < this.slotConfig.initialSlots) {
-            return playerLevel >= slot.unlockLevel;
-        }
-        
-        // 扩张获得的地块
-        return slotIndex < this.unlockedSlots;
+
+        return slotIndex < this.getEffectiveUnlockedSlots();
     }
     
     /**
@@ -262,6 +459,11 @@ export class TerritorySystem {
         const data = this.buildingData[buildingType];
         if (!data) {
             return { success: false, reason: '无效的建筑类型' };
+        }
+
+        const unlockState = this.getBuildingUnlockState(buildingType);
+        if (!unlockState.unlocked) {
+            return { success: false, reason: unlockState.reason, unlockState };
         }
         
         // 主基地只能有一个
@@ -471,6 +673,10 @@ export class TerritorySystem {
      * 检查是否可以扩张
      */
     canExpand() {
+        if (this.getEffectiveUnlockedSlots() >= this.slotConfig.maxSlots) {
+            return { success: false, reason: '所有地块已开放' };
+        }
+
         const cost = this.getNextExpansionCost();
         if (!cost) {
             return { success: false, reason: '已达到最大扩张次数' };
@@ -514,7 +720,7 @@ export class TerritorySystem {
         // 更新扩张状态
         this.expansionCount += 1;
         this.unlockedSlots = Math.min(
-            this.slotConfig.initialSlots + this.expansionCount * 2,
+            this.getEffectiveUnlockedSlots() + 2,
             this.slotConfig.maxSlots
         );
         
@@ -669,8 +875,8 @@ export class TerritorySystem {
         this.buildings = [];
         
         // 恢复扩张状态
-        this.unlockedSlots = data.unlockedSlots || this.slotConfig.initialSlots;
-        this.expansionCount = data.expansionCount || 0;
+        this.unlockedSlots = data.unlockedSlots ?? this.slotConfig.initialSlots;
+        this.expansionCount = data.expansionCount ?? 0;
         this.lastProductionTime = data.lastProductionTime || Date.now();
         
         // 恢复建筑
@@ -692,6 +898,8 @@ export class TerritorySystem {
                 }
             }
         }
+
+        this.setProgressContext(this.progressContext);
         
         console.log('[TerritorySystem] 存档加载完成，建筑数量:', this.buildings.length);
     }
@@ -732,6 +940,7 @@ export class TerritorySystem {
         this.unlockedSlots = this.slotConfig.initialSlots;
         this.expansionCount = 0;
         this.lastProductionTime = Date.now();
+        this.setProgressContext(this.createDefaultProgressContext());
         this.saveToLocalStorage();
         console.log('[TerritorySystem] 领地数据已清除');
     }

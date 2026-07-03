@@ -11,7 +11,7 @@ export class SaveSystem {
         this.maxSlots = 5;
         
         // 存档版本
-        this.version = '1.0.0';
+        this.version = '1.1.0';
         
         // 存档前缀
         this.storagePrefix = 'petplan_save_';
@@ -58,6 +58,18 @@ export class SaveSystem {
             
             if (this.gameSystems.combat) {
                 saveData.data.combat = this.gameSystems.combat.getSaveData();
+            }
+
+            if (this.gameSystems.pet) {
+                saveData.data.pet = this.gameSystems.pet.getSaveData();
+            }
+
+            if (this.gameSystems.territory) {
+                saveData.data.territory = this.gameSystems.territory.getSaveData();
+            }
+
+            if (this.gameSystems.fate) {
+                saveData.data.fate = this.gameSystems.fate.getSaveData();
             }
             
             // 保存到 LocalStorage
@@ -110,6 +122,18 @@ export class SaveSystem {
             
             if (saveData.data.combat && this.gameSystems.combat) {
                 this.gameSystems.combat.loadSaveData(saveData.data.combat);
+            }
+
+            if (saveData.data.pet && this.gameSystems.pet) {
+                this.gameSystems.pet.loadSaveData(saveData.data.pet);
+            }
+
+            if (saveData.data.territory && this.gameSystems.territory) {
+                this.gameSystems.territory.loadSaveData(saveData.data.territory);
+            }
+
+            if (saveData.data.fate && this.gameSystems.fate) {
+                this.gameSystems.fate.loadSaveData(saveData.data.fate);
             }
             
             console.log('[SaveSystem] ✅ 加载成功:', slot);

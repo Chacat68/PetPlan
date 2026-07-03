@@ -155,9 +155,9 @@ export class ResourceSystem {
     loadSaveData(data) {
         if (!data) return;
         
-        this.coins = data.coins || 1000;
-        this.rubies = data.rubies || 50;
-        this.crystals = data.crystals || 100;
+        this.coins = data.coins ?? 1000;
+        this.rubies = data.rubies ?? 50;
+        this.crystals = data.crystals ?? 100;
         
         this.updateDisplay();
     }

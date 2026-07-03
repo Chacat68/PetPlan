@@ -4,152 +4,371 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/style.css?v=file-protocol-guard-20260703a" />
   </head>
   <body>
     <div class="game-container">
-      <!-- 顶部状态栏 -->
-      <header class="top-bar">
-        <div class="player-info">
-          <div class="avatar">👤</div>
-          <span class="player-level">Lv.1</span>
-        </div>
-        <div class="currency-bar">
-          <div class="currency coins">
-            <span class="icon">💰</span>
-            <span class="value" id="coins-display">1,000</span>
-          </div>
-          <div class="currency rubies">
-            <span class="icon">🔴</span>
-            <span class="value" id="rubies-display">50</span>
-          </div>
-          <div class="currency crystals">
-            <span class="icon">💎</span>
-            <span class="value" id="crystals-display">100</span>
-          </div>
-        </div>
-      </header>
-
       <!-- 游戏画布区域 -->
       <main class="game-area">
         <!-- 战斗场景 -->
-        <div class="scene-container" id="battle-scene">
-          <canvas id="gameCanvas" width="750" height="1800"></canvas>
+        <div class="scene-container" id="battle-scene" style="display: none">
+          <section class="battle-board-panel">
+            <div class="battle-scorebar">
+              <span>BATTLE</span>
+              <span class="score-dollar">RUN</span>
+            </div>
+
+            <div class="battle-arena-surface">
+              <div class="battle-resource-strip">
+                <div class="battle-resource coins">
+                  <span class="resource-label">金币</span>
+                  <span class="resource-value" id="coins-display">1,000</span>
+                </div>
+                <div class="battle-resource rubies">
+                  <span class="resource-label">红宝石</span>
+                  <span class="resource-value" id="rubies-display">50</span>
+                </div>
+                <div class="battle-resource crystals">
+                  <span class="resource-label">水晶</span>
+                  <span class="resource-value" id="crystals-display">100</span>
+                </div>
+                <div class="battle-resource power">
+                  <span class="resource-label">战力</span>
+                  <span class="resource-value" id="power-display">0</span>
+                </div>
+              </div>
+
+              <div class="battle-canvas-frame">
+                <canvas id="gameCanvas" width="750" height="1800"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <!-- 升级面板 -->
+          <aside class="battle-upgrade-panel upgrade-panel" id="upgrade-panel" style="display: none">
+            <div class="battle-shop-tabs">
+              <button type="button" class="shop-tab active">⚔</button>
+              <button type="button" class="shop-tab">♥</button>
+              <button type="button" class="shop-tab">✦</button>
+              <button type="button" class="shop-tab">↟</button>
+            </div>
+            <h3>升级</h3>
+            <div class="upgrade-list">
+              <div class="upgrade-item" data-attr="attack">
+                <span class="shop-icon battle-icon">⚔</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">攻击</span>
+                  <span class="upgrade-cost">攻击力 <b id="attack-value">20</b></span>
+                </span>
+                <button class="upgrade-btn" data-attr="attack">
+                  +5 <span class="cost">10💰</span>
+                </button>
+              </div>
+              <div class="upgrade-item" data-attr="maxHp">
+                <span class="shop-icon battle-icon heart">♥</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">生命上限</span>
+                  <span class="upgrade-cost">生命值 <b id="maxHp-value">100</b></span>
+                </span>
+                <button class="upgrade-btn" data-attr="maxHp">
+                  +20 <span class="cost">15💰</span>
+                </button>
+              </div>
+              <div class="upgrade-item" data-attr="hpRegen">
+                <span class="shop-icon battle-icon regen">✚</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">生命恢复</span>
+                  <span class="upgrade-cost">生命恢复 <b id="hpRegen-value">1</b></span>
+                </span>
+                <button class="upgrade-btn" data-attr="hpRegen">
+                  +1 <span class="cost">20💰</span>
+                </button>
+              </div>
+              <div class="upgrade-item" data-attr="critDamage">
+                <span class="shop-icon battle-icon crit">✦</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">暴击伤害</span>
+                  <span class="upgrade-cost">暴击伤害 <b id="critDamage-value">150%</b></span>
+                </span>
+                <button class="upgrade-btn" data-attr="critDamage">
+                  +10% <span class="cost">25💰</span>
+                </button>
+              </div>
+              <div class="upgrade-item" data-attr="attackSpeed">
+                <span class="shop-icon battle-icon speed">↟</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">攻击速度</span>
+                  <span class="upgrade-cost">攻击速度 <b id="attackSpeed-value">1.0</b></span>
+                </span>
+                <button class="upgrade-btn" data-attr="attackSpeed">
+                  +0.1 <span class="cost">30💰</span>
+                </button>
+              </div>
+              <div class="upgrade-item" data-attr="crit">
+                <span class="shop-icon battle-icon aim">◎</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">暴击率</span>
+                  <span class="upgrade-cost">暴击率 <b id="crit-value">5%</b></span>
+                </span>
+                <button class="upgrade-btn" data-attr="crit">
+                  +1% <span class="cost">35💰</span>
+                </button>
+              </div>
+              <div class="upgrade-item" data-attr="multiShot">
+                <span class="shop-icon battle-icon multi">※</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">多重射击</span>
+                  <span class="upgrade-cost">多重射击 <b id="multiShot-value">1</b></span>
+                </span>
+                <button class="upgrade-btn" data-attr="multiShot">
+                  +1 <span class="cost">40💰</span>
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- 命运硬币首页 -->
+        <div class="scene-container" id="fate-scene">
+          <section class="fate-board-panel">
+            <div class="fate-scorebar">
+              <span id="fate-total-flips-display">0</span>
+              <span class="score-dollar">$</span>
+            </div>
+
+            <div class="fate-table-surface">
+              <div class="fate-table-ground" aria-hidden="true"></div>
+              <div
+                class="fate-coin-drop-layer"
+                id="fate-coin-drop-layer"
+              ></div>
+              <div class="fate-resource-strip">
+                <div class="fate-resource heads">
+                  <span class="resource-label">正面</span>
+                  <span class="resource-value" id="heads-display">0</span>
+                </div>
+                <div class="fate-resource tails">
+                  <span class="resource-label">反面</span>
+                  <span class="resource-value" id="tails-display">0</span>
+                </div>
+                <div class="fate-resource coins">
+                  <span class="resource-label">硬币</span>
+                  <span class="resource-value" id="fate-coins-display">1</span>
+                </div>
+                <div class="fate-resource total">
+                  <span class="resource-label">自动</span>
+                  <span class="resource-value" id="fate-auto-rate-display">0 / 秒</span>
+                </div>
+              </div>
+
+              <div class="fate-runner">
+                <div class="fate-result-feed" id="fate-result-feed"></div>
+              </div>
+            </div>
+
+            <div class="fate-bottom-dock">
+              <button class="skill-tree-btn" id="fate-skill-tree-btn" type="button">
+                技能树 <span id="fate-manual-power-display">1</span>
+              </button>
+            </div>
+          </section>
+
+          <aside class="fate-shop-panel">
+            <div class="fate-shop-tabs">
+              <button type="button" class="shop-tab active">🏪</button>
+              <button type="button" class="shop-tab">♣</button>
+              <button type="button" class="shop-tab">🪙</button>
+              <button type="button" class="shop-tab">📈</button>
+            </div>
+            <h2>道具</h2>
+            <div class="fate-shop-list">
+              <button class="fate-upgrade" id="fate-buy-assistant-btn" type="button">
+                <span class="shop-icon">👻</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">小助手</span>
+                  <span class="upgrade-cost" id="fate-buy-assistant-cost">25 反面</span>
+                </span>
+                <span class="upgrade-effect">助手 <b id="fate-assistants-display">0</b></span>
+              </button>
+              <button class="fate-upgrade" id="fate-buy-gold-btn" type="button">
+                <span class="shop-icon coin-gold">$</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">金币</span>
+                  <span class="upgrade-cost" id="fate-buy-gold-cost">5 正面</span>
+                </span>
+                <span class="upgrade-effect" id="fate-gold-effect">桌面金币 +1</span>
+              </button>
+              <button class="fate-upgrade" id="fate-train-hero-btn" type="button">
+                <span class="shop-icon battle-icon">⚔</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">主角训练</span>
+                  <span class="upgrade-cost" id="fate-train-hero-cost">14 正面 + 6 反面</span>
+                </span>
+                <span class="upgrade-effect" id="fate-train-hero-effect">攻击 +5 / 生命 +10</span>
+              </button>
+              <button class="fate-upgrade" id="fate-train-pet-btn" type="button">
+                <span class="shop-icon battle-icon multi">※</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">宠物训练</span>
+                  <span class="upgrade-cost" id="fate-train-pet-cost">4 正面 + 16 反面</span>
+                </span>
+                <span class="upgrade-effect" id="fate-train-pet-effect">装备宠物 1 只</span>
+              </button>
+              <button class="fate-upgrade" id="fate-buy-coin-btn" type="button">
+                <span class="shop-icon coin-copper">正</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">铜币</span>
+                  <span class="upgrade-cost" id="fate-buy-coin-cost">10 正面 + 10 反面</span>
+                </span>
+                <span class="upgrade-effect">硬币 +1</span>
+              </button>
+              <button class="fate-upgrade" id="fate-upgrade-manual-btn" type="button">
+                <span class="shop-icon coin-silver">正</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">银色点击</span>
+                  <span class="upgrade-cost" id="fate-upgrade-manual-cost">20 正面</span>
+                </span>
+                <span class="upgrade-effect">点击强化</span>
+              </button>
+              <button class="fate-upgrade" id="fate-upgrade-speed-btn" type="button">
+                <span class="shop-icon coin-gold">反</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">金色引擎</span>
+                  <span class="upgrade-cost" id="fate-upgrade-speed-cost">40 反面</span>
+                </span>
+                <span class="upgrade-effect"><b id="fate-auto-interval-display">3.0 秒</b></span>
+              </button>
+            </div>
+          </aside>
         </div>
 
         <!-- 领地场景 -->
         <div class="scene-container" id="territory-scene" style="display: none">
-          <div class="territory-header">
-            <h2>🏰 领地</h2>
-            <div class="territory-resources">
-              <div class="resource-item">
-                <span class="resource-icon">💰</span>
-                <span class="resource-value" id="territory-gold">0</span>
+          <section class="territory-board-panel">
+            <div class="territory-scorebar">
+              <span>TERRITORY</span>
+              <span class="score-dollar">MAP</span>
+            </div>
+
+            <div class="territory-map-surface">
+              <div class="territory-content">
+                <div class="territory-grid" id="territory-grid">
+                  <!-- 地块将动态生成 -->
+                </div>
               </div>
-              <div class="resource-item">
-                <span class="resource-icon">💎</span>
-                <span class="resource-value" id="territory-crystal">0</span>
+            </div>
+          </section>
+
+          <aside class="territory-shop-panel">
+            <div class="territory-shop-tabs">
+              <button type="button" class="shop-tab active">▦</button>
+              <button type="button" class="shop-tab">⌂</button>
+              <button type="button" class="shop-tab">◆</button>
+              <button type="button" class="shop-tab">↗</button>
+            </div>
+            <h2>领地</h2>
+
+            <div class="territory-panel-list">
+              <div class="territory-panel-card territory-loop-card">
+                <span class="shop-icon coin-gold">↻</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">循环阶段</span>
+                  <span class="upgrade-cost" id="territory-loop-detail">脉冲 0 / 8</span>
+                  <span class="territory-loop-track" aria-hidden="true">
+                    <span id="territory-loop-fill"></span>
+                  </span>
+                </span>
+                <span class="upgrade-effect" id="territory-loop-stage">1</span>
               </div>
-              <button class="expand-btn" id="expand-territory-btn">
-                🏗️ 扩张 <span id="expansion-progress">6/12</span>
+              <div class="territory-unlock-list" id="territory-unlock-list" aria-label="建筑开放状态"></div>
+              <div class="territory-panel-card territory-next-card">
+                <span class="shop-icon coin-silver">⌂</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">下个建筑</span>
+                  <span class="upgrade-cost" id="territory-next-requirement">继续推进循环</span>
+                </span>
+                <span class="upgrade-effect" id="territory-next-building">训练场</span>
+              </div>
+              <div class="territory-panel-card">
+                <span class="shop-icon coin-copper">⏱</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">产出节奏</span>
+                  <span class="upgrade-cost">在线每分钟</span>
+                </span>
+                <span class="upgrade-effect" id="territory-production-rate">0</span>
+              </div>
+              <div class="territory-panel-card">
+                <span class="shop-icon coin-copper">💰</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">金币库存</span>
+                  <span class="upgrade-cost">当前金币</span>
+                </span>
+                <span class="upgrade-effect" id="territory-gold">0</span>
+              </div>
+              <div class="territory-panel-card">
+                <span class="shop-icon coin-silver">💎</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">水晶库存</span>
+                  <span class="upgrade-cost">当前水晶</span>
+                </span>
+                <span class="upgrade-effect" id="territory-crystal">0</span>
+              </div>
+              <div class="territory-panel-card territory-progress-card">
+                <span class="shop-icon coin-gold">▦</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">已解锁地块</span>
+                  <span class="upgrade-cost">已解锁地块</span>
+                </span>
+                <span class="upgrade-effect" id="territory-slot-count">6/12</span>
+              </div>
+              <button class="territory-panel-card expand-btn" id="expand-territory-btn" type="button">
+                <span class="shop-icon coin-gold">↗</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">扩张</span>
+                  <span class="upgrade-cost">扩张领地</span>
+                </span>
+                <span class="upgrade-effect" id="expansion-progress">6/12</span>
               </button>
             </div>
-          </div>
-          <div class="territory-content">
-            <div class="territory-grid" id="territory-grid">
-              <!-- 地块将动态生成 -->
-            </div>
-          </div>
+          </aside>
         </div>
 
-        <!-- 游戏UI覆盖层 -->
-        <div class="game-ui-overlay">
-          <div class="power-display">
-            <span class="label">战力</span>
-            <span class="value" id="power-display">0</span>
+        <!-- 游戏内功能按钮 -->
+        <div class="game-hud-controls" aria-label="游戏功能">
+          <div class="hud-action-cluster" aria-label="系统操作">
+            <button class="hud-pixel-btn" id="game-player-btn" type="button" aria-label="玩家信息" title="玩家信息">
+              <img class="hud-avatar-icon" src="images/player/table_hero.png?v=anime-gunner-20260702a" alt="" aria-hidden="true">
+              <span class="hud-player-level player-level">Lv.1</span>
+            </button>
+            <button class="hud-pixel-btn" id="game-settings-btn" type="button" aria-label="设置" title="设置">
+              <span class="hud-btn-icon">⚙</span>
+            </button>
+          </div>
+
+          <div class="hud-scene-cluster" aria-label="场景切换">
+            <button class="hud-scene-btn nav-btn active" data-tab="fate" type="button" aria-label="命运">
+              <span class="scene-icon">◎</span>
+              <span class="scene-label">命运</span>
+            </button>
+            <button class="hud-scene-btn nav-btn" data-tab="dungeon" type="button" aria-label="战斗">
+              <span class="scene-icon">⚔</span>
+              <span class="scene-label">战斗</span>
+            </button>
+            <button class="hud-scene-btn nav-btn" data-tab="territory" type="button" aria-label="领地">
+              <span class="scene-icon">▦</span>
+              <span class="scene-label">领地</span>
+            </button>
+            <button class="hud-scene-btn nav-btn" data-tab="pet" type="button" aria-label="宠物">
+              <span class="scene-icon">🐾</span>
+              <span class="scene-label">宠物</span>
+            </button>
+            <button class="hud-scene-btn nav-btn" data-tab="achievement" type="button" aria-label="成就">
+              <span class="scene-icon">★</span>
+              <span class="scene-label">成就</span>
+            </button>
           </div>
         </div>
       </main>
-
-      <!-- 升级面板 -->
-      <section class="upgrade-panel" id="upgrade-panel">
-        <h3>属性升级</h3>
-        <div class="upgrade-list">
-          <div class="upgrade-item" data-attr="attack">
-            <span class="name">⚔️ 攻击力</span>
-            <span class="value" id="attack-value">20</span>
-            <button class="upgrade-btn" data-attr="attack">
-              +5 <span class="cost">10💰</span>
-            </button>
-          </div>
-          <div class="upgrade-item" data-attr="maxHp">
-            <span class="name">❤️ 生命值</span>
-            <span class="value" id="maxHp-value">100</span>
-            <button class="upgrade-btn" data-attr="maxHp">
-              +20 <span class="cost">15💰</span>
-            </button>
-          </div>
-          <div class="upgrade-item" data-attr="hpRegen">
-            <span class="name">💚 生命恢复</span>
-            <span class="value" id="hpRegen-value">1</span>
-            <button class="upgrade-btn" data-attr="hpRegen">
-              +1 <span class="cost">20💰</span>
-            </button>
-          </div>
-          <div class="upgrade-item" data-attr="critDamage">
-            <span class="name">💥 暴击伤害</span>
-            <span class="value" id="critDamage-value">150%</span>
-            <button class="upgrade-btn" data-attr="critDamage">
-              +10% <span class="cost">25💰</span>
-            </button>
-          </div>
-          <div class="upgrade-item" data-attr="attackSpeed">
-            <span class="name">⚡ 攻击速度</span>
-            <span class="value" id="attackSpeed-value">1.0</span>
-            <button class="upgrade-btn" data-attr="attackSpeed">
-              +0.1 <span class="cost">30💰</span>
-            </button>
-          </div>
-          <div class="upgrade-item" data-attr="crit">
-            <span class="name">🎯 暴击率</span>
-            <span class="value" id="crit-value">5%</span>
-            <button class="upgrade-btn" data-attr="crit">
-              +1% <span class="cost">35💰</span>
-            </button>
-          </div>
-          <div class="upgrade-item" data-attr="multiShot">
-            <span class="name">🌀 多重射击</span>
-            <span class="value" id="multiShot-value">1</span>
-            <button class="upgrade-btn" data-attr="multiShot">
-              +1 <span class="cost">40💰</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- 底部导航栏 -->
-      <nav class="bottom-nav">
-        <button class="nav-btn" data-tab="character">
-          <span class="icon">👤</span>
-          <span class="label">角色</span>
-        </button>
-        <button class="nav-btn" data-tab="pet">
-          <span class="icon">🐾</span>
-          <span class="label">宠物</span>
-        </button>
-        <button class="nav-btn active" data-tab="dungeon">
-          <span class="icon">⚔️</span>
-          <span class="label">副本</span>
-        </button>
-        <button class="nav-btn" data-tab="territory">
-          <span class="icon">🏰</span>
-          <span class="label">领地</span>
-        </button>
-        <button class="nav-btn" data-tab="achievement">
-          <span class="icon">🏆</span>
-          <span class="label">成就</span>
-        </button>
-      </nav>
 
       <!-- 弹窗容器 -->
       <div class="modal-container" id="modal-container"></div>
@@ -159,88 +378,190 @@
         <div class="player-modal">
           <button class="modal-close" id="player-modal-close">✕</button>
           <div class="modal-header">
-            <div class="modal-avatar">👤</div>
-            <h2>玩家信息</h2>
+            <div class="modal-avatar">
+              <img src="images/player/table_hero.png?v=anime-gunner-20260702a" alt="" aria-hidden="true">
+            </div>
+            <h2>主角升级</h2>
           </div>
           <div class="modal-content">
-            <div class="info-row">
-              <span class="info-label">昵称</span>
-              <span class="info-value" id="modal-nickname">勇者</span>
+            <div class="player-upgrade-list" id="player-upgrade-list">
+              <div class="player-upgrade-card">
+                <span class="shop-icon battle-icon">⚔</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">攻击</span>
+                  <span class="upgrade-cost">当前 <b data-player-value="attack">20</b></span>
+                </span>
+                <button class="upgrade-btn player-upgrade-btn" data-attr="attack">
+                  +5 <span class="cost">10💰</span>
+                </button>
+              </div>
+              <div class="player-upgrade-card">
+                <span class="shop-icon battle-icon heart">♥</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">生命上限</span>
+                  <span class="upgrade-cost">当前 <b data-player-value="maxHp">100</b></span>
+                </span>
+                <button class="upgrade-btn player-upgrade-btn" data-attr="maxHp">
+                  +20 <span class="cost">15💰</span>
+                </button>
+              </div>
+              <div class="player-upgrade-card">
+                <span class="shop-icon battle-icon regen">✚</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">生命恢复</span>
+                  <span class="upgrade-cost">当前 <b data-player-value="hpRegen">1</b></span>
+                </span>
+                <button class="upgrade-btn player-upgrade-btn" data-attr="hpRegen">
+                  +1 <span class="cost">20💰</span>
+                </button>
+              </div>
+              <div class="player-upgrade-card">
+                <span class="shop-icon battle-icon crit">✦</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">暴击伤害</span>
+                  <span class="upgrade-cost">当前 <b data-player-value="critDamage">150%</b></span>
+                </span>
+                <button class="upgrade-btn player-upgrade-btn" data-attr="critDamage">
+                  +10% <span class="cost">25💰</span>
+                </button>
+              </div>
+              <div class="player-upgrade-card">
+                <span class="shop-icon battle-icon speed">↟</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">攻击速度</span>
+                  <span class="upgrade-cost">当前 <b data-player-value="attackSpeed">1.0</b></span>
+                </span>
+                <button class="upgrade-btn player-upgrade-btn" data-attr="attackSpeed">
+                  +0.1 <span class="cost">30💰</span>
+                </button>
+              </div>
+              <div class="player-upgrade-card">
+                <span class="shop-icon battle-icon aim">◎</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">暴击率</span>
+                  <span class="upgrade-cost">当前 <b data-player-value="crit">5%</b></span>
+                </span>
+                <button class="upgrade-btn player-upgrade-btn" data-attr="crit">
+                  +1% <span class="cost">35💰</span>
+                </button>
+              </div>
+              <div class="player-upgrade-card">
+                <span class="shop-icon battle-icon multi">※</span>
+                <span class="upgrade-main">
+                  <span class="upgrade-name">多重射击</span>
+                  <span class="upgrade-cost">当前 <b data-player-value="multiShot">1</b></span>
+                </span>
+                <button class="upgrade-btn player-upgrade-btn" data-attr="multiShot">
+                  +1 <span class="cost">40💰</span>
+                </button>
+              </div>
             </div>
-            <div class="info-row">
-              <span class="info-label">等级</span>
-              <span class="info-value" id="modal-level">Lv.1</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">战力</span>
-              <span class="info-value" id="modal-power">0</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">金币</span>
-              <span class="info-value" id="modal-coins">1,000</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">钻石</span>
-              <span class="info-value" id="modal-crystals">100</span>
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button class="modal-btn settings-btn" id="settings-btn">
-              <span class="btn-icon">⚙️</span>
-              <span>设置</span>
-            </button>
-            <button class="modal-btn save-btn" id="save-game-btn">
-              <span class="btn-icon">💾</span>
-              <span>存档</span>
-            </button>
           </div>
         </div>
       </div>
 
       <!-- 设置弹窗 -->
       <div class="settings-modal-overlay" id="settings-modal-overlay">
-        <div class="settings-modal">
+        <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
           <button class="modal-close" id="settings-modal-close">✕</button>
-          <div class="modal-header">
-            <span class="modal-icon">⚙️</span>
-            <h2>设置</h2>
-          </div>
-          <div class="settings-content">
-            <div class="settings-section">
-              <h3>📐 画质设置</h3>
-              <div class="resolution-options">
-                <label class="resolution-option">
-                  <input type="radio" name="resolution" value="auto" checked />
-                  <span class="option-label">自动适配</span>
-                  <span class="option-desc">推荐</span>
-                </label>
-                <label class="resolution-option">
-                  <input type="radio" name="resolution" value="540" />
-                  <span class="option-label">HD</span>
-                  <span class="option-desc">540×960</span>
-                </label>
-                <label class="resolution-option">
-                  <input type="radio" name="resolution" value="720" />
-                  <span class="option-label">HD+</span>
-                  <span class="option-desc">720×1280</span>
-                </label>
-                <label class="resolution-option">
-                  <input type="radio" name="resolution" value="1080" />
-                  <span class="option-label">FHD</span>
-                  <span class="option-desc">1080×1920</span>
-                </label>
-                <label class="resolution-option">
-                  <input type="radio" name="resolution" value="1080x2340" />
-                  <span class="option-label">FHD+</span>
-                  <span class="option-desc">1080×2340</span>
-                </label>
-                <label class="resolution-option">
-                  <input type="radio" name="resolution" value="1440" />
-                  <span class="option-label">QHD+</span>
-                  <span class="option-desc">1440×3200</span>
-                </label>
+          <div class="modal-header settings-modal-header">
+            <div class="settings-modal-title">
+              <span class="modal-icon">⚙</span>
+              <div>
+                <h2 id="settings-modal-title">设置</h2>
+                <span class="settings-modal-subtitle">系统控制台</span>
               </div>
             </div>
+            <div class="settings-header-status" aria-live="polite">
+              <span>当前场景</span>
+              <strong id="settings-scene-label">命运</strong>
+            </div>
+          </div>
+          <div class="settings-content">
+            <section class="settings-section settings-screen-section">
+              <div class="settings-section-title">
+                <span class="settings-section-icon">▣</span>
+                <div>
+                  <h3>屏幕</h3>
+                  <span>显示模式</span>
+                </div>
+              </div>
+              <div class="resolution-options settings-choice-list">
+                <label class="resolution-option settings-choice">
+                  <input type="radio" name="resolution" value="pc" checked />
+                  <span class="settings-choice-indicator" aria-hidden="true"></span>
+                  <span class="settings-choice-copy">
+                    <span class="option-label">PC 自适应</span>
+                    <span class="option-desc">16:9 游戏舞台</span>
+                  </span>
+                  <span class="settings-choice-badge">启用</span>
+                </label>
+              </div>
+              <div class="settings-metrics">
+                <div class="settings-metric">
+                  <span>比例</span>
+                  <strong>16:9</strong>
+                </div>
+                <div class="settings-metric">
+                  <span>缩放</span>
+                  <strong>自动</strong>
+                </div>
+                <div class="settings-metric">
+                  <span>布局</span>
+                  <strong>桌面</strong>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-section settings-save-section">
+              <div class="settings-section-title">
+                <span class="settings-section-icon">◆</span>
+                <div>
+                  <h3>存档</h3>
+                  <span>槽位 1</span>
+                </div>
+              </div>
+              <div class="settings-save-card">
+                <div>
+                  <span class="settings-save-label">最近保存</span>
+                  <strong id="settings-save-time">未保存</strong>
+                </div>
+                <div class="settings-save-meta">
+                  <span>等级 <b id="settings-save-level">Lv.1</b></span>
+                  <span>版本 <b id="settings-save-version">-</b></span>
+                </div>
+              </div>
+              <div class="settings-storage-actions">
+                <button class="settings-tool-btn save" id="settings-quick-save-btn" type="button">
+                  <span class="btn-icon">✓</span>
+                  <span>保存进度</span>
+                </button>
+                <button class="settings-tool-btn load" id="settings-quick-load-btn" type="button">
+                  <span class="btn-icon">↻</span>
+                  <span>读取进度</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="settings-section settings-system-section">
+              <div class="settings-section-title">
+                <span class="settings-section-icon">⌁</span>
+                <div>
+                  <h3>系统</h3>
+                  <span>运行状态</span>
+                </div>
+              </div>
+              <div class="settings-status-grid">
+                <div class="settings-status-item">
+                  <span>设置存储</span>
+                  <strong>本地</strong>
+                </div>
+                <div class="settings-status-item">
+                  <span>资源加载</span>
+                  <strong>模块</strong>
+                </div>
+              </div>
+            </section>
           </div>
           <div class="settings-actions">
             <button class="settings-save-btn" id="settings-save-btn">
@@ -255,7 +576,36 @@
       <div class="toast-container" id="toast-container"></div>
     </div>
 
-    <!-- 模块脚本 -->
-    <script type="module" src="js/main.js"></script>
-  </body>
+    <!-- 模块脚本启动器：ES Module 需要通过 http(s) 访问，file:// 会被浏览器 CORS 策略拦截。 -->
+    <script>
+      (function () {
+        var localUrl = "http://localhost:4174/index.html";
+        var moduleSrc = "js/main.js?v=file-protocol-guard-20260703a";
+
+        if (window.location.protocol === "file:") {
+          document.documentElement.classList.add("file-protocol");
+          document.addEventListener("DOMContentLoaded", function () {
+            var notice = document.createElement("div");
+            notice.className = "file-protocol-notice";
+            notice.innerHTML =
+              '<div class="file-protocol-panel" role="dialog" aria-modal="true" aria-labelledby="file-protocol-title">' +
+              '<h1 id="file-protocol-title">需要通过本地服务打开</h1>' +
+              "<p>当前是 file:// 打开方式，浏览器会拦截 ES Module，游戏脚本无法加载。</p>" +
+              '<code>python3 -m http.server 4174 --directory .</code>' +
+              '<a class="file-protocol-link" href="' +
+              localUrl +
+              '">打开 localhost:4174</a>' +
+              "</div>";
+            document.body.appendChild(notice);
+          });
+          return;
+        }
+
+        var script = document.createElement("script");
+        script.type = "module";
+        script.src = moduleSrc;
+        document.body.appendChild(script);
+      })();
+    </script>
+</body>
 </html>

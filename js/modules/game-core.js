@@ -131,16 +131,17 @@ export class GameCore {
   gameLoop(currentTime) {
     if (!this.isRunning) return;
 
-    // 计算 deltaTime
-    this.deltaTime = currentTime - this.lastTime;
-    this.lastTime = currentTime;
-
     // 帧率限制
     const targetFrameTime = 1000 / this.config.targetFps;
-    if (this.deltaTime < targetFrameTime) {
+    const elapsed = currentTime - this.lastTime;
+    if (elapsed < targetFrameTime) {
       requestAnimationFrame((time) => this.gameLoop(time));
       return;
     }
+
+    // 计算 deltaTime
+    this.deltaTime = elapsed;
+    this.lastTime = currentTime;
 
     // 更新逻辑
     this.update(this.deltaTime);
@@ -161,8 +162,26 @@ export class GameCore {
       this.systems.player.update(deltaTime);
     }
 
-    if (this.systems.combat) {
+    if (this.systems.fate) {
+      this.systems.fate.update(deltaTime);
+    }
+
+    if (this.systems.combat && !this.systems.combat.isPaused) {
       this.systems.combat.update(deltaTime);
+    }
+
+    if (
+      this.systems.pet &&
+      this.systems.player &&
+      this.systems.combat &&
+      !this.systems.combat.isPaused
+    ) {
+      const player = this.systems.player.player;
+      this.systems.pet.update(
+        deltaTime,
+        player.x + player.width / 2,
+        player.y + player.height / 2
+      );
     }
 
     // 更新云朵
@@ -207,21 +226,32 @@ export class GameCore {
     // 绘制玩家
     if (this.systems.player) {
       this.systems.player.render(ctx);
-
-      // 绘制宠物（围绕玩家）
-      if (this.systems.pet) {
-        const player = this.systems.player.player;
-        this.systems.pet.render(
-          ctx,
-          player.x + player.width / 2,
-          player.y + player.height / 2
-        );
-      }
     }
 
     // 绘制战斗元素
     if (this.systems.combat) {
-      this.systems.combat.render(ctx);
+      if (typeof this.systems.combat.renderWorld === "function") {
+        this.systems.combat.renderWorld(ctx);
+      } else {
+        this.systems.combat.render(ctx);
+      }
+    }
+
+    // 绘制宠物在战斗层上方，冲刺攻击时不被怪物遮住。
+    if (this.systems.pet && this.systems.player) {
+      const player = this.systems.player.player;
+      this.systems.pet.render(
+        ctx,
+        player.x + player.width / 2,
+        player.y + player.height / 2
+      );
+    }
+
+    if (
+      this.systems.combat &&
+      typeof this.systems.combat.renderFloatingTexts === "function"
+    ) {
+      this.systems.combat.renderFloatingTexts(ctx);
     }
   }
 
@@ -230,119 +260,61 @@ export class GameCore {
    */
   renderBackground(ctx) {
     const { width, height } = this.config;
-    const time = Date.now() * 0.001;
 
-    // 夜空渐变
-    const skyGradient = ctx.createLinearGradient(0, 0, 0, height * 0.65);
-    skyGradient.addColorStop(0, "#0a0e17");
-    skyGradient.addColorStop(0.4, "#1a2540");
-    skyGradient.addColorStop(0.8, "#2a3f5f");
-    skyGradient.addColorStop(1, "#3d5a80");
-    ctx.fillStyle = skyGradient;
+    ctx.fillStyle = "#24292f";
     ctx.fillRect(0, 0, width, height);
 
-    // 星星
-    this.drawStars(ctx, width, height, time);
+    const tileSize = Math.max(48, Math.floor(width / 12));
+    ctx.fillStyle = "#2f3838";
+    for (let y = 0; y < height; y += tileSize) {
+      for (let x = 0; x < width; x += tileSize) {
+        if ((x / tileSize + y / tileSize) % 2 === 0) {
+          ctx.fillRect(x, y, tileSize, tileSize);
+        }
+      }
+    }
 
-    // 月亮
-    this.drawMoon(ctx, width * 0.8, 50, 25);
+    ctx.strokeStyle = "rgba(244, 165, 69, 0.2)";
+    ctx.lineWidth = 2;
+    for (let x = 0; x <= width; x += tileSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= height; y += tileSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
 
-    // 远山层1 (最远)
-    ctx.fillStyle = "#1a2540";
+    const laneY = height * 0.64;
+    const laneHeight = Math.max(92, height * 0.28);
+    ctx.fillStyle = "rgba(97, 58, 42, 0.72)";
+    ctx.fillRect(0, laneY, width, laneHeight);
+
+    ctx.strokeStyle = "rgba(255, 209, 103, 0.55)";
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(0, height * 0.45);
-    ctx.bezierCurveTo(80, height * 0.35, 120, height * 0.4, 180, height * 0.38);
-    ctx.bezierCurveTo(
-      240,
-      height * 0.35,
-      300,
-      height * 0.3,
-      350,
-      height * 0.35
-    );
-    ctx.lineTo(width, height * 0.4);
-    ctx.lineTo(width, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fill();
-
-    // 远山层2 (中等)
-    ctx.fillStyle = "#243352";
-    ctx.beginPath();
-    ctx.moveTo(0, height * 0.5);
-    ctx.bezierCurveTo(
-      50,
-      height * 0.42,
-      100,
-      height * 0.48,
-      150,
-      height * 0.44
-    );
-    ctx.bezierCurveTo(
-      200,
-      height * 0.4,
-      280,
-      height * 0.45,
-      320,
-      height * 0.42
-    );
-    ctx.lineTo(width, height * 0.48);
-    ctx.lineTo(width, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fill();
-
-    // 近山层 (最近)
-    const hillGradient = ctx.createLinearGradient(0, height * 0.55, 0, height);
-    hillGradient.addColorStop(0, "#2d4a3e");
-    hillGradient.addColorStop(0.5, "#1a3d2e");
-    hillGradient.addColorStop(1, "#0d2818");
-    ctx.fillStyle = hillGradient;
-    ctx.beginPath();
-    ctx.moveTo(0, height * 0.58);
-    ctx.bezierCurveTo(
-      60,
-      height * 0.52,
-      100,
-      height * 0.56,
-      160,
-      height * 0.54
-    );
-    ctx.bezierCurveTo(
-      220,
-      height * 0.52,
-      300,
-      height * 0.58,
-      360,
-      height * 0.55
-    );
-    ctx.lineTo(width, height * 0.6);
-    ctx.lineTo(width, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fill();
-
-    // 草地
-    const grassGradient = ctx.createLinearGradient(0, height * 0.7, 0, height);
-    grassGradient.addColorStop(0, "#1a4d2e");
-    grassGradient.addColorStop(0.5, "#0d3d1f");
-    grassGradient.addColorStop(1, "#082810");
-    ctx.fillStyle = grassGradient;
-    ctx.fillRect(0, height * 0.7, width, height * 0.3);
-
-    // 地面装饰线
-    ctx.strokeStyle = "rgba(77, 171, 247, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, height * 0.7);
-    ctx.lineTo(width, height * 0.7);
+    ctx.moveTo(0, laneY);
+    ctx.lineTo(width, laneY);
+    ctx.moveTo(0, laneY + laneHeight);
+    ctx.lineTo(width, laneY + laneHeight);
     ctx.stroke();
 
-    // 云朵 (半透明)
-    ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
-    this.clouds.forEach((cloud) => {
-      this.drawCloud(ctx, cloud.x, cloud.y, cloud.size);
-    });
+    const glow = ctx.createRadialGradient(
+      width * 0.22,
+      height * 0.55,
+      0,
+      width * 0.22,
+      height * 0.55,
+      width * 0.5
+    );
+    glow.addColorStop(0, "rgba(255, 209, 103, 0.16)");
+    glow.addColorStop(1, "rgba(255, 209, 103, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, width, height);
   }
 
   /**
@@ -469,7 +441,9 @@ export class GameCore {
         if (this.systems.player) {
           const player = this.systems.player.player;
           // 玩家位置保持在合理范围内
-          player.x = Math.max(20, Math.min(player.x, width * 0.15));
+          const minPlayerX = Math.min(Math.max(width * 0.13, 140), width * 0.24);
+          const maxPlayerX = Math.max(minPlayerX, width * 0.3);
+          player.x = Math.max(minPlayerX, Math.min(player.x, maxPlayerX));
           player.y = Math.max(height * 0.55, Math.min(player.y, height * 0.75 - player.height));
         }
 

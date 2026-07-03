@@ -3,14 +3,17 @@
  * 管理玩家属性、升级和战力计算
  */
 
+import { MovementSystem } from "./movement-system.js?v=movement-20260702a";
+
 let instance = null;
+const PLAYER_ASSET_VERSION = 'anime-gunner-20260702a';
 
 export class PlayerSystem {
     constructor() {
         // 玩家数据
         this.player = {
             // 位置
-            x: 60,
+            x: 160,
             y: 300,
             width: 40,
             height: 40,
@@ -63,15 +66,68 @@ export class PlayerSystem {
         
         // 系统引用
         this.resourceSystem = null;
+        this.combatSystem = null;
+        this.movementSystem = new MovementSystem();
+        this.movementConfig = {
+            homeRatioX: 0.24,
+            homeRatioY: 0.64,
+            engageOffsetX: 145,
+            maxEngageRatioX: 0.42,
+            moveSpeed: 135,
+            attackSpeedBonus: 16
+        };
+        this.combatState = 'idle';
+
+        // 角色贴图
+        this.playerImage = new Image();
+        this.playerImageLoaded = false;
+        this.playerImage.onload = () => {
+            this.playerImageLoaded = true;
+        };
+        this.playerImage.onerror = () => {
+            console.warn('[PlayerSystem] 角色图片加载失败: images/player/table_hero.png');
+        };
+        this.playerImage.src = `images/player/table_hero.png?v=${PLAYER_ASSET_VERSION}`;
+
+        this.spriteFrameSize = 512;
+        this.playerSprites = {
+            idle: this.loadSpriteSheet('images/sprites/battle/hero/hero_idle_sheet.png', 4, 190),
+            move: this.loadSpriteSheet('images/sprites/battle/hero/hero_move_sheet.png', 4, 115),
+            attack: this.loadSpriteSheet('images/sprites/battle/hero/hero_attack_sheet.png', 4, 75)
+        };
+        this.attackAnimationTimer = 0;
+        this.attackAnimationDuration = 300;
         
         // 动画
         this.animationFrame = 0;
         this.animationTimer = 0;
+        this.animationTime = 0;
         
         // 生命恢复计时器
         this.regenTimer = 0;
         
         console.log('[PlayerSystem] 初始化完成');
+    }
+
+    loadSpriteSheet(src, frameCount, frameDuration) {
+        const image = new Image();
+        const sprite = {
+            image,
+            src,
+            frameCount,
+            frameDuration,
+            loaded: false
+        };
+
+        image.onload = () => {
+            sprite.loaded = true;
+        };
+        image.onerror = () => {
+            console.warn(`[PlayerSystem] 序列帧加载失败: ${src}`);
+        };
+        image.src = `${src}?v=${PLAYER_ASSET_VERSION}`;
+
+        return sprite;
     }
     
     /**
@@ -79,6 +135,10 @@ export class PlayerSystem {
      */
     setResourceSystem(resourceSystem) {
         this.resourceSystem = resourceSystem;
+    }
+
+    setCombatSystem(combatSystem) {
+        this.combatSystem = combatSystem;
     }
     
     /**
@@ -121,6 +181,26 @@ export class PlayerSystem {
         
         return { success: true, message: `${attr} +${increment}` };
     }
+
+    applyFateTraining() {
+        const attackGain = 5;
+        const maxHpGain = 10;
+
+        this.player.attack += attackGain;
+        this.player.maxHp += maxHpGain;
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + maxHpGain);
+
+        this.updateDisplay();
+
+        return {
+            success: true,
+            message: `主角训练: 攻击 +${attackGain}, 生命 +${maxHpGain}`,
+            gains: {
+                attack: attackGain,
+                maxHp: maxHpGain
+            }
+        };
+    }
     
     /**
      * 计算总战力
@@ -154,13 +234,118 @@ export class PlayerSystem {
                 );
             }
         }
+
+        this.updateBattleMovement(deltaTime);
         
         // 动画帧更新
+        this.animationTime += deltaTime;
         this.animationTimer += deltaTime;
         if (this.animationTimer >= 200) {
             this.animationTimer = 0;
             this.animationFrame = (this.animationFrame + 1) % 4;
         }
+
+        if (this.attackAnimationTimer > 0) {
+            this.attackAnimationTimer = Math.max(0, this.attackAnimationTimer - deltaTime);
+        }
+    }
+
+    playAttackAnimation() {
+        this.attackAnimationTimer = this.attackAnimationDuration;
+        this.setCombatState('attack');
+    }
+
+    updateBattleMovement(deltaTime) {
+        if (!this.combatSystem || this.combatSystem.isPaused) {
+            this.setCombatState('idle');
+            return;
+        }
+
+        const origin = this.movementSystem.getCenter(this.player);
+        const target = typeof this.combatSystem.acquireTarget === 'function'
+            ? this.combatSystem.acquireTarget(origin, { strategy: 'ahead' })
+            : this.combatSystem.getNearestMonster?.(origin.x, origin.y);
+        const destination = target
+            ? this.getEngagePosition(target)
+            : this.getHomePosition();
+
+        const movement = this.movementSystem.moveToward(
+            this.player,
+            destination.x,
+            destination.y,
+            this.getMoveSpeed(),
+            deltaTime,
+            {
+                bounds: this.getBattleBounds(),
+                arriveDistance: 2,
+                maxDeltaTime: 50
+            }
+        );
+
+        this.setCombatState(movement.moved ? 'move' : 'idle');
+    }
+
+    getHomePosition() {
+        const width = this.combatSystem?.mapWidth || 400;
+        const height = this.combatSystem?.mapHeight || 400;
+
+        return {
+            x: width * this.movementConfig.homeRatioX - this.player.width / 2,
+            y: height * this.movementConfig.homeRatioY - this.player.height / 2
+        };
+    }
+
+    getEngagePosition(target) {
+        const width = this.combatSystem?.mapWidth || 400;
+        const height = this.combatSystem?.mapHeight || 400;
+        const targetCenterY = target.y + target.height / 2;
+        const maxX = width * this.movementConfig.maxEngageRatioX;
+
+        return {
+            x: Math.max(24, Math.min(maxX, target.x - this.movementConfig.engageOffsetX)),
+            y: Math.max(70, Math.min(height - this.player.height - 24, targetCenterY - this.player.height / 2))
+        };
+    }
+
+    getBattleBounds() {
+        const width = this.combatSystem?.mapWidth || 400;
+        const height = this.combatSystem?.mapHeight || 400;
+
+        return {
+            minX: 16,
+            minY: 48,
+            maxX: width - 16,
+            maxY: height - 16
+        };
+    }
+
+    getMoveSpeed() {
+        return this.movementConfig.moveSpeed + this.player.attackSpeed * this.movementConfig.attackSpeedBonus;
+    }
+
+    setCombatState(state) {
+        if (this.combatState === state) return;
+        this.combatState = state;
+    }
+
+    getAnimationState() {
+        if (this.attackAnimationTimer > 0) {
+            return 'attack';
+        }
+
+        return this.combatState === 'move' ? 'move' : 'idle';
+    }
+
+    getGunMuzzlePosition() {
+        const { x, y, width, height } = this.player;
+        const spriteSize = Math.max(width, height) * 2.1;
+        const spriteX = x + width / 2 - spriteSize / 2;
+        const spriteY = y + height / 2 - spriteSize / 2 - height * 0.18;
+
+        return {
+            x: spriteX + spriteSize * 0.825,
+            y: spriteY + spriteSize * 0.35
+        };
     }
     
     /**
@@ -169,25 +354,51 @@ export class PlayerSystem {
     render(ctx) {
         const { x, y, width, height, hp, maxHp } = this.player;
         
-        // 绘制角色（简单的圆形）
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(x + width / 2, y + height / 2, width / 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // 绘制眼睛
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(x + width * 0.35, y + height * 0.4, 3, 0, Math.PI * 2);
-        ctx.arc(x + width * 0.65, y + height * 0.4, 3, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // 绘制嘴巴
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(x + width / 2, y + height * 0.5, 8, 0.2 * Math.PI, 0.8 * Math.PI);
-        ctx.stroke();
+        const imageReady = (
+            this.playerImageLoaded ||
+            (this.playerImage.complete && this.playerImage.naturalWidth > 0)
+        );
+
+        const animationState = this.getAnimationState();
+        const activeSprite = this.playerSprites[animationState] || this.playerSprites.idle;
+        const spriteReady = activeSprite && (
+            activeSprite.loaded ||
+            (activeSprite.image.complete && activeSprite.image.naturalWidth > 0)
+        );
+
+        if (spriteReady) {
+            let frameIndex = Math.floor(this.animationTime / activeSprite.frameDuration) % activeSprite.frameCount;
+            if (animationState === 'attack') {
+                const elapsed = this.attackAnimationDuration - this.attackAnimationTimer;
+                frameIndex = Math.min(
+                    activeSprite.frameCount - 1,
+                    Math.floor(elapsed / activeSprite.frameDuration)
+                );
+            }
+
+            this.renderSpriteFrame(ctx, activeSprite, frameIndex, x, y, width, height);
+        } else if (imageReady) {
+            const spriteSize = Math.max(width, height) * 2.1;
+            const spriteX = x + width / 2 - spriteSize / 2;
+            const spriteY = y + height / 2 - spriteSize / 2 - height * 0.18;
+
+            ctx.save();
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(this.playerImage, spriteX, spriteY, spriteSize, spriteSize);
+            ctx.restore();
+        } else {
+            // 图片未加载时保留简单占位，避免战斗空角色。
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(x + width / 2, y + height / 2, width / 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(x + width * 0.35, y + height * 0.4, 3, 0, Math.PI * 2);
+            ctx.arc(x + width * 0.65, y + height * 0.4, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
         
         // 绘制生命条
         const barWidth = 50;
@@ -209,6 +420,27 @@ export class PlayerSystem {
         ctx.lineWidth = 1;
         ctx.strokeRect(barX, barY, barWidth, barHeight);
     }
+
+    renderSpriteFrame(ctx, sprite, frameIndex, x, y, width, height) {
+        const spriteSize = Math.max(width, height) * 2.1;
+        const spriteX = x + width / 2 - spriteSize / 2;
+        const spriteY = y + height / 2 - spriteSize / 2 - height * 0.18;
+
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+            sprite.image,
+            frameIndex * (sprite.frameSize || this.spriteFrameSize),
+            0,
+            sprite.frameSize || this.spriteFrameSize,
+            sprite.frameSize || this.spriteFrameSize,
+            spriteX,
+            spriteY,
+            spriteSize,
+            spriteSize
+        );
+        ctx.restore();
+    }
     
     /**
      * 更新 UI 显示
@@ -218,22 +450,28 @@ export class PlayerSystem {
         const attrs = ['attack', 'maxHp', 'hpRegen', 'critDamage', 'attackSpeed', 'crit', 'multiShot'];
         
         attrs.forEach(attr => {
+            let value = this.player[attr];
+            let displayValue = value;
+            if (attr === 'critDamage' || attr === 'crit') {
+                displayValue = `${value}%`;
+            } else if (attr === 'attackSpeed') {
+                displayValue = value.toFixed(1);
+            }
+
             const valueEl = document.getElementById(`${attr}-value`);
             if (valueEl) {
-                let value = this.player[attr];
-                if (attr === 'critDamage' || attr === 'crit') {
-                    valueEl.textContent = `${value}%`;
-                } else if (attr === 'attackSpeed') {
-                    valueEl.textContent = value.toFixed(1);
-                } else {
-                    valueEl.textContent = value;
-                }
+                valueEl.textContent = displayValue;
             }
+
+            document.querySelectorAll(`[data-player-value="${attr}"]`).forEach(valueNode => {
+                valueNode.textContent = displayValue;
+            });
             
             // 更新按钮成本
-            const btn = document.querySelector(`.upgrade-btn[data-attr="${attr}"] .cost`);
-            if (btn && this.resourceSystem) {
-                btn.textContent = `${this.resourceSystem.formatNumber(this.upgradeCosts[attr])}💰`;
+            if (this.resourceSystem) {
+                document.querySelectorAll(`.upgrade-btn[data-attr="${attr}"] .cost`).forEach(costNode => {
+                    costNode.textContent = `${this.resourceSystem.formatNumber(this.upgradeCosts[attr])}💰`;
+                });
             }
         });
     }

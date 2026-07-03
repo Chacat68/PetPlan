@@ -3,7 +3,10 @@
  * 管理宠物收集、养成、编队和战斗
  */
 
+import { MovementSystem } from "./movement-system.js?v=movement-20260702a";
+
 let instance = null;
+const PET_ASSET_VERSION = 'pet-actions-20260702a';
 
 export class PetSystem {
     constructor() {
@@ -15,7 +18,8 @@ export class PetSystem {
                 emoji: '🔥',
                 type: 'fire',
                 rarity: 'common',
-                image: 'images/pets/fire_dog.png',
+                image: 'images/pets/fire_dog_table.png',
+                idleSheet: 'images/sprites/pets/fire_dog_idle_sheet.png',
                 requiredLevel: 1,
                 cost: { coins: 500, rubies: 0 },
                 baseStats: { attack: 15, hp: 80, defense: 5, attackSpeed: 1.0 },
@@ -27,7 +31,7 @@ export class PetSystem {
                 emoji: '❄️',
                 type: 'ice',
                 rarity: 'common',
-                image: 'images/pets/ice_cat.png',
+                image: 'images/pets/ice_cat_table.png',
                 requiredLevel: 1,
                 cost: { coins: 500, rubies: 0 },
                 baseStats: { attack: 12, hp: 70, defense: 8, attackSpeed: 1.2 },
@@ -39,7 +43,7 @@ export class PetSystem {
                 emoji: '⚡',
                 type: 'thunder',
                 rarity: 'uncommon',
-                image: 'images/pets/thunder_bird.png',
+                image: 'images/pets/thunder_bird_table.png',
                 requiredLevel: 5,
                 cost: { coins: 2000, rubies: 50 },
                 baseStats: { attack: 20, hp: 60, defense: 3, attackSpeed: 1.5 },
@@ -51,7 +55,7 @@ export class PetSystem {
                 emoji: '🌍',
                 type: 'earth',
                 rarity: 'uncommon',
-                image: 'images/pets/earth_bear.png',
+                image: 'images/pets/earth_bear_table.png',
                 requiredLevel: 8,
                 cost: { coins: 3000, rubies: 100 },
                 baseStats: { attack: 18, hp: 150, defense: 15, attackSpeed: 0.8 },
@@ -63,7 +67,7 @@ export class PetSystem {
                 emoji: '🌪️',
                 type: 'wind',
                 rarity: 'rare',
-                image: 'images/pets/storm_dragon.png',
+                image: 'images/pets/storm_dragon_table.png',
                 requiredLevel: 15,
                 cost: { coins: 10000, rubies: 300 },
                 baseStats: { attack: 35, hp: 120, defense: 10, attackSpeed: 1.3 },
@@ -75,7 +79,7 @@ export class PetSystem {
                 emoji: '✨',
                 type: 'light',
                 rarity: 'epic',
-                image: 'images/pets/unicorn.png',
+                image: 'images/pets/unicorn_table.png',
                 requiredLevel: 20,
                 cost: { coins: 20000, rubies: 500 },
                 baseStats: { attack: 25, hp: 100, defense: 12, attackSpeed: 1.0 },
@@ -87,7 +91,7 @@ export class PetSystem {
                 emoji: '🌑',
                 type: 'dark',
                 rarity: 'epic',
-                image: 'images/pets/shadow_wolf.png',
+                image: 'images/pets/shadow_wolf_table.png',
                 requiredLevel: 25,
                 cost: { coins: 25000, rubies: 600 },
                 baseStats: { attack: 45, hp: 90, defense: 8, attackSpeed: 1.4 },
@@ -99,7 +103,7 @@ export class PetSystem {
                 emoji: '🔥',
                 type: 'phoenix',
                 rarity: 'legendary',
-                image: 'images/pets/phoenix.png',
+                image: 'images/pets/phoenix_table.png',
                 requiredLevel: 30,
                 cost: { coins: 50000, rubies: 1000 },
                 baseStats: { attack: 50, hp: 200, defense: 15, attackSpeed: 1.2 },
@@ -124,10 +128,16 @@ export class PetSystem {
         
         // 宠物图片缓存
         this.petImages = {};
+        this.petAnimationSheets = {};
+        this.petBattleStates = new Map();
+        this.elapsedTime = 0;
+        this.movementSystem = new MovementSystem();
+        this.combatStates = ['idle', 'move', 'attack'];
         
         // 系统引用
         this.resourceSystem = null;
         this.playerSystem = null;
+        this.combatSystem = null;
         
         // 预加载图片
         this.preloadImages();
@@ -141,14 +151,42 @@ export class PetSystem {
     preloadImages() {
         this.petTemplates.forEach(pet => {
             const img = new Image();
-            img.src = pet.image;
             img.onload = () => {
                 this.petImages[pet.id] = img;
             };
             img.onerror = () => {
                 console.warn(`[PetSystem] 图片加载失败: ${pet.image}`);
             };
+            img.src = `${pet.image}?v=${PET_ASSET_VERSION}`;
+            if (img.complete && img.naturalWidth > 0) {
+                this.petImages[pet.id] = img;
+            }
+
+            this.petAnimationSheets[pet.id] = {};
+            this.combatStates.forEach(state => {
+                const spritePath = this.getPetSpritePath(pet, state);
+                const sheet = new Image();
+                sheet.onload = () => {
+                    this.petAnimationSheets[pet.id][state] = sheet;
+                };
+                sheet.onerror = () => {
+                    console.warn(`[PetSystem] 宠物 ${state} 序列帧加载失败: ${spritePath}`);
+                };
+                sheet.src = `${spritePath}?v=${PET_ASSET_VERSION}`;
+                if (sheet.complete && sheet.naturalWidth > 0) {
+                    this.petAnimationSheets[pet.id][state] = sheet;
+                }
+            });
         });
+    }
+
+    getPetSpritePath(pet, state) {
+        return `images/sprites/battle/pets/${this.getPetSpriteKey(pet)}_${state}_sheet.png`;
+    }
+
+    getPetSpriteKey(pet) {
+        const match = pet.image.match(/\/([^/]+)_table\.png$/);
+        return match ? match[1] : `pet_${pet.id}`;
     }
     
     /**
@@ -160,6 +198,10 @@ export class PetSystem {
     
     setPlayerSystem(playerSystem) {
         this.playerSystem = playerSystem;
+    }
+
+    setCombatSystem(combatSystem) {
+        this.combatSystem = combatSystem;
     }
     
     /**
@@ -256,6 +298,28 @@ export class PetSystem {
         const template = this.petTemplates.find(t => t.id === pet.templateId);
         return { success: true, message: `${template.name} 已卸下` };
     }
+
+    trainEquippedPets(levelGain = 1) {
+        if (this.equippedPets.length === 0) {
+            return { success: false, message: '没有装备宠物' };
+        }
+
+        const gain = Math.max(1, Math.floor(levelGain));
+        this.equippedPets.forEach(pet => {
+            pet.level += gain;
+            pet.friendship = (pet.friendship || 0) + gain * 5;
+        });
+
+        return {
+            success: true,
+            message: `装备宠物 Lv +${gain}`,
+            count: this.equippedPets.length
+        };
+    }
+
+    getEquippedPetLevelTotal() {
+        return this.equippedPets.reduce((total, pet) => total + (pet.level || 1), 0);
+    }
     
     /**
      * 获取宠物总战力加成
@@ -289,6 +353,206 @@ export class PetSystem {
     getRarityConfig(rarity) {
         return this.rarityConfig[rarity] || this.rarityConfig.common;
     }
+
+    update(deltaTime, playerX, playerY) {
+        this.elapsedTime += deltaTime;
+
+        if (!this.combatSystem || this.equippedPets.length === 0) {
+            return;
+        }
+
+        const activeIds = new Set(this.equippedPets.map(pet => pet.instanceId));
+        for (const id of this.petBattleStates.keys()) {
+            if (!activeIds.has(id)) {
+                this.petBattleStates.delete(id);
+            }
+        }
+
+        this.equippedPets.forEach((pet, index) => {
+            const template = this.petTemplates.find(t => t.id === pet.templateId);
+            if (!template) return;
+
+            const state = this.getPetBattleState(pet.instanceId);
+            const idlePosition = this.getIdlePosition(playerX, playerY, index);
+            this.ensurePetPosition(state, idlePosition);
+
+            if (state.phase === 'idle') {
+                this.updatePetCruise(state, template, idlePosition, deltaTime);
+                return;
+            }
+
+            if (state.phase === 'move' && (!state.target || !this.combatSystem.monsters.includes(state.target))) {
+                this.startPetCruise(state, template);
+            }
+
+            if (state.phase === 'move') {
+                this.updatePetCharge(state, template, pet, deltaTime);
+            } else if (state.phase === 'attack') {
+                this.updatePetAttack(state, template, deltaTime);
+            }
+        });
+    }
+
+    getPetBattleState(instanceId) {
+        if (!this.petBattleStates.has(instanceId)) {
+            this.petBattleStates.set(instanceId, {
+                phase: 'idle',
+                combatState: 'idle',
+                cooldown: 350,
+                phaseTime: 0,
+                attackTimer: 0,
+                attackDuration: 260,
+                animationOffset: Math.random() * 400,
+                x: 0,
+                y: 0,
+                startX: 0,
+                startY: 0,
+                returnX: 0,
+                returnY: 0,
+                target: null,
+                hasHit: false
+            });
+        }
+
+        return this.petBattleStates.get(instanceId);
+    }
+
+    getIdlePosition(playerX, playerY, index) {
+        const angle = (index * 120 + this.elapsedTime * 0.02) * Math.PI / 180;
+        const radius = 58;
+        return {
+            x: playerX + Math.cos(angle) * radius,
+            y: playerY + Math.sin(angle) * radius * 0.5
+        };
+    }
+
+    ensurePetPosition(state, fallbackPosition) {
+        if (state.x === 0 && state.y === 0) {
+            state.x = fallbackPosition.x;
+            state.y = fallbackPosition.y;
+        }
+    }
+
+    updatePetCruise(state, template, idlePosition, deltaTime) {
+        state.cooldown -= deltaTime;
+
+        if (state.cooldown <= 0) {
+            const target = typeof this.combatSystem.acquireTarget === 'function'
+                ? this.combatSystem.acquireTarget({ x: state.x, y: state.y }, { strategy: 'nearest' })
+                : this.combatSystem.getNearestMonster(state.x, state.y);
+            if (target) {
+                this.startPetCharge(state, target);
+                return;
+            }
+        }
+
+        const movement = this.movePetToward(
+            state,
+            idlePosition.x,
+            idlePosition.y,
+            this.getPetCruiseSpeed(template),
+            deltaTime
+        );
+        state.combatState = movement.moved ? 'move' : 'idle';
+    }
+
+    startPetCharge(state, target) {
+        state.phase = 'move';
+        state.combatState = 'move';
+        state.phaseTime = 0;
+        state.startX = state.x;
+        state.startY = state.y;
+        state.target = target;
+        state.hasHit = false;
+    }
+
+    updatePetCharge(state, template, pet, deltaTime) {
+        state.phaseTime += deltaTime;
+
+        const targetX = state.target.x + state.target.width / 2;
+        const targetY = state.target.y + state.target.height / 2;
+        const hitDistance = Math.max(22, Math.min(34, state.target.width * 0.55));
+        const movement = this.movePetToward(
+            state,
+            targetX,
+            targetY,
+            this.getPetChargeSpeed(template),
+            deltaTime
+        );
+        state.combatState = 'move';
+
+        if (!state.hasHit && movement.distance <= hitDistance) {
+            state.hasHit = true;
+            this.resolvePetHit(state, template, pet);
+            this.startPetAttack(state, template);
+        }
+    }
+
+    startPetAttack(state, template) {
+        state.phase = 'attack';
+        state.combatState = 'attack';
+        state.phaseTime = 0;
+        state.attackDuration = Math.max(210, 360 / template.baseStats.attackSpeed);
+        state.attackTimer = state.attackDuration;
+    }
+
+    updatePetAttack(state, template, deltaTime) {
+        state.phaseTime += deltaTime;
+        state.attackTimer = Math.max(0, state.attackTimer - deltaTime);
+        state.combatState = 'attack';
+
+        if (state.attackTimer <= 0) {
+            this.startPetCruise(state, template);
+        }
+    }
+
+    resolvePetHit(state, template, pet) {
+        const levelMultiplier = 1 + (pet.level - 1) * 0.1;
+        const damage = Math.max(1, Math.floor(template.baseStats.attack * levelMultiplier));
+        const isCrit = Math.random() < 0.08;
+        const finalDamage = isCrit ? Math.floor(damage * 1.6) : damage;
+
+        this.combatSystem.applyPetDamage(state.target, finalDamage, isCrit);
+    }
+
+    startPetCruise(state, template) {
+        state.phase = 'idle';
+        state.combatState = 'idle';
+        state.phaseTime = 0;
+        state.cooldown = Math.max(180, 900 / template.baseStats.attackSpeed);
+        state.target = null;
+        state.hasHit = false;
+    }
+
+    getPetChargeSpeed(template) {
+        return 260 + template.baseStats.attackSpeed * 180;
+    }
+
+    getPetCruiseSpeed(template) {
+        return 180 + template.baseStats.attackSpeed * 80;
+    }
+
+    movePetToward(state, targetX, targetY, speed, deltaTime) {
+        return this.movementSystem.moveToward(state, targetX, targetY, speed, deltaTime, {
+            maxDeltaTime: 50
+        });
+    }
+
+    getPetStateSheet(templateId, state) {
+        return this.petAnimationSheets[templateId]?.[state] || this.petAnimationSheets[templateId]?.idle;
+    }
+
+    getPetAnimationState(state) {
+        if (state.combatState === 'attack' || state.phase === 'attack') return 'attack';
+        if (state.combatState === 'move' || state.phase === 'move') return 'move';
+        return 'idle';
+    }
+
+    getPetFrameDuration(state) {
+        if (state === 'attack') return 80;
+        if (state === 'move') return 110;
+        return 170;
+    }
     
     /**
      * 渲染装备的宠物
@@ -300,16 +564,49 @@ export class PetSystem {
             
             const img = this.petImages[pet.templateId];
             
-            // 计算宠物位置（在玩家周围旋转）
-            const angle = (index * 120 + Date.now() * 0.02) * Math.PI / 180;
-            const radius = 50;
-            const petX = playerX + Math.cos(angle) * radius;
-            const petY = playerY + Math.sin(angle) * radius * 0.5;
+            const state = this.getPetBattleState(pet.instanceId);
+            const idlePosition = this.getIdlePosition(playerX, playerY, index);
+            this.ensurePetPosition(state, idlePosition);
+            const petX = state.x;
+            const petY = state.y;
+            const animationState = this.getPetAnimationState(state);
+            const activeSheet = this.getPetStateSheet(pet.templateId, animationState);
             
-            // 绘制宠物（只使用图片）
-            const size = 40;
-            if (img && img.complete && img.naturalWidth > 0) {
+            const size = animationState === 'attack' ? 72 : animationState === 'move' ? 60 : 52;
+            if (activeSheet && activeSheet.complete && activeSheet.naturalWidth > 0) {
+                const frameSize = 512;
+                const frameIndex = (Math.floor((this.elapsedTime + state.animationOffset) / this.getPetFrameDuration(animationState)) + index) % 4;
+
+                ctx.save();
+                ctx.imageSmoothingEnabled = false;
+                if (animationState === 'attack') {
+                    ctx.shadowColor = '#ffd167';
+                    ctx.shadowBlur = 14;
+                } else if (animationState === 'move') {
+                    ctx.shadowColor = 'rgba(255, 209, 103, 0.55)';
+                    ctx.shadowBlur = 8;
+                }
+                ctx.drawImage(
+                    activeSheet,
+                    frameIndex * frameSize,
+                    0,
+                    frameSize,
+                    frameSize,
+                    petX - size / 2,
+                    petY - size / 2,
+                    size,
+                    size
+                );
+                ctx.restore();
+            } else if (img && img.complete && img.naturalWidth > 0) {
+                ctx.save();
+                ctx.imageSmoothingEnabled = false;
+                if (animationState === 'attack') {
+                    ctx.shadowColor = '#ffd167';
+                    ctx.shadowBlur = 14;
+                }
                 ctx.drawImage(img, petX - size / 2, petY - size / 2, size, size);
+                ctx.restore();
             }
             // 图片未加载完成时不显示任何内容（不使用 emoji）
         });
