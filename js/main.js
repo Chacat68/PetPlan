@@ -43,6 +43,7 @@ class Game {
     this.currentScene = "fate";
     this.fateDropSerial = 0;
     this.fateHelperWave = 0;
+    this.fateShopFilter = "recommended";
     this.petModalTab = "formation";
     this.achievementModalTab = "achievements";
     this.seenTerritoryUnlocks = new Set();
@@ -201,7 +202,7 @@ class Game {
    */
   bindFateEvents() {
     const actions = {
-      "fate-buy-coin-btn": "coin",
+      "fate-upgrade-assistant-power-btn": "assistantPower",
       "fate-buy-gold-btn": "gold",
       "fate-buy-assistant-btn": "assistant",
       "fate-upgrade-manual-btn": "manual",
@@ -216,6 +217,12 @@ class Game {
       if (button) {
         button.addEventListener("click", () => this.handleFateUpgrade(action));
       }
+    });
+
+    document.querySelectorAll("[data-fate-shop-filter]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this.setFateShopFilter(button.dataset.fateShopFilter);
+      });
     });
   }
 
@@ -517,23 +524,34 @@ class Game {
     const face = this.getFateTableCoinFace(coin);
     const result = this.fateCoinSystem.manualFlip(face);
     if (coin) {
-      this.playFateTableCoinClickFeedback(coin, face);
+      this.playFateTableCoinClickFeedback(
+        coin,
+        face,
+        this.getFateResultFaceAmount(result, face)
+      );
     }
+    this.addFateCoinDrops(result, { source: "manual" });
     this.addFateResult(result);
     this.updateFateDisplay();
   }
 
-  playFateTableCoinClickFeedback(coin, face) {
+  playFateTableCoinClickFeedback(coin, face, amount = 1) {
     if (!coin) return;
 
     coin.classList.remove("clicked");
     void coin.offsetWidth;
-    coin.dataset.score = this.formatFateGainText(face);
+    coin.dataset.score = this.formatFateGainText(face, amount);
     coin.classList.add("clicked");
   }
 
-  formatFateGainText(face) {
-    return face === "tails" ? "获得反面 +1" : "获得正面 +1";
+  getFateResultFaceAmount(result, face) {
+    if (!result) return 1;
+    return face === "tails" ? result.tails || 0 : result.heads || 0;
+  }
+
+  formatFateGainText(face, amount = 1) {
+    const value = Math.max(1, Math.floor(amount || 1));
+    return face === "tails" ? `获得反面 +${value}` : `获得正面 +${value}`;
   }
 
   /**
@@ -542,11 +560,27 @@ class Game {
   handleFateAutoFlip(request) {
     if (!request || request.cycles <= 0) return;
 
-    if (this.currentScene !== "fate") {
+    if (!this.canAnimateFateAssistantBatch()) {
+      const result = this.fateCoinSystem.assistantBatchFlip(request.cycles);
+      if (this.currentScene === "fate") {
+        this.addFateResult(result);
+        this.addFateCoinDrops(result, { source: "auto" });
+      }
+      this.updateFateDisplay();
       return;
     }
 
     this.queueFateHelperClicks(request.cycles);
+  }
+
+  canAnimateFateAssistantBatch() {
+    if (this.currentScene !== "fate") return false;
+
+    const layer = document.getElementById("fate-coin-drop-layer");
+    return Boolean(
+      layer?.querySelector(".fate-table-coin") &&
+        layer?.querySelector(".fate-helper")
+    );
   }
 
   /**
@@ -556,7 +590,7 @@ class Game {
     if (!this.fateCoinSystem) return;
 
     const handlers = {
-      coin: () => this.fateCoinSystem.buyFateCoin(),
+      assistantPower: () => this.fateCoinSystem.upgradeAssistantPower(),
       gold: () => this.buyFateGoldCoin(),
       assistant: () => this.fateCoinSystem.buyAssistant(),
       manual: () => this.fateCoinSystem.upgradeManualPower(),
@@ -722,24 +756,37 @@ class Game {
     setText("fate-coins-display", format(data.fateCoins));
     setText("heads-display", format(data.heads));
     setText("tails-display", format(data.tails));
-    setText("fate-total-flips-display", format(data.goldCoins));
-    setText("fate-assistants-display", format(data.assistants));
+    setText("fate-total-flips-display", format(data.totalFlips));
     setText("fate-manual-power-display", format(data.manualPower));
     setText(
       "fate-auto-rate-display",
       `${data.autoFlipsPerSecond.toFixed(1)} / 秒`
     );
     setText(
-      "fate-auto-interval-display",
-      `${(data.autoInterval / 1000).toFixed(1)} 秒`
+      "fate-gold-effect",
+      `硬币 ${format(data.fateCoins)} -> ${format(data.fateCoins + 1)}`
     );
     setText(
-      "fate-gold-effect",
-      "桌面金币 +1"
+      "fate-assistant-effect",
+      `自动 ${this.formatFateRate(data.autoFlipsPerSecond)} -> ${this.formatFateRate(
+        this.getFateAutoRatePreview(data, {
+          assistants: data.assistants + 1,
+        })
+      )}/秒`
+    );
+    setText(
+      "fate-assistant-power-effect",
+      data.assistants <= 0
+        ? "需小助手"
+        : `自动 ${this.formatFateRate(data.autoFlipsPerSecond)} -> ${this.formatFateRate(
+            this.getFateAutoRatePreview(data, {
+              assistantPower: data.assistantPower + 1,
+            })
+          )}/秒`
     );
     setText(
       "fate-train-hero-effect",
-      "攻击 +5 / 生命 +10"
+      this.getFateHeroTrainingPreview()
     );
     const equippedPetCount = this.petSystem?.equippedPets?.length || 0;
     const equippedPetLevelTotal =
@@ -748,12 +795,26 @@ class Game {
         : equippedPetCount;
     setText(
       "fate-train-pet-effect",
-      equippedPetCount > 0 ? `宠物 Lv 合计 ${equippedPetLevelTotal}` : "先装备宠物"
+      equippedPetCount > 0
+        ? `宠物 Lv ${equippedPetLevelTotal} -> ${
+            equippedPetLevelTotal + equippedPetCount
+          }`
+        : "先装备宠物"
+    );
+    setText(
+      "fate-upgrade-manual-effect",
+      `点击 +${format(data.manualPower)} -> +${format(data.manualPower + 1)}`
+    );
+    setText(
+      "fate-upgrade-speed-effect",
+      this.getFateAssistantSpeedPreview(data)
     );
 
     setText(
-      "fate-buy-coin-cost",
-      this.fateCoinSystem.formatCost(data.costs.fateCoin)
+      "fate-assistant-power-cost",
+      data.assistants <= 0
+        ? "先购买小助手"
+        : this.fateCoinSystem.formatCost(data.costs.assistantPower)
     );
     setText(
       "fate-buy-assistant-cost",
@@ -769,7 +830,9 @@ class Game {
     );
     setText(
       "fate-upgrade-speed-cost",
-      data.autoInterval <= 750
+      data.assistants <= 0
+        ? "先购买小助手"
+        : data.autoInterval <= 750
         ? "已达上限"
         : this.fateCoinSystem.formatCost(data.costs.assistantSpeed)
     );
@@ -783,8 +846,9 @@ class Game {
     );
 
     setDisabled(
-      "fate-buy-coin-btn",
-      !this.fateCoinSystem.canAfford(data.costs.fateCoin)
+      "fate-upgrade-assistant-power-btn",
+      data.assistants <= 0 ||
+        !this.fateCoinSystem.canAfford(data.costs.assistantPower)
     );
     setDisabled(
       "fate-buy-assistant-btn",
@@ -804,7 +868,8 @@ class Game {
     );
     setDisabled(
       "fate-upgrade-speed-btn",
-      data.autoInterval <= 750 ||
+      data.assistants <= 0 ||
+        data.autoInterval <= 750 ||
         !this.fateCoinSystem.canAfford(data.costs.assistantSpeed)
     );
     setDisabled(
@@ -819,7 +884,445 @@ class Game {
 
     this.syncFateTableCoins(data.fateCoins);
     this.syncFateHelpers(data.assistants);
-    this.syncTerritoryProgress();
+    const territorySummary = this.syncTerritoryProgress();
+    const recommendation = this.getFateUpgradeRecommendation(
+      data,
+      territorySummary
+    );
+    this.updateFateShopRecommendation(recommendation);
+    this.updateFateNextGoal(data, territorySummary, recommendation);
+  }
+
+  getFateAutoRatePreview(data, overrides = {}) {
+    const assistants = overrides.assistants ?? data.assistants ?? 0;
+    const assistantPower = overrides.assistantPower ?? data.assistantPower ?? 1;
+    const autoInterval = overrides.autoInterval ?? data.autoInterval ?? 3000;
+
+    if (assistants <= 0 || autoInterval <= 0) return 0;
+    return (assistants * assistantPower) / (autoInterval / 1000);
+  }
+
+  formatFateRate(value) {
+    return (Number(value) || 0).toFixed(1);
+  }
+
+  getFateHeroTrainingPreview() {
+    const player = this.playerSystem?.player || {};
+    const attack = Math.floor(player.attack || 20);
+    const maxHp = Math.floor(player.maxHp || 100);
+    return `攻 ${attack}->${attack + 5} / 命 ${maxHp}->${maxHp + 10}`;
+  }
+
+  getFateAssistantSpeedPreview(data) {
+    if (data.assistants <= 0) return "需小助手";
+    if (data.autoInterval <= 750) return "已达上限";
+
+    return `自动 ${this.formatFateRate(data.autoFlipsPerSecond)} -> ${this.formatFateRate(
+      this.getFateAutoRatePreview(data, {
+        autoInterval: Math.max(750, data.autoInterval - 250),
+      })
+    )}/秒`;
+  }
+
+  getFateUpgradeRecommendation(data, territorySummary) {
+    const candidates = this.getFateUpgradeCandidates(data, territorySummary)
+      .map((candidate, index) => {
+        const gap = this.getFateCostGap(candidate.cost, data);
+        const territoryScore = this.getFateTerritoryCandidateScore(
+          candidate,
+          territorySummary
+        );
+        const availabilityScore = gap.affordable ? 28 : Math.round(gap.progress * 18);
+        const score = Math.max(
+          0,
+          Math.round(
+            candidate.baseScore +
+              candidate.benefitScore +
+              territoryScore +
+              availabilityScore -
+              gap.missingPenalty
+          )
+        );
+
+        return {
+          ...candidate,
+          gap,
+          reason: this.getFateRecommendationReason(
+            candidate,
+            gap,
+            territoryScore
+          ),
+          score,
+          order: index,
+        };
+      })
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.gap.affordable !== b.gap.affordable) {
+          return a.gap.affordable ? -1 : 1;
+        }
+        return a.order - b.order;
+      });
+
+    return {
+      primary: candidates[0] || null,
+      secondary: candidates[1] || null,
+      candidates,
+    };
+  }
+
+  getFateUpgradeCandidates(data, territorySummary) {
+    const currentAuto = data.autoFlipsPerSecond || 0;
+    const equippedPetCount = this.petSystem?.equippedPets?.length || 0;
+    const heroCost = this.getFateHeroTrainingCost();
+    const petCost = this.getFatePetTrainingCost();
+    const firstAssistant = data.assistants <= 0;
+    const canUseAutomation = data.assistants > 0;
+    const nextAssistantRate = this.getFateAutoRatePreview(data, {
+      assistants: data.assistants + 1,
+    });
+    const nextChipRate = this.getFateAutoRatePreview(data, {
+      assistantPower: data.assistantPower + 1,
+    });
+    const nextSpeedRate = this.getFateAutoRatePreview(data, {
+      autoInterval: Math.max(750, data.autoInterval - 250),
+    });
+
+    const candidates = [
+      {
+        action: "assistant",
+        title: firstAssistant ? "购买第 1 个助手" : "增加小助手",
+        route: "反面路线",
+        routeType: "tails",
+        cost: data.costs.assistant,
+        preview: `自动 ${this.formatFateRate(currentAuto)} -> ${this.formatFateRate(nextAssistantRate)}/秒`,
+        baseScore: firstAssistant
+          ? 174
+          : data.assistants < data.fateCoins
+          ? 84
+          : 48,
+        benefitScore: Math.min(74, Math.round((nextAssistantRate - currentAuto) * 44)),
+        pulseGain: 26,
+      },
+      {
+        action: "gold",
+        title: "扩充桌面硬币",
+        route: "正面路线",
+        routeType: "heads",
+        cost: data.costs.goldCoin,
+        preview: `硬币 ${this.fateCoinSystem.formatNumber(data.fateCoins)} -> ${this.fateCoinSystem.formatNumber(data.fateCoins + 1)}`,
+        baseScore: data.fateCoins < 3 ? 104 : 58,
+        benefitScore: data.fateCoins < 3 ? 28 : 14,
+        pulseGain: 24,
+      },
+      {
+        action: "assistantPower",
+        title: "提升自动结算",
+        route: "混合路线",
+        routeType: "mixed",
+        cost: data.costs.assistantPower,
+        preview: canUseAutomation
+          ? `自动 ${this.formatFateRate(currentAuto)} -> ${this.formatFateRate(nextChipRate)}/秒`
+          : "需小助手",
+        baseScore: canUseAutomation ? (data.assistantPower < 2 ? 98 : 68) : 0,
+        benefitScore: canUseAutomation
+          ? Math.min(80, Math.round((nextChipRate - currentAuto) * 64))
+          : 0,
+        pulseGain: 0,
+      },
+      {
+        action: "manual",
+        title: "强化手动点击",
+        route: "正面路线",
+        routeType: "heads",
+        cost: data.costs.manual,
+        preview: `点击 +${this.fateCoinSystem.formatNumber(data.manualPower)} -> +${this.fateCoinSystem.formatNumber(data.manualPower + 1)}`,
+        baseScore: data.manualPower < data.assistantPower + 2 ? 60 : 38,
+        benefitScore: 18,
+        pulseGain: 0,
+      },
+      {
+        action: "speed",
+        title: "缩短助手间隔",
+        route: "反面路线",
+        routeType: "tails",
+        cost: data.costs.assistantSpeed,
+        preview: this.getFateAssistantSpeedPreview(data),
+        baseScore:
+          canUseAutomation && data.autoInterval > 750
+            ? data.assistants >= 2 && data.assistantPower >= 2
+              ? 64
+              : 18
+            : 0,
+        benefitScore:
+          canUseAutomation && data.autoInterval > 750
+            ? Math.min(68, Math.round((nextSpeedRate - currentAuto) * 92))
+            : 0,
+        pulseGain: 0,
+      },
+      {
+        action: "hero",
+        title: "进行主角训练",
+        route: "正面路线",
+        routeType: "heads",
+        cost: heroCost,
+        preview: this.getFateHeroTrainingPreview(),
+        baseScore: 58,
+        benefitScore: this.fateCoinSystem.canAfford(heroCost) ? 18 : 8,
+        pulseGain: 16,
+      },
+      {
+        action: "pet",
+        title: "训练上阵宠物",
+        route: "反面路线",
+        routeType: "tails",
+        cost: petCost,
+        preview:
+          equippedPetCount > 0
+            ? `宠物 Lv +${equippedPetCount}`
+            : "先装备宠物",
+        baseScore: equippedPetCount > 0 ? 48 : 0,
+        benefitScore: equippedPetCount > 0 ? 12 : 0,
+        pulseGain: equippedPetCount * 6,
+      },
+    ];
+
+    return candidates.filter((candidate) => candidate.baseScore > 0);
+  }
+
+  getFateCostGap(cost = {}, data = {}) {
+    const headsCost = Math.max(0, cost.heads || 0);
+    const tailsCost = Math.max(0, cost.tails || 0);
+    const missingHeads = Math.max(0, headsCost - (data.heads || 0));
+    const missingTails = Math.max(0, tailsCost - (data.tails || 0));
+    const totalCost = headsCost + tailsCost;
+    const totalMissing = missingHeads + missingTails;
+    const progress =
+      totalCost <= 0 ? 1 : Math.max(0, Math.min(1, 1 - totalMissing / totalCost));
+
+    return {
+      missingHeads,
+      missingTails,
+      totalMissing,
+      progress,
+      affordable: totalMissing <= 0,
+      missingPenalty: totalCost <= 0 ? 0 : Math.round((1 - progress) * 52),
+    };
+  }
+
+  getFateRecommendationReason(candidate, gap, territoryScore = 0) {
+    if (candidate.action === "assistant" && candidate.title.includes("第 1 个")) {
+      return "解锁自动化";
+    }
+    if (territoryScore >= 72) return "可推进领地";
+
+    const reasons = {
+      assistant: "提升自动频率",
+      gold: "扩桌并加脉冲",
+      assistantPower: "自动收益最高",
+      manual: "强化手动收益",
+      speed: "后期自动提速",
+      hero: "提升战斗成长",
+      pet: "提升宠物成长",
+    };
+
+    if (reasons[candidate.action]) return reasons[candidate.action];
+    if (gap.affordable) return "现在可购买";
+    if (gap.progress >= 0.75) return "最接近购买";
+
+    return reasons[candidate.action] || "推荐路线";
+  }
+
+  getFateTerritoryCandidateScore(candidate, territorySummary) {
+    const nextBuilding = territorySummary?.nextBuilding;
+    const state = nextBuilding?.state;
+    if (!state || state.unlocked || !candidate.pulseGain) return 0;
+
+    const missingPulse = Math.max(0, state.requiredPulse - state.pulse);
+    if (missingPulse <= 0) return 0;
+    if (candidate.pulseGain >= missingPulse) return 72;
+    if (candidate.pulseGain >= missingPulse * 0.65) return 42;
+    if (missingPulse <= 24) return 24;
+    return 0;
+  }
+
+  updateFateShopRecommendation(recommendation) {
+    const primaryAction = recommendation?.primary?.action || "";
+    const secondaryAction = recommendation?.secondary?.action || "";
+    const reasonByAction = new Map(
+      (recommendation?.candidates || []).map((candidate) => [
+        candidate.action,
+        candidate.reason || "",
+      ])
+    );
+
+    document
+      .querySelectorAll(".fate-upgrade[data-fate-action]")
+      .forEach((button) => {
+        const action = button.dataset.fateAction;
+        const isPrimary = action === primaryAction;
+        const isSecondary = action === secondaryAction;
+
+        button.classList.toggle("is-recommended", isPrimary);
+        button.classList.toggle("is-secondary-recommendation", isSecondary);
+        button.dataset.recommendation = isPrimary
+          ? "primary"
+          : isSecondary
+          ? "secondary"
+          : "none";
+        button.dataset.recommendationReason =
+          isPrimary || isSecondary ? reasonByAction.get(action) || "" : "";
+        this.updateFateUpgradeReason(button, button.dataset.recommendationReason);
+      });
+
+    this.updateFateShopFilter();
+  }
+
+  updateFateUpgradeReason(button, reason = "") {
+    if (!button) return;
+
+    let reasonEl = button.querySelector(".upgrade-reason");
+    if (!reasonEl) {
+      reasonEl = document.createElement("span");
+      reasonEl.className = "upgrade-reason";
+      button.appendChild(reasonEl);
+    }
+
+    reasonEl.textContent = reason;
+    reasonEl.hidden = !reason;
+  }
+
+  setFateShopFilter(filter) {
+    const filters = new Set(["recommended", "fate", "auto", "growth"]);
+    this.fateShopFilter = filters.has(filter) ? filter : "recommended";
+    this.updateFateShopFilter();
+  }
+
+  updateFateShopFilter() {
+    const filter = this.fateShopFilter || "recommended";
+    const labels = {
+      recommended: "推荐",
+      fate: "命运",
+      auto: "自动",
+      growth: "成长",
+    };
+
+    document.querySelectorAll("[data-fate-shop-filter]").forEach((button) => {
+      const active = button.dataset.fateShopFilter === filter;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+
+    document
+      .querySelectorAll(".fate-upgrade[data-fate-action]")
+      .forEach((button) => {
+        const visible = this.isFateShopCardVisible(button, filter);
+        button.hidden = !visible;
+      });
+
+    const title = document.getElementById("fate-shop-title");
+    if (title) title.textContent = labels[filter] || "推荐";
+  }
+
+  isFateShopCardVisible(button, filter) {
+    if (filter === "recommended") {
+      return (
+        button.dataset.recommendation === "primary" ||
+        button.dataset.recommendation === "secondary"
+      );
+    }
+
+    return button.dataset.fateShopCategory === filter;
+  }
+
+  updateFateNextGoal(data, territorySummary, recommendation = null) {
+    const goalEl = document.getElementById("fate-next-goal-text");
+    const goalTitleEl = document.getElementById("fate-next-goal-title");
+    const goalDetailEl = document.getElementById("fate-next-goal-detail");
+    const routeEl = document.getElementById("fate-next-goal-route");
+    const altEl = document.getElementById("fate-next-goal-alt");
+    if (!goalEl) return;
+
+    const goal = this.getFateNextGoal(data, territorySummary, recommendation);
+    if (goalTitleEl && goalDetailEl) {
+      goalTitleEl.textContent = goal.title;
+      goalDetailEl.textContent = goal.detail || "";
+      goalEl.title = goal.detail ? `${goal.title} · ${goal.detail}` : goal.title;
+    } else {
+      goalEl.textContent = goal.detail ? `${goal.title} · ${goal.detail}` : goal.title;
+    }
+    if (routeEl) {
+      routeEl.textContent = goal.route || "命运路线";
+      routeEl.dataset.route = goal.routeType || "neutral";
+    }
+    if (altEl) {
+      altEl.textContent = goal.alt ? `备选：${goal.alt}` : "";
+    }
+  }
+
+  getFateNextGoal(data, territorySummary, recommendation = null) {
+    const activeRecommendation =
+      recommendation || this.getFateUpgradeRecommendation(data, territorySummary);
+    const primary = activeRecommendation?.primary;
+    const secondary = activeRecommendation?.secondary;
+    const nextBuilding = territorySummary?.nextBuilding;
+
+    if (nextBuilding?.state && !nextBuilding.state.unlocked) {
+      const missingPulse = Math.max(
+        0,
+        nextBuilding.state.requiredPulse - nextBuilding.state.pulse
+      );
+      const primaryPulseGain = primary?.pulseGain || 0;
+      if (
+        missingPulse <= 24 &&
+        primaryPulseGain >= missingPulse &&
+        primary?.gap?.affordable
+      ) {
+        const name =
+          nextBuilding.data?.name || nextBuilding.type || "下一座领地建筑";
+        return {
+          title: `开放${name}`,
+          detail: `还差 ${this.formatGameNumber(missingPulse)} 循环脉冲`,
+          route: "领地目标",
+          routeType: "territory",
+          alt: primary ? primary.title : "主角训练提升战斗",
+        };
+      }
+    }
+
+    if (primary) {
+      const costText = this.formatFateGoalCost(primary.cost, data);
+      return {
+        title: primary.title,
+        detail: primary.preview ? `${costText} · ${primary.preview}` : costText,
+        route: primary.route,
+        routeType: primary.routeType,
+        alt: secondary ? secondary.title : "",
+      };
+    }
+
+    return {
+      title: "继续翻动命运桌",
+      detail: "积累正面与反面",
+      route: "命运路线",
+      routeType: "neutral",
+      alt: "",
+    };
+  }
+
+  formatFateGoalCost(cost, data) {
+    const missingHeads = Math.max(0, (cost.heads || 0) - (data.heads || 0));
+    const missingTails = Math.max(0, (cost.tails || 0) - (data.tails || 0));
+    const parts = [];
+
+    if (missingHeads > 0) {
+      parts.push(`还差 ${this.fateCoinSystem.formatNumber(missingHeads)} 正面`);
+    }
+    if (missingTails > 0) {
+      parts.push(`还差 ${this.fateCoinSystem.formatNumber(missingTails)} 反面`);
+    }
+
+    return parts.join(" / ") || "现在可购买";
   }
 
   /**
@@ -831,9 +1334,10 @@ class Game {
 
     const item = document.createElement("div");
     item.className = "fate-result";
-    if (result.flips === 1) {
+    if (result.face) {
       item.textContent = this.formatFateGainText(
-        result.tails > 0 ? "tails" : "heads"
+        result.face,
+        this.getFateResultFaceAmount(result, result.face)
       );
     } else {
       item.textContent = `${result.flips} 次: +${result.heads} 正面 / +${result.tails} 反面`;
@@ -1280,7 +1784,12 @@ class Game {
       const face = this.getFateTableCoinFace(coin);
       const result = this.fateCoinSystem.assistantFlip(face);
       helper.dataset.state = "tap";
-      this.playFateTableCoinClickFeedback(coin, face);
+      this.playFateTableCoinClickFeedback(
+        coin,
+        face,
+        this.getFateResultFaceAmount(result, face)
+      );
+      this.addFateCoinDrops(result, { source: "auto", maxCoins: 4 });
       this.addFateResult(result);
     } else {
       helper.dataset.state = "miss";
@@ -1875,7 +2384,6 @@ class Game {
     const fate = this.fateCoinSystem?.getDisplayData?.() || {};
     const totalFlips = fate.totalFlips || 0;
     const fateCoins = fate.fateCoins || 0;
-    const goldCoins = fate.goldCoins || 0;
     const playerLevel = this.playerSystem?.player?.level || 1;
     const battlePower = this.playerSystem?.calculateTotalPower?.() || 0;
     const unlockedPets = this.petSystem?.unlockedPets?.length || 0;
@@ -1906,13 +2414,13 @@ class Game {
         reward: "金币 500",
       },
       {
-        id: "gold_coin_1",
+        id: "table_coin_2",
         group: "achievements",
         icon: "G",
-        title: "金色筹码",
-        desc: "拥有 1 枚金币硬币",
-        current: goldCoins,
-        target: 1,
+        title: "桌面扩充",
+        desc: "桌面硬币达到 2 枚",
+        current: fateCoins,
+        target: 2,
         reward: "红宝石 20",
       },
       {
@@ -2189,7 +2697,6 @@ class Game {
       totalFlips: fate.totalFlips || 0,
       fateCoins: fate.fateCoins || 1,
       assistants: fate.assistants || 0,
-      goldCoins: fate.goldCoins || 0,
       heroTrainingLevel,
       playerLevel: player.level || 1,
       equippedPets,

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=file-protocol-guard-20260703a" />
+    <link rel="stylesheet" href="css/style.css?v=fate-shop-filter-20260709a" />
   </head>
   <body>
     <div class="game-container">
@@ -133,7 +133,7 @@
           <section class="fate-board-panel">
             <div class="fate-scorebar">
               <span id="fate-total-flips-display">0</span>
-              <span class="score-dollar">$</span>
+              <span class="score-dollar">次</span>
             </div>
 
             <div class="fate-table-surface">
@@ -161,6 +161,16 @@
                 </div>
               </div>
 
+              <div class="fate-next-goal" id="fate-next-goal">
+                <span class="goal-label">下一目标</span>
+                <span class="goal-text" id="fate-next-goal-text">
+                  <span class="goal-title" id="fate-next-goal-title">购买第 1 个助手</span>
+                  <span class="goal-detail" id="fate-next-goal-detail">还差 25 反面</span>
+                </span>
+                <span class="goal-route" id="fate-next-goal-route">反面路线</span>
+                <span class="goal-alt" id="fate-next-goal-alt">备选：金色硬币</span>
+              </div>
+
               <div class="fate-runner">
                 <div class="fate-result-feed" id="fate-result-feed"></div>
               </div>
@@ -174,69 +184,69 @@
           </section>
 
           <aside class="fate-shop-panel">
-            <div class="fate-shop-tabs">
-              <button type="button" class="shop-tab active">🏪</button>
-              <button type="button" class="shop-tab">♣</button>
-              <button type="button" class="shop-tab">🪙</button>
-              <button type="button" class="shop-tab">📈</button>
+            <div class="fate-shop-tabs" role="tablist" aria-label="命运商店分类">
+              <button type="button" class="shop-tab active" data-fate-shop-filter="recommended" role="tab" aria-selected="true" aria-label="推荐" title="推荐">★</button>
+              <button type="button" class="shop-tab" data-fate-shop-filter="fate" role="tab" aria-selected="false" aria-label="命运" title="命运">◎</button>
+              <button type="button" class="shop-tab" data-fate-shop-filter="auto" role="tab" aria-selected="false" aria-label="自动" title="自动">⚙</button>
+              <button type="button" class="shop-tab" data-fate-shop-filter="growth" role="tab" aria-selected="false" aria-label="成长" title="成长">↗</button>
             </div>
-            <h2>道具</h2>
+            <h2 id="fate-shop-title">推荐</h2>
             <div class="fate-shop-list">
-              <button class="fate-upgrade" id="fate-buy-assistant-btn" type="button">
+              <button class="fate-upgrade" id="fate-buy-assistant-btn" type="button" data-fate-action="assistant" data-fate-shop-category="auto">
                 <span class="shop-icon">👻</span>
                 <span class="upgrade-main">
                   <span class="upgrade-name">小助手</span>
                   <span class="upgrade-cost" id="fate-buy-assistant-cost">25 反面</span>
                 </span>
-                <span class="upgrade-effect">助手 <b id="fate-assistants-display">0</b></span>
+                <span class="upgrade-effect" id="fate-assistant-effect">助手 0 -> 1</span>
               </button>
-              <button class="fate-upgrade" id="fate-buy-gold-btn" type="button">
+              <button class="fate-upgrade" id="fate-buy-gold-btn" type="button" data-fate-action="gold" data-fate-shop-category="fate">
                 <span class="shop-icon coin-gold">$</span>
                 <span class="upgrade-main">
-                  <span class="upgrade-name">金币</span>
+                  <span class="upgrade-name">金色硬币</span>
                   <span class="upgrade-cost" id="fate-buy-gold-cost">5 正面</span>
                 </span>
-                <span class="upgrade-effect" id="fate-gold-effect">桌面金币 +1</span>
+                <span class="upgrade-effect" id="fate-gold-effect">正面扩桌 +1</span>
               </button>
-              <button class="fate-upgrade" id="fate-train-hero-btn" type="button">
+              <button class="fate-upgrade" id="fate-train-hero-btn" type="button" data-fate-action="hero" data-fate-shop-category="growth">
                 <span class="shop-icon battle-icon">⚔</span>
                 <span class="upgrade-main">
                   <span class="upgrade-name">主角训练</span>
                   <span class="upgrade-cost" id="fate-train-hero-cost">14 正面 + 6 反面</span>
                 </span>
-                <span class="upgrade-effect" id="fate-train-hero-effect">攻击 +5 / 生命 +10</span>
+                <span class="upgrade-effect" id="fate-train-hero-effect">正面训练 +5/+10</span>
               </button>
-              <button class="fate-upgrade" id="fate-train-pet-btn" type="button">
+              <button class="fate-upgrade" id="fate-train-pet-btn" type="button" data-fate-action="pet" data-fate-shop-category="growth">
                 <span class="shop-icon battle-icon multi">※</span>
                 <span class="upgrade-main">
                   <span class="upgrade-name">宠物训练</span>
                   <span class="upgrade-cost" id="fate-train-pet-cost">4 正面 + 16 反面</span>
                 </span>
-                <span class="upgrade-effect" id="fate-train-pet-effect">装备宠物 1 只</span>
+                <span class="upgrade-effect" id="fate-train-pet-effect">反面宠物成长</span>
               </button>
-              <button class="fate-upgrade" id="fate-buy-coin-btn" type="button">
-                <span class="shop-icon coin-copper">正</span>
+              <button class="fate-upgrade" id="fate-upgrade-assistant-power-btn" type="button" data-fate-action="assistantPower" data-fate-shop-category="auto">
+                <span class="shop-icon coin-copper">芯</span>
                 <span class="upgrade-main">
-                  <span class="upgrade-name">铜币</span>
-                  <span class="upgrade-cost" id="fate-buy-coin-cost">10 正面 + 10 反面</span>
+                  <span class="upgrade-name">结算芯片</span>
+                  <span class="upgrade-cost" id="fate-assistant-power-cost">10 正面 + 10 反面</span>
                 </span>
-                <span class="upgrade-effect">硬币 +1</span>
+                <span class="upgrade-effect" id="fate-assistant-power-effect">混合结算 +1</span>
               </button>
-              <button class="fate-upgrade" id="fate-upgrade-manual-btn" type="button">
+              <button class="fate-upgrade" id="fate-upgrade-manual-btn" type="button" data-fate-action="manual" data-fate-shop-category="fate">
                 <span class="shop-icon coin-silver">正</span>
                 <span class="upgrade-main">
                   <span class="upgrade-name">银色点击</span>
                   <span class="upgrade-cost" id="fate-upgrade-manual-cost">20 正面</span>
                 </span>
-                <span class="upgrade-effect">点击强化</span>
+                <span class="upgrade-effect" id="fate-upgrade-manual-effect">点击 +1 -> +2</span>
               </button>
-              <button class="fate-upgrade" id="fate-upgrade-speed-btn" type="button">
+              <button class="fate-upgrade" id="fate-upgrade-speed-btn" type="button" data-fate-action="speed" data-fate-shop-category="auto">
                 <span class="shop-icon coin-gold">反</span>
                 <span class="upgrade-main">
                   <span class="upgrade-name">金色引擎</span>
                   <span class="upgrade-cost" id="fate-upgrade-speed-cost">40 反面</span>
                 </span>
-                <span class="upgrade-effect"><b id="fate-auto-interval-display">3.0 秒</b></span>
+                <span class="upgrade-effect" id="fate-upgrade-speed-effect">间隔 3.0s -> 2.8s</span>
               </button>
             </div>
           </aside>
@@ -580,7 +590,7 @@
     <script>
       (function () {
         var localUrl = "http://localhost:4174/index.html";
-        var moduleSrc = "js/main.js?v=file-protocol-guard-20260703a";
+        var moduleSrc = "js/main.js?v=fate-shop-filter-20260709a";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

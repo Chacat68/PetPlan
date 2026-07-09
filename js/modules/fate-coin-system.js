@@ -61,34 +61,49 @@ export class FateCoinSystem {
 
   manualFlip(face = null) {
     const result = face
-      ? this.settleFace(face)
+      ? this.settleFace(face, this.manualPower)
       : this.flipMany(this.manualPower);
     result.source = "manual";
-    this.goldCoins += 1;
 
     this.notifyChange();
     return result;
   }
 
   assistantFlip(face) {
-    const result = this.settleFace(face);
+    const result = this.settleFace(face, this.assistantPower);
     result.source = "assistant";
-    this.goldCoins += 1;
 
     this.notifyChange();
     return result;
   }
 
-  settleFace(face) {
+  assistantBatchFlip(cycles = 1) {
+    const safeCycles = Math.max(0, Math.floor(cycles));
+    const flips = safeCycles * this.assistants * this.assistantPower;
+    const result = this.flipMany(flips);
+    result.source = "assistant";
+    result.cycles = safeCycles;
+    result.assistants = this.assistants;
+
+    this.notifyChange();
+    return result;
+  }
+
+  settleFace(face, count = 1) {
     const normalizedFace = face === "tails" ? "tails" : "heads";
-    const heads = normalizedFace === "heads" ? 1 : 0;
-    const tails = normalizedFace === "tails" ? 1 : 0;
+    const safeCount = Math.max(0, Math.floor(count));
+    const heads = normalizedFace === "heads" ? safeCount : 0;
+    const tails = normalizedFace === "tails" ? safeCount : 0;
+
+    if (safeCount <= 0) {
+      return { flips: 0, heads: 0, tails: 0, face: normalizedFace };
+    }
 
     this.heads += heads;
     this.tails += tails;
-    this.totalFlips += 1;
+    this.totalFlips += safeCount;
 
-    return { flips: 1, heads, tails, face: normalizedFace };
+    return { flips: safeCount, heads, tails, face: normalizedFace };
   }
 
   flipMany(count) {
@@ -120,12 +135,16 @@ export class FateCoinSystem {
     return Math.max(0, Math.min(count, Math.round(count * 0.5 + variance)));
   }
 
-  getBuyCoinCost() {
-    const scale = Math.pow(1.45, Math.max(0, this.fateCoins - 1));
+  getUpgradeAssistantPowerCost() {
+    const scale = Math.pow(1.55, Math.max(0, this.assistantPower - 1));
     return {
       heads: Math.floor(10 * scale),
       tails: Math.floor(10 * scale),
     };
+  }
+
+  getBuyCoinCost() {
+    return this.getUpgradeAssistantPowerCost();
   }
 
   getBuyAssistantCost() {
@@ -158,17 +177,25 @@ export class FateCoinSystem {
     };
   }
 
-  buyFateCoin() {
-    const cost = this.getBuyCoinCost();
+  upgradeAssistantPower() {
+    if (this.assistants <= 0) {
+      return { success: false, message: "先购买小助手" };
+    }
+
+    const cost = this.getUpgradeAssistantPowerCost();
     if (!this.canAfford(cost)) {
       return { success: false, message: "正面或反面不足" };
     }
 
     this.pay(cost);
-    this.fateCoins += 1;
+    this.assistantPower += 1;
     this.notifyChange();
 
-    return { success: true, message: "命运硬币 +1" };
+    return { success: true, message: "助手结算 +1" };
+  }
+
+  buyFateCoin() {
+    return this.upgradeAssistantPower();
   }
 
   buyAssistant() {
@@ -194,7 +221,7 @@ export class FateCoinSystem {
     this.fateCoins += 1;
     this.notifyChange();
 
-    return { success: true, message: "桌面金币 +1" };
+    return { success: true, message: "桌面硬币 +1" };
   }
 
   upgradeManualPower() {
@@ -211,6 +238,10 @@ export class FateCoinSystem {
   }
 
   upgradeAssistantSpeed() {
+    if (this.assistants <= 0) {
+      return { success: false, message: "先购买小助手" };
+    }
+
     if (this.autoInterval <= 750) {
       return { success: false, message: "助手速度已达上限" };
     }
@@ -248,7 +279,7 @@ export class FateCoinSystem {
 
   getAutoFlipsPerSecond() {
     if (this.assistants <= 0) return 0;
-    return this.assistants / (this.autoInterval / 1000);
+    return (this.assistants * this.assistantPower) / (this.autoInterval / 1000);
   }
 
   formatNumber(num) {
@@ -286,9 +317,11 @@ export class FateCoinSystem {
       autoInterval: this.autoInterval,
       goldCoins: this.goldCoins,
       totalFlips: this.totalFlips,
+      tableCoins: this.fateCoins,
       autoFlipsPerSecond: this.getAutoFlipsPerSecond(),
       costs: {
-        fateCoin: this.getBuyCoinCost(),
+        assistantPower: this.getUpgradeAssistantPowerCost(),
+        fateCoin: this.getUpgradeAssistantPowerCost(),
         assistant: this.getBuyAssistantCost(),
         goldCoin: this.getBuyGoldCoinCost(),
         manual: this.getUpgradeManualCost(),
@@ -324,8 +357,8 @@ export class FateCoinSystem {
     this.manualPower = data.manualPower ?? 1;
     this.assistantPower = data.assistantPower ?? 1;
     this.autoInterval = data.autoInterval ?? 3000;
-    this.goldCoins = data.goldCoins ?? data.totalFlips ?? 0;
-    this.totalFlips = data.totalFlips ?? 0;
+    this.goldCoins = data.goldCoins ?? 0;
+    this.totalFlips = data.totalFlips ?? data.goldCoins ?? 0;
     this.autoTimer = 0;
 
     this.notifyChange();

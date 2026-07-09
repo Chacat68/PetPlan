@@ -205,7 +205,6 @@ export class TerritorySystem {
             totalFlips: 0,
             fateCoins: 1,
             assistants: 0,
-            goldCoins: 0,
             heroTrainingLevel: 0,
             playerLevel: 1,
             equippedPets: 0,
@@ -243,7 +242,6 @@ export class TerritorySystem {
             safe.totalFlips +
             Math.max(0, safe.fateCoins - 1) * 24 +
             safe.assistants * 26 +
-            safe.goldCoins * 12 +
             safe.heroTrainingLevel * 16 +
             safe.equippedPets * 18 +
             extraPetLevels * 6 +
