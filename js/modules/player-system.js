@@ -201,6 +201,32 @@ export class PlayerSystem {
             }
         };
     }
+
+    /**
+     * 统一的经验结算入口。塔防胜负结算通过这里升级，避免直接改写存档字段。
+     */
+    addExperience(amount) {
+        const gained = Math.max(0, Math.floor(Number(amount) || 0));
+        if (gained <= 0) {
+            return { gained: 0, levelsGained: 0, level: this.player.level };
+        }
+
+        this.player.exp += gained;
+        let levelsGained = 0;
+
+        while (this.player.exp >= this.player.expToNext) {
+            this.player.exp -= this.player.expToNext;
+            this.player.level += 1;
+            this.player.expToNext = Math.max(100, Math.floor(this.player.expToNext * 1.22));
+            this.player.attack += 2;
+            this.player.maxHp += 5;
+            this.player.hp = Math.min(this.player.maxHp, this.player.hp + 5);
+            levelsGained += 1;
+        }
+
+        this.updateDisplay();
+        return { gained, levelsGained, level: this.player.level };
+    }
     
     /**
      * 计算总战力
@@ -257,6 +283,16 @@ export class PlayerSystem {
 
     updateBattleMovement(deltaTime) {
         if (!this.combatSystem || this.combatSystem.isPaused) {
+            this.setCombatState('idle');
+            return;
+        }
+
+        if (this.combatSystem.mode === 'towerDefense') {
+            const position = this.combatSystem.getHeroPosition?.();
+            if (position) {
+                this.player.x = position.x;
+                this.player.y = position.y;
+            }
             this.setCombatState('idle');
             return;
         }
@@ -336,8 +372,21 @@ export class PlayerSystem {
         return this.combatState === 'move' ? 'move' : 'idle';
     }
 
-    getGunMuzzlePosition() {
+    getGunMuzzlePosition(targetPoint = null) {
         const { x, y, width, height } = this.player;
+
+        if (this.combatSystem?.mode === 'towerDefense') {
+            const centerX = x + width / 2;
+            const centerY = y + height / 2;
+            const dx = (targetPoint?.x ?? centerX) - centerX;
+            const dy = (targetPoint?.y ?? centerY - 1) - centerY;
+            const distance = Math.hypot(dx, dy) || 1;
+            return {
+                x: centerX + (dx / distance) * width * 0.38,
+                y: centerY + (dy / distance) * height * 0.38
+            };
+        }
+
         const spriteSize = Math.max(width, height) * 2.1;
         const spriteX = x + width / 2 - spriteSize / 2;
         const spriteY = y + height / 2 - spriteSize / 2 - height * 0.18;
@@ -399,6 +448,9 @@ export class PlayerSystem {
             ctx.arc(x + width * 0.65, y + height * 0.4, 3, 0, Math.PI * 2);
             ctx.fill();
         }
+
+        // 塔防中主角是基地英雄塔，基地生命由 CombatSystem 单独绘制。
+        if (this.combatSystem?.mode === 'towerDefense') return;
         
         // 绘制生命条
         const barWidth = 50;

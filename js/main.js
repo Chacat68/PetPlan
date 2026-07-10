@@ -3,7 +3,7 @@
  * 负责初始化和协调所有子系统
  */
 
-import { GameCore, getGameCoreInstance } from "./modules/game-core.js?v=monster-sequences-20260701a";
+import { GameCore, getGameCoreInstance } from "./modules/game-core.js?v=tower-defense-20260710b";
 import {
   ResourceSystem,
   getResourceSystemInstance,
@@ -11,14 +11,14 @@ import {
 import {
   PlayerSystem,
   getPlayerSystemInstance,
-} from "./modules/player-system.js?v=hero-upgrade-loop-20260703a";
+} from "./modules/player-system.js?v=tower-defense-20260710b";
 import {
   CombatSystem,
   getCombatSystemInstance,
-} from "./modules/combat-system.js?v=gun-muzzle-20260703a";
+} from "./modules/combat-system.js?v=tower-defense-20260710b";
 import { SaveSystem, getSaveSystemInstance } from "./modules/save-system.js?v=phase-one-20260710b";
 import { UISystem, getUISystemInstance } from "./modules/ui-system.js";
-import { PetSystem, getPetSystemInstance } from "./modules/pet-system.js?v=pet-actions-20260702a";
+import { PetSystem, getPetSystemInstance } from "./modules/pet-system.js?v=tower-defense-20260710b";
 import {
   TerritorySystem,
   getTerritorySystemInstance,
@@ -50,6 +50,7 @@ class Game {
     this.petModalTab = "formation";
     this.achievementModalTab = "achievements";
     this.seenTerritoryUnlocks = new Set();
+    this.lastBattleSettlementKey = null;
     this.modalFocusManager = new ModalFocusManager();
     this.sceneRouter = new SceneRouter();
   }
@@ -100,6 +101,7 @@ class Game {
         this.playerSystem.setCombatSystem(this.combatSystem);
       }
       this.petSystem.setCombatSystem(this.combatSystem);
+      this.combatSystem.setPetSystem(this.petSystem);
 
       // 7. 初始化领地系统
       this.territorySystem = getTerritorySystemInstance(
@@ -127,6 +129,9 @@ class Game {
 
       // 9. 初始化 UI 系统
       this.uiSystem = getUISystemInstance();
+      this.combatSystem.setOnStateChange((state) => {
+        this.updateBattleDisplay(state);
+      });
 
       // 10. 初始化游戏核心
       this.gameCore = getGameCoreInstance(this.canvas);
@@ -216,6 +221,150 @@ class Game {
 
     // 命运桌事件
     this.bindFateEvents();
+
+    // 宠物防线事件
+    this.bindBattleEvents();
+  }
+
+  /**
+   * 绑定竖版塔防的开波、局内升级、修复和塔位点击。
+   */
+  bindBattleEvents() {
+    const actions = [
+      ["battle-start-wave-btn", () => this.combatSystem.startNextWave()],
+      ["battle-upgrade-tower-btn", () => this.combatSystem.upgradeSelectedTower()],
+      ["battle-repair-base-btn", () => this.combatSystem.repairBase()],
+      ["battle-restart-btn", () => this.combatSystem.restartBattle()],
+    ];
+
+    actions.forEach(([id, handler]) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      button.addEventListener("click", () => {
+        const result = handler();
+        this.handleBattleActionResult(result);
+      });
+    });
+
+    this.canvas.addEventListener("click", (event) => {
+      if (this.currentScene !== "dungeon") return;
+      const rect = this.canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const x = ((event.clientX - rect.left) / rect.width) * this.canvas.width;
+      const y = ((event.clientY - rect.top) / rect.height) * this.canvas.height;
+      const result = this.combatSystem.selectTowerAt(x, y);
+      this.handleBattleActionResult(result, { quietFailure: !result?.message });
+    });
+  }
+
+  handleBattleActionResult(result, options = {}) {
+    if (!result) return;
+    this.updateBattleDisplay();
+    if (!result.message || (options.quietFailure && !result.success)) return;
+    this.uiSystem?.showToast(
+      result.message,
+      result.success ? "success" : "info"
+    );
+  }
+
+  updateBattleDisplay(providedState = null) {
+    if (!this.combatSystem) return;
+    const state = providedState || this.combatSystem.getBattleState();
+    const setText = (id, value) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = String(value);
+    };
+
+    setText("battle-phase-badge", state.phaseLabel);
+    setText("battle-wave-display", `${state.currentWave}/${state.totalWaves}`);
+    setText("battle-base-hp-display", `${state.baseHp}/${state.baseMaxHp}`);
+    setText("battle-energy-display", state.energy);
+    setText("battle-enemy-display", state.activeEnemies + state.queuedEnemies);
+    setText("battle-panel-wave", `${state.currentWave} / ${state.totalWaves}`);
+    setText("battle-best-wave", state.meta.bestWave);
+    setText("battle-kills-display", state.rewards.kills);
+    setText(
+      "battle-reward-coins",
+      this.resourceSystem?.formatNumber?.(state.rewards.coins) || state.rewards.coins
+    );
+
+    const tower = state.selectedTower;
+    setText("selected-tower-name", tower?.name || "暂无上阵宠物");
+    setText("selected-tower-role", tower?.role || "请先在宠物编队中上阵宠物");
+    setText("selected-tower-level", tower ? `${tower.level} / ${tower.maxLevel}` : "--");
+    setText("selected-tower-damage", tower?.damage ?? "--");
+    setText("selected-tower-range", tower?.range ?? "--");
+    setText("selected-tower-speed", tower ? `${tower.attackSpeed}/秒` : "--");
+    setText("battle-upgrade-cost", tower ? `${tower.upgradeCost}⚡` : "--");
+
+    const towerCard = document.getElementById("selected-tower-card");
+    if (towerCard) {
+      towerCard.style.borderColor = tower?.color || "#565d6c";
+    }
+
+    const startButton = document.getElementById("battle-start-wave-btn");
+    if (startButton) {
+      startButton.disabled = !state.canStartWave;
+      startButton.textContent = state.currentWave === 0
+        ? "开始第一波"
+        : state.canStartWave
+          ? `开始第 ${state.currentWave + 1} 波`
+          : state.phase === "victory"
+            ? "本局已通关"
+            : state.phase === "defeat"
+              ? "基地已失守"
+              : "防守进行中";
+    }
+
+    const upgradeButton = document.getElementById("battle-upgrade-tower-btn");
+    if (upgradeButton) {
+      upgradeButton.disabled = !tower || tower.level >= tower.maxLevel || state.energy < tower.upgradeCost;
+    }
+
+    const repairButton = document.getElementById("battle-repair-base-btn");
+    if (repairButton) {
+      repairButton.disabled = (
+        state.baseHp >= state.baseMaxHp ||
+        state.energy < 35 ||
+        state.phase === "victory" ||
+        state.phase === "defeat"
+      );
+    }
+
+    const restartButton = document.getElementById("battle-restart-btn");
+    if (restartButton) {
+      restartButton.textContent = state.phase === "victory" || state.phase === "defeat"
+        ? "重新挑战"
+        : "重整防线";
+    }
+
+    const tips = {
+      ready: "点击有宠物的塔位进行选择；先选塔，再点空塔位即可换位。",
+      spawning: "敌军正在进入战场。宠物塔会优先攻击最接近基地的目标。",
+      combat: "击杀敌人可获得战斗能量，用于升级宠物塔或修复基地。",
+      intermission: "波次间可以移动宠物塔。调整阵型后再开始下一波。",
+      victory: "十波已全部守住，金币、水晶和经验已经结算。",
+      defeat: "失败也会获得部分金币和经验；重整防线即可重新开始。",
+    };
+    const settlement = state.settlement;
+    const settlementText = settlement
+      ? `${tips[state.phase]} 本次获得 ${settlement.coins} 金币、${settlement.crystals} 水晶、${settlement.exp} 经验。`
+      : tips[state.phase];
+    setText("battle-command-tip", settlementText || "守住基地！");
+
+    if (settlement) {
+      const settlementKey = `${settlement.runId}-${settlement.victory}-${settlement.wave}-${settlement.kills}-${settlement.coins}`;
+      if (this.lastBattleSettlementKey !== settlementKey) {
+        this.lastBattleSettlementKey = settlementKey;
+        const levelDisplay = document.querySelector(".player-level");
+        if (levelDisplay) levelDisplay.textContent = `Lv.${this.playerSystem.player.level}`;
+        void this.saveSystem?.saveGame?.(1);
+        this.uiSystem?.showToast(
+          settlement.victory ? "防线胜利，奖励已结算" : "基地失守，已结算部分奖励",
+          settlement.victory ? "success" : "info"
+        );
+      }
+    }
   }
 
   /**
@@ -2769,9 +2918,21 @@ class Game {
     } else if (this.currentScene === "dungeon") {
       if (upgradePanel) upgradePanel.style.display = "flex";
 
-      if (this.combatSystem) this.combatSystem.isPaused = false;
+      if (this.combatSystem) {
+        this.combatSystem.prepareBattle();
+        this.combatSystem.isPaused = false;
+        this.updateBattleDisplay();
+      }
       if (this.gameCore?.resizeCanvas) {
-        requestAnimationFrame(() => this.gameCore.resizeCanvas());
+        // 场景已经由 SceneRouter 显示，先同步一次尺寸；下一帧再校正字体/布局加载后的结果。
+        this.gameCore.resizeCanvas();
+        this.combatSystem?.placeHeroAtBase?.();
+        this.updateBattleDisplay();
+        requestAnimationFrame(() => {
+          this.gameCore.resizeCanvas();
+          this.combatSystem?.placeHeroAtBase?.();
+          this.updateBattleDisplay();
+        });
       }
       if (this.gameCore && !this.gameCore.isRunning) {
         this.gameCore.start();
@@ -2830,6 +2991,9 @@ class Game {
 
     // 更新命运桌
     this.updateFateDisplay();
+
+    // 更新宠物防线面板
+    this.updateBattleDisplay();
   }
 
   getProgressionContext(fateData = null) {

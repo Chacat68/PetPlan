@@ -361,6 +361,12 @@ export class PetSystem {
             return;
         }
 
+        // 竖版塔防由 CombatSystem 统一处理锁敌、射击和技能效果。
+        // PetSystem 只保留养成数据与宠物塔动画，避免旧冲刺 AI 重复造成伤害。
+        if (this.combatSystem.mode === 'towerDefense') {
+            return;
+        }
+
         const activeIds = new Set(this.equippedPets.map(pet => pet.instanceId));
         for (const id of this.petBattleStates.keys()) {
             if (!activeIds.has(id)) {
@@ -553,11 +559,63 @@ export class PetSystem {
         if (state === 'move') return 110;
         return 170;
     }
+
+    renderTowerDefense(ctx) {
+        const towers = this.combatSystem?.getTowerRenderData?.() || [];
+        const baseSize = Math.max(48, this.combatSystem?.getTowerSlotRadius?.() * 1.72 || 58);
+
+        towers.forEach((tower, index) => {
+            const template = this.petTemplates.find(item => item.id === tower.templateId);
+            if (!template) return;
+
+            const animationState = tower.attackAnimationTimer > 0 ? 'attack' : 'idle';
+            const sheet = this.getPetStateSheet(template.id, animationState);
+            const image = this.petImages[template.id];
+            const size = animationState === 'attack' ? baseSize * 1.12 : baseSize;
+
+            ctx.save();
+            ctx.imageSmoothingEnabled = false;
+            if (tower.selected || animationState === 'attack') {
+                ctx.shadowColor = tower.role?.color || '#ffd167';
+                ctx.shadowBlur = tower.selected ? 16 : 10;
+            }
+
+            if (sheet && sheet.complete && sheet.naturalWidth > 0) {
+                const frameSize = 512;
+                const frameDuration = this.getPetFrameDuration(animationState);
+                const frameIndex = (Math.floor((this.elapsedTime + index * 83) / frameDuration) + index) % 4;
+                ctx.drawImage(
+                    sheet,
+                    frameIndex * frameSize,
+                    0,
+                    frameSize,
+                    frameSize,
+                    tower.x - size / 2,
+                    tower.y - size / 2,
+                    size,
+                    size
+                );
+            } else if (image && image.complete && image.naturalWidth > 0) {
+                ctx.drawImage(image, tower.x - size / 2, tower.y - size / 2, size, size);
+            } else {
+                ctx.fillStyle = tower.role?.color || '#ffd167';
+                ctx.beginPath();
+                ctx.arc(tower.x, tower.y, size * 0.28, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        });
+    }
     
     /**
      * 渲染装备的宠物
      */
     render(ctx, playerX, playerY) {
+        if (this.combatSystem?.mode === 'towerDefense') {
+            this.renderTowerDefense(ctx);
+            return;
+        }
+
         this.equippedPets.forEach((pet, index) => {
             const template = this.petTemplates.find(t => t.id === pet.templateId);
             if (!template) return;

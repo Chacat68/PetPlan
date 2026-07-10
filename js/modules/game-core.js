@@ -86,6 +86,10 @@ export class GameCore {
    */
   setSystems(systems) {
     this.systems = systems;
+    if (this.systems.combat) {
+      this.systems.combat.mapWidth = this.config.width;
+      this.systems.combat.mapHeight = this.config.height;
+    }
   }
 
   /**
@@ -140,7 +144,7 @@ export class GameCore {
     }
 
     // 计算 deltaTime
-    this.deltaTime = elapsed;
+    this.deltaTime = Math.min(elapsed, 100);
     this.lastTime = currentTime;
 
     // 更新逻辑
@@ -260,6 +264,14 @@ export class GameCore {
    */
   renderBackground(ctx) {
     const { width, height } = this.config;
+
+    if (
+      this.systems.combat?.mode === "towerDefense" &&
+      typeof this.systems.combat.renderBattlefieldBackground === "function"
+    ) {
+      this.systems.combat.renderBattlefieldBackground(ctx);
+      return;
+    }
 
     ctx.fillStyle = "#24292f";
     ctx.fillRect(0, 0, width, height);

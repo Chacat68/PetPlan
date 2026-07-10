@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=phase-one-20260710b" />
+    <link rel="stylesheet" href="css/style.css?v=tower-defense-20260710b" />
   </head>
   <body>
     <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
@@ -21,8 +21,8 @@
         <div class="scene-container" id="battle-scene" style="display: none">
           <section class="battle-board-panel">
             <div class="battle-scorebar">
-              <span>BATTLE</span>
-              <span class="score-dollar">RUN</span>
+              <span>PET DEFENSE</span>
+              <span class="score-dollar" id="battle-phase-badge">布置防线</span>
             </div>
 
             <div class="battle-arena-surface">
@@ -45,93 +45,65 @@
                 </div>
               </div>
 
+              <div class="tower-defense-status" aria-live="polite">
+                <span>波次 <b id="battle-wave-display">0/10</b></span>
+                <span>基地 <b id="battle-base-hp-display">--/--</b></span>
+                <span>能量 <b id="battle-energy-display">100</b></span>
+                <span>敌军 <b id="battle-enemy-display">0</b></span>
+              </div>
+
               <div class="battle-canvas-frame">
                 <canvas id="gameCanvas" width="750" height="1800"></canvas>
               </div>
             </div>
           </section>
 
-          <!-- 升级面板 -->
+          <!-- 宠物防线指挥面板 -->
           <aside class="battle-upgrade-panel upgrade-panel" id="upgrade-panel" style="display: none">
             <div class="battle-shop-tabs">
-              <button type="button" class="shop-tab active">⚔</button>
-              <button type="button" class="shop-tab">♥</button>
-              <button type="button" class="shop-tab">✦</button>
-              <button type="button" class="shop-tab">↟</button>
+              <span class="shop-tab active" aria-hidden="true">🛡</span>
+              <span class="shop-tab" aria-hidden="true">🐾</span>
+              <span class="shop-tab" aria-hidden="true">⚡</span>
             </div>
-            <h3>升级</h3>
-            <div class="upgrade-list">
-              <div class="upgrade-item" data-attr="attack">
-                <span class="shop-icon battle-icon">⚔</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">攻击</span>
-                  <span class="upgrade-cost">攻击力 <b id="attack-value">20</b></span>
-                </span>
-                <button class="upgrade-btn" data-attr="attack">
-                  +5 <span class="cost">10💰</span>
-                </button>
-              </div>
-              <div class="upgrade-item" data-attr="maxHp">
-                <span class="shop-icon battle-icon heart">♥</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">生命上限</span>
-                  <span class="upgrade-cost">生命值 <b id="maxHp-value">100</b></span>
-                </span>
-                <button class="upgrade-btn" data-attr="maxHp">
-                  +20 <span class="cost">15💰</span>
-                </button>
-              </div>
-              <div class="upgrade-item" data-attr="hpRegen">
-                <span class="shop-icon battle-icon regen">✚</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">生命恢复</span>
-                  <span class="upgrade-cost">生命恢复 <b id="hpRegen-value">1</b></span>
-                </span>
-                <button class="upgrade-btn" data-attr="hpRegen">
-                  +1 <span class="cost">20💰</span>
-                </button>
-              </div>
-              <div class="upgrade-item" data-attr="critDamage">
-                <span class="shop-icon battle-icon crit">✦</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">暴击伤害</span>
-                  <span class="upgrade-cost">暴击伤害 <b id="critDamage-value">150%</b></span>
-                </span>
-                <button class="upgrade-btn" data-attr="critDamage">
-                  +10% <span class="cost">25💰</span>
-                </button>
-              </div>
-              <div class="upgrade-item" data-attr="attackSpeed">
-                <span class="shop-icon battle-icon speed">↟</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">攻击速度</span>
-                  <span class="upgrade-cost">攻击速度 <b id="attackSpeed-value">1.0</b></span>
-                </span>
-                <button class="upgrade-btn" data-attr="attackSpeed">
-                  +0.1 <span class="cost">30💰</span>
-                </button>
-              </div>
-              <div class="upgrade-item" data-attr="crit">
-                <span class="shop-icon battle-icon aim">◎</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">暴击率</span>
-                  <span class="upgrade-cost">暴击率 <b id="crit-value">5%</b></span>
-                </span>
-                <button class="upgrade-btn" data-attr="crit">
-                  +1% <span class="cost">35💰</span>
-                </button>
-              </div>
-              <div class="upgrade-item" data-attr="multiShot">
-                <span class="shop-icon battle-icon multi">※</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">多重射击</span>
-                  <span class="upgrade-cost">多重射击 <b id="multiShot-value">1</b></span>
-                </span>
-                <button class="upgrade-btn" data-attr="multiShot">
-                  +1 <span class="cost">40💰</span>
-                </button>
-              </div>
+            <h3>防线指挥</h3>
+
+            <div class="battle-command-summary">
+              <div><span>当前波次</span><b id="battle-panel-wave">0 / 10</b></div>
+              <div><span>最佳记录</span><b id="battle-best-wave">0</b></div>
+              <div><span>本局击杀</span><b id="battle-kills-display">0</b></div>
+              <div><span>待结算金币</span><b id="battle-reward-coins">0</b></div>
             </div>
+
+            <section class="selected-tower-card" id="selected-tower-card">
+              <span class="selected-tower-kicker">已选择宠物塔</span>
+              <strong id="selected-tower-name">暂无上阵宠物</strong>
+              <span id="selected-tower-role">请先在宠物编队中上阵宠物</span>
+              <dl class="selected-tower-stats">
+                <div><dt>塔等级</dt><dd id="selected-tower-level">--</dd></div>
+                <div><dt>伤害</dt><dd id="selected-tower-damage">--</dd></div>
+                <div><dt>射程</dt><dd id="selected-tower-range">--</dd></div>
+                <div><dt>攻速</dt><dd id="selected-tower-speed">--</dd></div>
+              </dl>
+            </section>
+
+            <div class="battle-command-actions">
+              <button type="button" class="tower-action-btn primary" id="battle-start-wave-btn">
+                开始第一波
+              </button>
+              <button type="button" class="tower-action-btn" id="battle-upgrade-tower-btn">
+                升级宠物塔 <span id="battle-upgrade-cost">40⚡</span>
+              </button>
+              <button type="button" class="tower-action-btn" id="battle-repair-base-btn">
+                修复基地 <span>35⚡</span>
+              </button>
+              <button type="button" class="tower-action-btn danger" id="battle-restart-btn">
+                重整防线
+              </button>
+            </div>
+
+            <p class="battle-command-tip" id="battle-command-tip">
+              点击有宠物的塔位进行选择；波次间先选塔，再点空塔位即可换位。
+            </p>
           </aside>
         </div>
 
@@ -604,7 +576,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=phase-one-20260710b";
+        var moduleSrc = "js/main.js?v=tower-defense-20260710b";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

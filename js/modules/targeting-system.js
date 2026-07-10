@@ -27,6 +27,7 @@ export class TargetingSystem {
                     laneDelta: Math.abs(targetPoint.y - originPoint.y),
                     ahead: targetPoint.x >= originPoint.x,
                     hpRatio: target.maxHp > 0 ? target.hp / target.maxHp : 1,
+                    pathProgress: Number.isFinite(target.progress) ? target.progress : null,
                     x: targetPoint.x
                 };
             })
@@ -53,6 +54,12 @@ export class TargetingSystem {
 
         if (strategy === 'frontline') {
             return a.x - b.x || a.distance - b.distance;
+        }
+
+        if (strategy === 'path-progress') {
+            const aProgress = a.pathProgress ?? -1;
+            const bProgress = b.pathProgress ?? -1;
+            return bProgress - aProgress || a.distance - b.distance;
         }
 
         return a.distance - b.distance;

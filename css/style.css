@@ -2474,6 +2474,37 @@ body {
   color: #7bd7ff;
 }
 
+.tower-defense-status {
+  position: absolute;
+  left: clamp(88px, 7vw, 132px);
+  right: clamp(10px, 1vw, 18px);
+  top: clamp(58px, 4.8vw, 86px);
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(4px, 0.45vw, 8px);
+  pointer-events: none;
+}
+
+.tower-defense-status > span {
+  padding: clamp(4px, 0.38vw, 7px) clamp(5px, 0.55vw, 10px);
+  border: 1px solid rgba(255, 209, 103, 0.42);
+  border-radius: 4px;
+  background: rgba(5, 7, 12, 0.78);
+  color: #d8d9e2;
+  font-size: clamp(9px, 0.7vw, 13px);
+  text-align: center;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+.tower-defense-status b {
+  display: block;
+  margin-top: 2px;
+  color: #fff1a7;
+  font-size: clamp(12px, 0.95vw, 18px);
+  line-height: 1;
+}
+
 .battle-upgrade-panel.upgrade-panel {
   position: static;
   flex: 0 0 clamp(270px, 28%, 420px);
@@ -2485,7 +2516,8 @@ body {
   border: clamp(5px, 0.55vw, 10px) solid #f4a545;
   box-shadow: inset 0 0 0 clamp(4px, 0.45vw, 8px) #3b241f, 3px 3px 0 #000;
   padding: clamp(7px, 0.75vw, 14px);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .battle-shop-tabs {
@@ -2494,6 +2526,12 @@ body {
   gap: clamp(7px, 0.7vw, 14px);
   justify-content: center;
   align-items: center;
+}
+
+.battle-upgrade-panel .shop-tab {
+  display: grid;
+  place-items: center;
+  cursor: default;
 }
 
 .battle-upgrade-panel h3 {
@@ -2597,6 +2635,151 @@ body {
 .battle-icon.aim,
 .battle-icon.multi {
   background: #ffd167;
+}
+
+.battle-command-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(6px, 0.6vw, 11px);
+  margin-bottom: clamp(8px, 0.8vw, 14px);
+}
+
+.battle-command-summary > div {
+  min-width: 0;
+  padding: clamp(7px, 0.7vw, 12px);
+  border: 2px solid #272935;
+  border-radius: 5px;
+  background: #15161d;
+  box-shadow: 2px 2px 0 #000;
+}
+
+.battle-command-summary span,
+.selected-tower-kicker {
+  display: block;
+  color: #aeb3bf;
+  font-size: clamp(9px, 0.68vw, 13px);
+  line-height: 1.15;
+}
+
+.battle-command-summary b {
+  display: block;
+  margin-top: 4px;
+  color: #ffd167;
+  font-size: clamp(14px, 1.05vw, 20px);
+  line-height: 1;
+}
+
+.selected-tower-card {
+  padding: clamp(9px, 0.9vw, 16px);
+  border: clamp(2px, 0.2vw, 4px) solid #565d6c;
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(255, 209, 103, 0.14), transparent 38%),
+    #1c1d25;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.03), 2px 2px 0 #000;
+}
+
+.selected-tower-card strong {
+  display: block;
+  margin-top: 5px;
+  color: #fff;
+  font-size: clamp(16px, 1.25vw, 24px);
+  line-height: 1.1;
+}
+
+#selected-tower-role {
+  display: block;
+  margin-top: 4px;
+  color: #ffd167;
+  font-size: clamp(10px, 0.78vw, 15px);
+}
+
+.selected-tower-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(5px, 0.45vw, 8px);
+  margin: clamp(9px, 0.85vw, 15px) 0 0;
+}
+
+.selected-tower-stats > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: clamp(5px, 0.45vw, 8px);
+  border-radius: 4px;
+  background: rgba(5, 7, 12, 0.55);
+}
+
+.selected-tower-stats dt {
+  color: #aeb3bf;
+  font-size: clamp(9px, 0.66vw, 12px);
+}
+
+.selected-tower-stats dd {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(11px, 0.8vw, 15px);
+  font-weight: 900;
+}
+
+.battle-command-actions {
+  display: grid;
+  gap: clamp(7px, 0.65vw, 12px);
+  margin-top: clamp(9px, 0.9vw, 16px);
+}
+
+.tower-action-btn {
+  width: 100%;
+  min-height: clamp(36px, 3.35vw, 58px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: clamp(7px, 0.7vw, 12px) clamp(10px, 0.9vw, 16px);
+  border: clamp(2px, 0.22vw, 4px) solid #090a0e;
+  border-radius: 6px;
+  background: #e3e5ea;
+  color: #17191e;
+  font-size: clamp(11px, 0.88vw, 17px);
+  font-weight: 900;
+  box-shadow: inset 0 0 0 2px #fff, 2px 2px 0 #000;
+}
+
+.tower-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.tower-action-btn.primary {
+  justify-content: center;
+  background: #ffd167;
+  color: #24120a;
+  box-shadow: inset 0 0 0 2px #fff1a7, 2px 2px 0 #000;
+}
+
+.tower-action-btn.danger {
+  justify-content: center;
+  background: #5a2029;
+  color: #ffdfe4;
+  box-shadow: inset 0 0 0 2px #7d313e, 2px 2px 0 #000;
+}
+
+.tower-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  filter: grayscale(0.4);
+}
+
+.battle-command-tip {
+  margin: clamp(8px, 0.8vw, 14px) 0 0;
+  padding: clamp(7px, 0.65vw, 11px);
+  border-left: 3px solid #7bd7ff;
+  background: rgba(123, 215, 255, 0.08);
+  color: #c9d4df;
+  font-size: clamp(9px, 0.68vw, 13px);
+  line-height: 1.45;
 }
 
 #territory-scene {
