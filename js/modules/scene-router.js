@@ -23,9 +23,15 @@ export class SceneRouter {
     return this.isPrimaryScene(scene) ? scene : fallback;
   }
 
-  getRequestedScene(fallback = "fate") {
-    const scene = new URLSearchParams(window.location.search).get("scene");
-    return this.resolve(scene, fallback);
+  getRequestedScene(fallback = "fate", { normalize = false } = {}) {
+    const requestedScene = new URLSearchParams(window.location.search).get("scene");
+    const resolvedScene = this.resolve(requestedScene, fallback);
+
+    if (normalize && requestedScene && requestedScene !== resolvedScene) {
+      this.writeSceneToLocation(resolvedScene, { replace: true });
+    }
+
+    return resolvedScene;
   }
 
   activate(scene, { syncHistory = false } = {}) {
@@ -50,11 +56,12 @@ export class SceneRouter {
   }
 
   bindHistory(onNavigate) {
-    this.onPopState = () => onNavigate(this.getRequestedScene());
+    this.onPopState = () =>
+      onNavigate(this.getRequestedScene("fate", { normalize: true }));
     window.addEventListener("popstate", this.onPopState);
   }
 
-  writeSceneToLocation(scene) {
+  writeSceneToLocation(scene, { replace = false } = {}) {
     const url = new URL(window.location.href);
     if (scene === "fate") {
       url.searchParams.delete("scene");
@@ -65,7 +72,8 @@ export class SceneRouter {
     const nextLocation = `${url.pathname}${url.search}${url.hash}`;
     const currentLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (nextLocation !== currentLocation) {
-      window.history.pushState({ scene }, "", nextLocation);
+      const method = replace ? "replaceState" : "pushState";
+      window.history[method]({ scene }, "", nextLocation);
     }
   }
 }

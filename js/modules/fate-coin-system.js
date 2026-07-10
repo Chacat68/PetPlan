@@ -3,7 +3,7 @@
  * Produces heads and tails through manual flips and assistant automation.
  */
 
-import { FATE_COST_CONFIG } from "./progression-config.js";
+import { FATE_COST_CONFIG } from "./progression-config.js?v=phase-one-20260710b";
 
 let instance = null;
 

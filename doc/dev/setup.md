@@ -23,6 +23,7 @@ python3 -m http.server 4174 --directory .
 node --check js/main.js
 node --check js/modules/scene-router.js
 node --check js/modules/modal-focus-manager.js
+node --experimental-default-type=module tests/phase-one-smoke.mjs
 git diff --check
 ```
 
@@ -36,7 +37,7 @@ git diff --check
 ## 调试
 
 - 运行时游戏实例保留在 `window.game`。
-- LocalStorage 的 `petplan_save_1` 是默认存档槽位。
+- LocalStorage 的 `petplan_save_1` 是默认存档槽位；旧版 `petplan_save_slot1` 仅用于首次迁移回退。
 - 清空站点数据前先从设置页导出存档。
 
 ## 部署

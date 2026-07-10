@@ -16,17 +16,17 @@ import {
   CombatSystem,
   getCombatSystemInstance,
 } from "./modules/combat-system.js?v=gun-muzzle-20260703a";
-import { SaveSystem, getSaveSystemInstance } from "./modules/save-system.js";
+import { SaveSystem, getSaveSystemInstance } from "./modules/save-system.js?v=phase-one-20260710b";
 import { UISystem, getUISystemInstance } from "./modules/ui-system.js";
 import { PetSystem, getPetSystemInstance } from "./modules/pet-system.js?v=pet-actions-20260702a";
 import {
   TerritorySystem,
   getTerritorySystemInstance,
-} from "./modules/territory-system.js?v=progression-20260710a";
-import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=progression-20260710a";
+} from "./modules/territory-system.js?v=phase-one-20260710b";
+import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=phase-one-20260710b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=modal-focus-20260710a";
-import { getProgressionSystemInstance } from "./modules/progression-system.js?v=progression-20260710a";
-import { SceneRouter } from "./modules/scene-router.js?v=scene-router-20260710a";
+import { getProgressionSystemInstance } from "./modules/progression-system.js?v=phase-one-20260710b";
+import { SceneRouter } from "./modules/scene-router.js?v=phase-one-20260710b";
 
 class Game {
   constructor() {
@@ -106,7 +106,6 @@ class Game {
         this.resourceSystem,
         this.playerSystem
       );
-      this.territorySystem.loadFromLocalStorage();
       if (typeof this.combatSystem.setTerritorySystem === "function") {
         this.combatSystem.setTerritorySystem(this.territorySystem);
       }
@@ -121,6 +120,9 @@ class Game {
         territory: this.territorySystem,
         fate: this.fateCoinSystem,
         progression: this.progressionSystem,
+      });
+      this.territorySystem.setOnPersist(() => {
+        void this.saveSystem.saveGame(1);
       });
 
       // 9. 初始化 UI 系统
@@ -149,12 +151,19 @@ class Game {
       });
 
       // 尝试加载存档
-      await this.saveSystem.loadGame(1);
+      const loadedSave = await this.saveSystem.loadGame(1);
+      if (!loadedSave && this.territorySystem.loadFromLocalStorage()) {
+        // 独立领地键只作为旧版回退，成功读取后立即迁入槽位存档。
+        await this.saveSystem.saveGame(1);
+      }
       this.syncTerritoryProgress({ silent: true });
 
       // 更新 UI
       this.updateUI();
-      this.handleNavigation(this.sceneRouter.getRequestedScene(), true);
+      this.handleNavigation(
+        this.sceneRouter.getRequestedScene("fate", { normalize: true }),
+        true
+      );
 
       // 启动游戏循环
       this.gameCore.start();
@@ -2917,12 +2926,12 @@ class Game {
     const maxSlots = this.territorySystem.slotConfig.maxSlots;
 
     for (let i = 0; i < maxSlots; i++) {
-      const slot = document.createElement("div");
-      slot.className = "territory-slot";
-      slot.dataset.slot = i;
-
       const state = this.territorySystem.getSlotState(i);
       const building = this.territorySystem.getBuildingAt(i);
+      const slot = document.createElement(state === "locked" ? "div" : "button");
+      slot.className = "territory-slot";
+      slot.dataset.slot = i;
+      if (slot instanceof HTMLButtonElement) slot.type = "button";
 
       if (state === "locked") {
         slot.classList.add("locked");
@@ -2936,6 +2945,7 @@ class Game {
           </div>
         `;
       } else if (state === "empty") {
+        slot.setAttribute("aria-label", `空地块 ${i + 1}，建造建筑`);
         slot.innerHTML = `
           <div class="slot-content">
             <div class="slot-empty">+</div>
@@ -2946,6 +2956,10 @@ class Game {
       } else if (state === "built" && building) {
         slot.classList.add("built");
         const data = this.territorySystem.buildingData[building.type];
+        slot.setAttribute(
+          "aria-label",
+          `${data.name}，等级 ${building.level}，查看建筑详情`
+        );
         slot.innerHTML = `
           <div class="slot-content">
             <div class="slot-icon">${data.icon}</div>

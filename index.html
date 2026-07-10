@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=progression-20260710a" />
+    <link rel="stylesheet" href="css/style.css?v=phase-one-20260710b" />
   </head>
   <body>
     <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
@@ -599,8 +599,12 @@
     <!-- 模块脚本启动器：ES Module 需要通过 http(s) 访问，file:// 会被浏览器 CORS 策略拦截。 -->
     <script>
       (function () {
-        var localUrl = "http://localhost:4174/index.html";
-        var moduleSrc = "js/main.js?v=progression-20260710a";
+        var requestedScene = new URLSearchParams(window.location.search).get("scene");
+        var localUrl = new URL("http://localhost:4174/index.html");
+        if (requestedScene === "dungeon" || requestedScene === "territory") {
+          localUrl.searchParams.set("scene", requestedScene);
+        }
+        var moduleSrc = "js/main.js?v=phase-one-20260710b";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");
@@ -613,7 +617,7 @@
               "<p>当前是 file:// 打开方式，浏览器会拦截 ES Module，游戏脚本无法加载。</p>" +
               '<code>python3 -m http.server 4174 --directory .</code>' +
               '<a class="file-protocol-link" href="' +
-              localUrl +
+              localUrl.href +
               '">打开 localhost:4174</a>' +
               "</div>";
             document.body.appendChild(notice);

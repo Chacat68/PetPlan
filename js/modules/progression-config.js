@@ -9,6 +9,7 @@ export const FATE_COST_CONFIG = Object.freeze({
 export const TERRITORY_PROGRESSION_CONFIG = Object.freeze({
   pulseWeights: Object.freeze({
     totalFlips: 1,
+    totalFlipsCap: 16,
     fateCoins: 24,
     assistants: 26,
     heroTrainingLevel: 16,
@@ -17,7 +18,7 @@ export const TERRITORY_PROGRESSION_CONFIG = Object.freeze({
     buildings: 14,
     expansionCount: 20,
   }),
-  slotUnlockPulses: Object.freeze([0, 8, 18, 32, 50, 72, 98, 130, 166, 206, 250, 300]),
+  slotUnlockPulses: Object.freeze([0, 12, 28, 48, 72, 100, 132, 168, 208, 252, 300, 352]),
   buildingUnlocks: Object.freeze({
     main_base: { stage: 1, pulse: 0, label: "初始开放" },
     training_ground: { stage: 2, pulse: 8, label: "循环脉冲 8" },

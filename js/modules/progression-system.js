@@ -2,7 +2,7 @@ import {
   FIRST_SESSION_STEPS,
   GROWTH_PATHS,
   PATH_RECOMMENDATION_BOOST,
-} from "./progression-config.js";
+} from "./progression-config.js?v=phase-one-20260710b";
 
 let instance = null;
 
@@ -32,10 +32,12 @@ export class ProgressionSystem {
     }
 
     const value = Math.max(0, Number(context[activeStep.metric]) || 0);
+    const activeStepIndex = FIRST_SESSION_STEPS.indexOf(activeStep);
     return {
       ...activeStep,
       complete: false,
-      current: completedSteps + 1,
+      current: activeStepIndex + 1,
+      completedCount: completedSteps,
       total: FIRST_SESSION_STEPS.length,
       value,
       progress: Math.min(1, value / activeStep.target),

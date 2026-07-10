@@ -15,6 +15,7 @@ export class SaveSystem {
         
         // 存档前缀
         this.storagePrefix = 'petplan_save_';
+        this.legacyStoragePrefix = 'petplan_save_slot';
         
         // 系统引用
         this.gameSystems = {};
@@ -28,12 +29,125 @@ export class SaveSystem {
     setGameSystems(systems) {
         this.gameSystems = systems;
     }
+
+    getStorageKey(slot) {
+        return this.storagePrefix + slot;
+    }
+
+    getLegacyStorageKey(slot) {
+        return this.legacyStoragePrefix + slot;
+    }
+
+    isValidSlot(slot) {
+        return Number.isInteger(slot) && slot >= 1 && slot <= this.maxSlots;
+    }
+
+    /**
+     * 将 1.0 时期的顶层存档与当前嵌套存档统一为当前结构。
+     */
+    normalizeSaveData(rawSaveData, slot = 1) {
+        if (!rawSaveData || typeof rawSaveData !== 'object') return null;
+        if (!rawSaveData.version || !Number.isFinite(Number(rawSaveData.timestamp))) {
+            return null;
+        }
+
+        const currentData = rawSaveData.data;
+        const hasCurrentShape =
+            currentData && typeof currentData === 'object' && !Array.isArray(currentData);
+        const sourceData = hasCurrentShape
+            ? currentData
+            : {
+                player: rawSaveData.player,
+                resource: rawSaveData.resources ?? rawSaveData.resource,
+                combat: rawSaveData.combat,
+                pet: rawSaveData.pets ?? rawSaveData.pet,
+                territory: rawSaveData.territory,
+                fate: rawSaveData.fate,
+                progression: rawSaveData.progression
+            };
+        const knownKeys = [
+            'player',
+            'resource',
+            'combat',
+            'pet',
+            'territory',
+            'fate',
+            'progression'
+        ];
+
+        if (!knownKeys.some((key) => sourceData[key] !== undefined)) {
+            return null;
+        }
+
+        const data = {};
+        knownKeys.forEach((key) => {
+            if (sourceData[key] !== undefined) data[key] = sourceData[key];
+        });
+
+        // 旧存档不包含命运与进度模块，加载空值可避免串入当前会话状态。
+        data.fate ??= {};
+        data.progression ??= {};
+
+        return {
+            version: this.version,
+            timestamp: Number(rawSaveData.timestamp),
+            slot,
+            level:
+                rawSaveData.level ??
+                rawSaveData.slotInfo?.playerLevel ??
+                data.player?.level ??
+                data.player?.player?.level ??
+                1,
+            data
+        };
+    }
+
+    readStoredSave(slot) {
+        const candidates = [
+            { key: this.getStorageKey(slot), legacyKey: false },
+            { key: this.getLegacyStorageKey(slot), legacyKey: true }
+        ];
+
+        for (const candidate of candidates) {
+            const serialized = localStorage.getItem(candidate.key);
+            if (serialized) return { ...candidate, serialized };
+        }
+
+        return null;
+    }
+
+    applySaveData(saveData) {
+        const data = saveData.data;
+
+        // 资源先恢复，为玩家、宠物和领地的后续刷新提供正确依赖。
+        if (data.resource && this.gameSystems.resource) {
+            this.gameSystems.resource.loadSaveData(data.resource);
+        }
+        if (data.territory && this.gameSystems.territory) {
+            this.gameSystems.territory.loadSaveData(data.territory);
+        }
+        if (data.player && this.gameSystems.player) {
+            this.gameSystems.player.loadSaveData(data.player);
+        }
+        if (data.combat && this.gameSystems.combat) {
+            this.gameSystems.combat.loadSaveData(data.combat);
+        }
+        if (data.pet && this.gameSystems.pet) {
+            this.gameSystems.pet.loadSaveData(data.pet);
+        }
+        if (this.gameSystems.fate) {
+            this.gameSystems.fate.loadSaveData(data.fate ?? {});
+        }
+        if (this.gameSystems.progression) {
+            this.gameSystems.progression.loadSaveData(data.progression ?? {});
+        }
+    }
     
     /**
      * 保存游戏
      */
     async saveGame(slot) {
-        if (slot < 1 || slot > this.maxSlots) {
+        if (!this.isValidSlot(slot)) {
             console.error('[SaveSystem] 无效的存档槽位:', slot);
             return false;
         }
@@ -77,7 +191,7 @@ export class SaveSystem {
             }
             
             // 保存到 LocalStorage
-            const key = this.storagePrefix + slot;
+            const key = this.getStorageKey(slot);
             localStorage.setItem(key, JSON.stringify(saveData));
             
             console.log('[SaveSystem] ✅ 保存成功:', slot);
@@ -93,55 +207,37 @@ export class SaveSystem {
      * 加载游戏
      */
     async loadGame(slot) {
-        if (slot < 1 || slot > this.maxSlots) {
+        if (!this.isValidSlot(slot)) {
             console.error('[SaveSystem] 无效的存档槽位:', slot);
             return false;
         }
         
         try {
-            const key = this.storagePrefix + slot;
-            const saveDataStr = localStorage.getItem(key);
-            
-            if (!saveDataStr) {
+            const storedSave = this.readStoredSave(slot);
+
+            if (!storedSave) {
                 console.log('[SaveSystem] 槽位为空:', slot);
                 return false;
             }
-            
-            const saveData = JSON.parse(saveDataStr);
-            
-            // 验证版本
-            if (!saveData.version || !saveData.timestamp) {
+
+            const rawSaveData = JSON.parse(storedSave.serialized);
+            const saveData = this.normalizeSaveData(rawSaveData, slot);
+
+            if (!saveData) {
                 console.error('[SaveSystem] 无效的存档格式');
                 return false;
             }
-            
-            // 恢复各系统数据
-            if (saveData.data.player && this.gameSystems.player) {
-                this.gameSystems.player.loadSaveData(saveData.data.player);
-            }
-            
-            if (saveData.data.resource && this.gameSystems.resource) {
-                this.gameSystems.resource.loadSaveData(saveData.data.resource);
-            }
-            
-            if (saveData.data.combat && this.gameSystems.combat) {
-                this.gameSystems.combat.loadSaveData(saveData.data.combat);
-            }
 
-            if (saveData.data.pet && this.gameSystems.pet) {
-                this.gameSystems.pet.loadSaveData(saveData.data.pet);
-            }
+            this.applySaveData(saveData);
 
-            if (saveData.data.territory && this.gameSystems.territory) {
-                this.gameSystems.territory.loadSaveData(saveData.data.territory);
-            }
-
-            if (saveData.data.fate && this.gameSystems.fate) {
-                this.gameSystems.fate.loadSaveData(saveData.data.fate);
-            }
-
-            if (saveData.data.progression && this.gameSystems.progression) {
-                this.gameSystems.progression.loadSaveData(saveData.data.progression);
+            const isMigratedShape = !rawSaveData.data || rawSaveData.version !== this.version;
+            if (storedSave.legacyKey || isMigratedShape) {
+                const currentKey = this.getStorageKey(slot);
+                if (!storedSave.legacyKey && !localStorage.getItem(`${currentKey}_legacy_backup`)) {
+                    localStorage.setItem(`${currentKey}_legacy_backup`, storedSave.serialized);
+                }
+                localStorage.setItem(currentKey, JSON.stringify(saveData));
+                console.log('[SaveSystem] 已迁移旧版存档:', slot);
             }
             
             console.log('[SaveSystem] ✅ 加载成功:', slot);
@@ -157,13 +253,13 @@ export class SaveSystem {
      * 删除存档
      */
     async deleteGame(slot) {
-        if (slot < 1 || slot > this.maxSlots) {
+        if (!this.isValidSlot(slot)) {
             return false;
         }
         
         try {
-            const key = this.storagePrefix + slot;
-            localStorage.removeItem(key);
+            localStorage.removeItem(this.getStorageKey(slot));
+            localStorage.removeItem(this.getLegacyStorageKey(slot));
             console.log('[SaveSystem] 存档已删除:', slot);
             return true;
         } catch (error) {
@@ -177,12 +273,15 @@ export class SaveSystem {
      */
     getSaveInfo(slot) {
         try {
-            const key = this.storagePrefix + slot;
-            const saveDataStr = localStorage.getItem(key);
-            
-            if (!saveDataStr) return null;
-            
-            const saveData = JSON.parse(saveDataStr);
+            const storedSave = this.readStoredSave(slot);
+            if (!storedSave) return null;
+
+            const saveData = this.normalizeSaveData(
+                JSON.parse(storedSave.serialized),
+                slot
+            );
+            if (!saveData) return null;
+
             return {
                 slot: slot,
                 timestamp: saveData.timestamp,
@@ -210,15 +309,23 @@ export class SaveSystem {
      */
     exportSave(slot) {
         try {
-            const key = this.storagePrefix + slot;
-            const saveDataStr = localStorage.getItem(key);
-            
-            if (!saveDataStr) {
+            const storedSave = this.readStoredSave(slot);
+
+            if (!storedSave) {
                 console.error('[SaveSystem] 槽位为空');
                 return;
             }
-            
-            const blob = new Blob([saveDataStr], { type: 'application/json' });
+
+            const saveData = this.normalizeSaveData(
+                JSON.parse(storedSave.serialized),
+                slot
+            );
+            if (!saveData) {
+                console.error('[SaveSystem] 无效的存档格式');
+                return;
+            }
+
+            const blob = new Blob([JSON.stringify(saveData)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -236,21 +343,24 @@ export class SaveSystem {
      * 导入存档
      */
     async importSave(file, slot) {
+        if (!this.isValidSlot(slot)) return false;
+
         return new Promise((resolve) => {
             try {
                 const reader = new FileReader();
                 
                 reader.onload = (e) => {
                     try {
-                        const saveData = JSON.parse(e.target.result);
-                        
-                        if (!saveData.version || !saveData.timestamp) {
+                        const parsedSaveData = JSON.parse(e.target.result);
+                        const saveData = this.normalizeSaveData(parsedSaveData, slot);
+
+                        if (!saveData) {
                             console.error('[SaveSystem] 无效的存档文件');
                             resolve(false);
                             return;
                         }
-                        
-                        const key = this.storagePrefix + slot;
+
+                        const key = this.getStorageKey(slot);
                         localStorage.setItem(key, JSON.stringify(saveData));
                         
                         console.log('[SaveSystem] 导入成功');

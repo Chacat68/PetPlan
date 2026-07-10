@@ -3,7 +3,7 @@
  * 管理领地建设、建筑升级和资源产出
  */
 
-import { TERRITORY_PROGRESSION_CONFIG } from "./progression-config.js";
+import { TERRITORY_PROGRESSION_CONFIG } from "./progression-config.js?v=phase-one-20260710b";
 
 let instance = null;
 
@@ -138,6 +138,7 @@ export class TerritorySystem {
         
         // 存储键
         this.storageKey = 'petplan_territory';
+        this.onPersist = null;
         
         // 初始化地块
         this.initSlots();
@@ -168,6 +169,20 @@ export class TerritorySystem {
     
     setPlayerSystem(playerSystem) {
         this.playerSystem = playerSystem;
+    }
+
+    setOnPersist(callback) {
+        this.onPersist = typeof callback === 'function' ? callback : null;
+    }
+
+    persist() {
+        if (this.onPersist) {
+            this.onPersist(this.getSaveData());
+            return;
+        }
+
+        // 未装配完整游戏存档时，保留独立键作为旧版工具的兼容回退。
+        this.saveToLocalStorage();
     }
 
     createDefaultProgressContext() {
@@ -207,14 +222,23 @@ export class TerritorySystem {
             ...context
         };
         const extraPetLevels = Math.max(0, safe.petLevelTotal - safe.equippedPets);
+        const additionalEquippedPets = Math.max(0, safe.equippedPets - 1);
         const weights = TERRITORY_PROGRESSION_CONFIG.pulseWeights;
 
         return [
-            { id: 'flips', label: '翻转', value: safe.totalFlips * weights.totalFlips },
+            {
+                id: 'flips',
+                label: '翻转',
+                value:
+                    Math.min(
+                        Math.max(0, safe.totalFlips),
+                        weights.totalFlipsCap
+                    ) * weights.totalFlips
+            },
             { id: 'table', label: '硬币', value: Math.max(0, safe.fateCoins - 1) * weights.fateCoins },
             { id: 'assistants', label: '助手', value: safe.assistants * weights.assistants },
             { id: 'hero', label: '训练', value: safe.heroTrainingLevel * weights.heroTrainingLevel },
-            { id: 'pets', label: '上阵', value: safe.equippedPets * weights.equippedPets },
+            { id: 'pets', label: '额外上阵', value: additionalEquippedPets * weights.equippedPets },
             { id: 'petLevels', label: '宠物成长', value: extraPetLevels * weights.extraPetLevels },
             { id: 'buildings', label: '建筑', value: safe.buildings * weights.buildings },
             { id: 'expansion', label: '扩张', value: safe.expansionCount * weights.expansionCount }
@@ -502,7 +526,7 @@ export class TerritorySystem {
         this.slots[slotIndex].building = building;
         
         // 保存数据
-        this.saveToLocalStorage();
+        this.persist();
         
         console.log('[TerritorySystem] ✅ 建造成功:', this.buildingData[buildingType].name);
         return { success: true, building };
@@ -535,7 +559,7 @@ export class TerritorySystem {
         
         this.buildings.push(building);
         this.slots[slotIndex].building = building;
-        this.saveToLocalStorage();
+        this.persist();
         
         return true;
     }
@@ -589,7 +613,7 @@ export class TerritorySystem {
         building.level += 1;
         
         // 保存数据
-        this.saveToLocalStorage();
+        this.persist();
         
         console.log('[TerritorySystem] ✅ 升级成功:', 
             this.buildingData[building.type].name, 'Lv.', building.level);
@@ -630,7 +654,7 @@ export class TerritorySystem {
         this.slots[slotIndex].building = null;
         
         // 保存数据
-        this.saveToLocalStorage();
+        this.persist();
         
         console.log('[TerritorySystem] ✅ 拆除成功，返还:', refundCoins, '金币,', refundCrystals, '水晶');
         return { success: true, refund: { coins: refundCoins, crystals: refundCrystals } };
@@ -704,7 +728,7 @@ export class TerritorySystem {
         );
         
         // 保存数据
-        this.saveToLocalStorage();
+        this.persist();
         
         console.log('[TerritorySystem] ✅ 扩张成功，当前地块数:', this.unlockedSlots);
         return { success: true, unlockedSlots: this.unlockedSlots };
@@ -745,7 +769,7 @@ export class TerritorySystem {
         }
         
         if (collected.coins > 0 || collected.crystals > 0) {
-            this.saveToLocalStorage();
+            this.persist();
             console.log('[TerritorySystem] 收集资源:', collected);
         }
         
@@ -904,10 +928,13 @@ export class TerritorySystem {
             if (dataStr) {
                 const data = JSON.parse(dataStr);
                 this.loadSaveData(data);
+                return true;
             }
         } catch (error) {
             console.error('[TerritorySystem] 加载失败:', error);
         }
+
+        return false;
     }
     
     /**
@@ -920,7 +947,7 @@ export class TerritorySystem {
         this.expansionCount = 0;
         this.lastProductionTime = Date.now();
         this.setProgressContext(this.createDefaultProgressContext());
-        this.saveToLocalStorage();
+        this.persist();
         console.log('[TerritorySystem] 领地数据已清除');
     }
 }

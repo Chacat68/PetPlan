@@ -67,7 +67,10 @@ focusManager.release(modal);
     combat: {},
     pet: {},
     territory: {},
-    fate: {}
+    fate: {},
+    progression: {}
   }
 }
 ```
+
+`SaveSystem` 会读取旧键 `petplan_save_slot<slot>`，并将旧版顶层的 `resources` / `pets` 映射到当前 `data.resource` / `data.pet` 结构。只有通过完整归一化校验的导入文件才会覆盖目标槽位。

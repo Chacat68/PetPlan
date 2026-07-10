@@ -1780,48 +1780,6 @@ body {
   overflow: hidden;
 }
 
-.territory-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  background: var(--gradient-header);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.territory-header h2 {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.territory-resources {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.territory-resources .resource-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 6px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-}
-
-.territory-resources .resource-icon {
-  font-size: 16px;
-}
-
-.territory-resources .resource-value {
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--gold);
-}
-
 .expand-btn {
   background: var(--gradient-crystal);
   color: white;
@@ -1858,6 +1816,10 @@ body {
 
 .territory-slot {
   aspect-ratio: 1;
+  appearance: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
   background: var(--gradient-card);
   border: 2px dashed var(--border-color);
   border-radius: var(--radius-lg);
@@ -1868,6 +1830,11 @@ body {
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+}
+
+.territory-slot:focus-visible {
+  outline: 3px solid #fff2a8;
+  outline-offset: 3px;
 }
 
 .territory-slot:hover {

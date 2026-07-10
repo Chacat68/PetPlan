@@ -1,391 +1,113 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场景切换持久化测试 - Pet Plan</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>场景路由冒烟测试 - PetPlan</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #2c3e50;
-            color: white;
-        }
+      body {
+        margin: 0 auto;
+        max-width: 880px;
+        padding: 32px;
+        color: #f5f7ff;
+        background: #172235;
+        font: 16px/1.6 system-ui, sans-serif;
+      }
 
-        .test-section {
-            background: #34495e;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 10px;
-        }
+      a {
+        color: #ffe08a;
+      }
 
-        .test-button {
-            background: #4a90e2;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
-            text-decoration: none;
-            display: inline-block;
-        }
+      .result {
+        margin: 12px 0;
+        padding: 12px 16px;
+        border-radius: 8px;
+        background: #24344f;
+      }
 
-        .test-button:hover {
-            background: #357abd;
-        }
+      .pass {
+        border-left: 5px solid #55d68b;
+      }
 
-        .test-result {
-            background: #27ae60;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }
+      .fail {
+        border-left: 5px solid #ff6b7d;
+      }
 
-        .test-error {
-            background: #e74c3c;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }
-
-        .test-info {
-            background: #3498db;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }
-
-        .building-list {
-            background: #2c3e50;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 10px 0;
-        }
-
-        .building-item {
-            background: #34495e;
-            padding: 10px;
-            margin: 5px 0;
-            border-radius: 5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-
-        .status-success {
-            background: #27ae60;
-        }
-
-        .status-error {
-            background: #e74c3c;
-        }
-
-        .status-warning {
-            background: #f39c12;
-        }
+      #router-fixture {
+        position: fixed;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
     </style>
-</head>
+  </head>
+  <body>
+    <h1>PetPlan 场景路由冒烟测试</h1>
+    <p>本页只验证场景与旧入口，不读写游戏存档。</p>
+    <p>
+      <a href="../index.html">打开游戏</a>
+      ·
+      <a href="../territory.html">验证旧领地入口</a>
+    </p>
+    <div id="results" aria-live="polite"></div>
 
-<body>
-    <h1>🔄 场景切换持久化测试</h1>
-
-    <div class="test-section">
-        <h2>测试说明</h2>
-        <p>这个页面用于测试建筑数据在场景切换后是否保持。请按照以下步骤进行测试：</p>
-        <ol>
-            <li>点击"添加测试建筑"按钮，在领地中添加一些建筑</li>
-            <li>点击"查看当前建筑"按钮，确认建筑已添加</li>
-            <li>点击"切换到主界面"按钮，跳转到主界面</li>
-            <li>在主界面点击"领地"按钮，返回领地界面</li>
-            <li>再次点击"查看当前建筑"按钮，确认建筑仍然存在</li>
-        </ol>
-    </div>
-
-    <div class="test-section">
-        <h2>测试操作</h2>
-        <button class="test-button" onclick="addTestBuildings()">添加测试建筑</button>
-        <button class="test-button" onclick="viewCurrentBuildings()">查看当前建筑</button>
-        <button class="test-button" onclick="clearAllBuildings()">清除所有建筑</button>
-        <a href="index.html" class="test-button">切换到主界面</a>
-        <a href="territory.html" class="test-button">切换到领地界面</a>
-        <button class="test-button" onclick="runFullTest()">运行完整测试</button>
-    </div>
-
-    <div class="test-section">
-        <h2>测试结果</h2>
-        <div id="test-results"></div>
-    </div>
-
-    <div class="test-section">
-        <h2>当前建筑列表</h2>
-        <div id="building-list" class="building-list">
-            <p>点击"查看当前建筑"按钮查看建筑列表</p>
-        </div>
-    </div>
-
-    <div class="test-section">
-        <h2>系统状态</h2>
-        <div id="system-status" class="building-list">
-            <p>系统状态检查中...</p>
-        </div>
+    <div id="router-fixture" aria-hidden="true">
+      <button data-test-nav data-tab="fate">命运</button>
+      <button data-test-nav data-tab="dungeon">战斗</button>
+      <button data-test-nav data-tab="territory">领地</button>
+      <section id="test-fate"></section>
+      <section id="test-dungeon"></section>
+      <section id="test-territory"></section>
     </div>
 
     <script type="module">
-        import { getTerritorySystemInstance, resetTerritorySystemInstance } from './js/modules/territory-system.js';
-        import ResourceSystem from './js/modules/resource-system.js';
+      import { SceneRouter } from "../js/modules/scene-router.js?v=phase-one-20260710b";
 
-        // 初始化系统
-        const resourceSystem = ResourceSystem.getInstance();
-        const territorySystem = getTerritorySystemInstance(resourceSystem);
+      const results = document.getElementById("results");
+      const report = (name, passed, detail = "") => {
+        const item = document.createElement("div");
+        item.className = `result ${passed ? "pass" : "fail"}`;
+        item.textContent = `${passed ? "通过" : "失败"}：${name}${detail ? ` — ${detail}` : ""}`;
+        results.appendChild(item);
+      };
 
-        // 加载数据
-        resourceSystem.loadFromLocalStorage();
-        territorySystem.loadFromLocalStorage();
+      const router = new SceneRouter({
+        navSelector: "[data-test-nav]",
+        scenes: {
+          fate: "#test-fate",
+          dungeon: "#test-dungeon",
+          territory: "#test-territory",
+        },
+      });
 
-        // 检查系统状态
-        function checkSystemStatus() {
-            const statusDiv = document.getElementById('system-status');
-            const results = [];
+      for (const scene of ["fate", "dungeon", "territory"]) {
+        const active = router.activate(scene);
+        const visible = Object.entries(router.scenes)
+          .filter(([, selector]) => document.querySelector(selector).style.display === "flex")
+          .map(([name]) => name);
+        report(`${scene} 场景映射`, active === scene && visible.join() === scene);
+      }
 
-            // 检查资源系统
-            try {
-                const coins = resourceSystem.coins;
-                const crystals = resourceSystem.crystals;
-                results.push({
-                    name: '资源系统',
-                    status: 'success',
-                    message: `金币: ${coins}, 水晶: ${crystals}`
-                });
-            } catch (error) {
-                results.push({
-                    name: '资源系统',
-                    status: 'error',
-                    message: `错误: ${error.message}`
-                });
-            }
+      const originalLocation = `${location.pathname}${location.search}${location.hash}`;
+      history.replaceState({}, "", `${location.pathname}?scene=invalid#route-test`);
+      const normalized = router.getRequestedScene("fate", { normalize: true });
+      report(
+        "无效 scene 规范化",
+        normalized === "fate" && !new URL(location.href).searchParams.has("scene")
+      );
+      history.replaceState({}, "", originalLocation);
 
-            // 检查领地系统
-            try {
-                const buildings = territorySystem.getBuildings();
-                results.push({
-                    name: '领地系统',
-                    status: 'success',
-                    message: `建筑数量: ${buildings.length}`
-                });
-            } catch (error) {
-                results.push({
-                    name: '领地系统',
-                    status: 'error',
-                    message: `错误: ${error.message}`
-                });
-            }
-
-            // 检查单例模式
-            try {
-                const territorySystem2 = getTerritorySystemInstance(resourceSystem);
-                const isSingleton = territorySystem === territorySystem2;
-                results.push({
-                    name: '单例模式',
-                    status: isSingleton ? 'success' : 'error',
-                    message: isSingleton ? '正常工作' : '单例模式失效'
-                });
-            } catch (error) {
-                results.push({
-                    name: '单例模式',
-                    status: 'error',
-                    message: `错误: ${error.message}`
-                });
-            }
-
-            // 显示状态
-            statusDiv.innerHTML = results.map(result => `
-                <div class="building-item">
-                    <div>
-                        <span class="status-indicator status-${result.status}"></span>
-                        <strong>${result.name}</strong>
-                    </div>
-                    <div>${result.message}</div>
-                </div>
-            `).join('');
-        }
-
-        // 添加测试建筑
-        window.addTestBuildings = function () {
-            try {
-                // 确保有足够的资源
-                resourceSystem.setCoins(100000);
-                resourceSystem.setCrystals(10000);
-                resourceSystem.saveToLocalStorage();
-
-                // 添加一些测试建筑
-                const testBuildings = [
-                    { type: 'training_ground', position: { x: 0, y: 0 } },
-                    { type: 'temple', position: { x: 1, y: 0 } },
-                    { type: 'workshop', position: { x: 0, y: 1 } },
-                    { type: 'crystal_mine', position: { x: 1, y: 1 } }
-                ];
-
-                let successCount = 0;
-                testBuildings.forEach(building => {
-                    if (territorySystem.debugBuildBuilding(building.type, building.position)) {
-                        successCount++;
-                    }
-                });
-
-                showResult(`成功添加 ${successCount} 个测试建筑`, 'success');
-                viewCurrentBuildings();
-                checkSystemStatus();
-            } catch (error) {
-                showResult(`添加测试建筑失败: ${error.message}`, 'error');
-            }
-        };
-
-        // 查看当前建筑
-        window.viewCurrentBuildings = function () {
-            try {
-                const buildings = territorySystem.getBuildings();
-                const buildingList = document.getElementById('building-list');
-
-                if (buildings.length === 0) {
-                    buildingList.innerHTML = '<p>当前没有建筑</p>';
-                } else {
-                    buildingList.innerHTML = buildings.map(building => {
-                        const buildingData = territorySystem.buildingData[building.type];
-                        return `
-                            <div class="building-item">
-                                <div>
-                                    <strong>${buildingData.name}</strong> (${building.type})
-                                    <br>
-                                    <small>位置: (${building.position.x}, ${building.position.y}) | 等级: ${building.level}</small>
-                                </div>
-                                <div>${getBuildingIcon(building.type)}</div>
-                            </div>
-                        `;
-                    }).join('');
-                }
-
-                showResult(`当前共有 ${buildings.length} 个建筑`, 'success');
-            } catch (error) {
-                showResult(`查看建筑失败: ${error.message}`, 'error');
-            }
-        };
-
-        // 清除所有建筑
-        window.clearAllBuildings = function () {
-            try {
-                territorySystem.clearTerritoryData();
-                resourceSystem.setCoins(100000);
-                resourceSystem.setCrystals(10000);
-                resourceSystem.saveToLocalStorage();
-
-                showResult('所有建筑已清除，资源已重置', 'success');
-                viewCurrentBuildings();
-                checkSystemStatus();
-            } catch (error) {
-                showResult(`清除建筑失败: ${error.message}`, 'error');
-            }
-        };
-
-        // 运行完整测试
-        window.runFullTest = function () {
-            try {
-                showResult('开始运行完整测试...', 'info');
-
-                // 1. 清除现有数据
-                territorySystem.clearTerritoryData();
-                showResult('步骤1: 清除现有数据 ✓', 'success');
-
-                // 2. 添加测试建筑
-                resourceSystem.setCoins(100000);
-                resourceSystem.setCrystals(10000);
-                resourceSystem.saveToLocalStorage();
-
-                const testBuildings = [
-                    { type: 'training_ground', position: { x: 0, y: 0 } },
-                    { type: 'temple', position: { x: 1, y: 0 } }
-                ];
-
-                testBuildings.forEach(building => {
-                    territorySystem.debugBuildBuilding(building.type, building.position);
-                });
-
-                showResult('步骤2: 添加测试建筑 ✓', 'success');
-
-                // 3. 保存数据
-                territorySystem.saveToLocalStorage();
-                showResult('步骤3: 保存数据 ✓', 'success');
-
-                // 4. 测试单例模式
-                const newTerritorySystem = getTerritorySystemInstance(resourceSystem);
-                const isSingleton = territorySystem === newTerritorySystem;
-
-                if (isSingleton) {
-                    showResult('步骤4: 单例模式测试通过 ✓', 'success');
-                } else {
-                    showResult('步骤4: 单例模式测试失败 ✗', 'error');
-                }
-
-                // 5. 重新加载数据测试
-                const loadedBuildings = newTerritorySystem.getBuildings();
-
-                if (loadedBuildings.length === testBuildings.length + 1) { // +1 for main_base
-                    showResult('步骤5: 数据持久化测试通过 ✓', 'success');
-                    showResult('🎉 场景切换持久化功能正常工作！', 'success');
-                } else {
-                    showResult(`步骤5: 数据持久化测试失败 - 期望 ${testBuildings.length + 1} 个建筑，实际 ${loadedBuildings.length} 个`, 'error');
-                }
-
-                checkSystemStatus();
-
-            } catch (error) {
-                showResult(`测试失败: ${error.message}`, 'error');
-            }
-        };
-
-        // 显示结果
-        function showResult(message, type) {
-            const resultsDiv = document.getElementById('test-results');
-            const resultDiv = document.createElement('div');
-            resultDiv.className = type === 'error' ? 'test-error' :
-                type === 'info' ? 'test-info' : 'test-result';
-            resultDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            resultsDiv.appendChild(resultDiv);
-            resultsDiv.scrollTop = resultsDiv.scrollHeight;
-        }
-
-        // 获取建筑图标
-        function getBuildingIcon(buildingType) {
-            const icons = {
-                'training_ground': '🏋️',
-                'temple': '🏛️',
-                'main_base': '🏰',
-                'barracks': '🏕️',
-                'workshop': '🔨',
-                'crystal_mine': '💎',
-                'library': '📚',
-                'hospital': '🏥',
-                'tower': '🗼',
-                'market': '🏪'
-            };
-            return icons[buildingType] || '🏗️';
-        }
-
-        // 页面加载时显示当前状态
-        viewCurrentBuildings();
-        checkSystemStatus();
+      try {
+        const response = await fetch("../territory.html", { cache: "no-store" });
+        const source = await response.text();
+        report(
+          "territory.html 兼容跳转",
+          response.ok && source.includes("index.html?scene=territory")
+        );
+      } catch (error) {
+        report("territory.html 兼容跳转", false, error.message);
+      }
     </script>
-</body>
-
+  </body>
 </html>
