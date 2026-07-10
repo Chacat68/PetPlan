@@ -8,8 +8,9 @@
 
 | 文档                                 | 说明           | 适合谁   |
 | ------------------------------------ | -------------- | -------- |
-| [quickstart.md](./quickstart.md)     | 5 分钟快速开始 | 新玩家   |
+| [QUICKSTART.md](./QUICKSTART.md)     | 5 分钟快速开始 | 新玩家   |
 | [player-guide.md](./player-guide.md) | 完整玩法指南   | 所有玩家 |
+| [design/product-experience.md](./design/product-experience.md) | 横屏体验与玩家路径 | 产品与开发 |
 | [design/](./design/)                 | 系统设计文档   | 开发者   |
 | [dev/](./dev/)                       | 开发环境和规范 | 贡献者   |
 | [CHANGELOG.md](./CHANGELOG.md)       | 版本更新日志   | 所有人   |
@@ -22,7 +23,7 @@
 doc/
 ├── README.md          # 本文件
 ├── CHANGELOG.md       # 更新日志
-├── quickstart.md      # 快速开始
+├── QUICKSTART.md      # 快速开始
 ├── player-guide.md    # 玩家指南
 ├── design/            # 技术设计
 │   ├── architecture.md   # 系统架构
@@ -48,4 +49,4 @@ doc/
 
 ---
 
-**最后更新**: 2026 年 1 月 1 日
+**最后更新**: 2026 年 7 月 10 日

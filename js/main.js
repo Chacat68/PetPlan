@@ -22,8 +22,11 @@ import { PetSystem, getPetSystemInstance } from "./modules/pet-system.js?v=pet-a
 import {
   TerritorySystem,
   getTerritorySystemInstance,
-} from "./modules/territory-system.js?v=territory-loop-20260703a";
-import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-coins-20260702c";
+} from "./modules/territory-system.js?v=progression-20260710a";
+import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=progression-20260710a";
+import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=modal-focus-20260710a";
+import { getProgressionSystemInstance } from "./modules/progression-system.js?v=progression-20260710a";
+import { SceneRouter } from "./modules/scene-router.js?v=scene-router-20260710a";
 
 class Game {
   constructor() {
@@ -47,6 +50,8 @@ class Game {
     this.petModalTab = "formation";
     this.achievementModalTab = "achievements";
     this.seenTerritoryUnlocks = new Set();
+    this.modalFocusManager = new ModalFocusManager();
+    this.sceneRouter = new SceneRouter();
   }
 
   /**
@@ -59,18 +64,21 @@ class Game {
       // 1. 初始化资源系统（最先，其他系统依赖）
       this.resourceSystem = getResourceSystemInstance();
 
-      // 2. 初始化命运硬币系统（首页核心成长线）
+      // 2. 初始化进度系统（目标、倾向与领取记录）
+      this.progressionSystem = getProgressionSystemInstance();
+
+      // 3. 初始化命运硬币系统（首页核心成长线）
       this.fateCoinSystem = getFateCoinSystemInstance();
       this.fateCoinSystem.setOnChange(() => this.updateFateDisplay());
       this.fateCoinSystem.setOnAutoFlip((result) =>
         this.handleFateAutoFlip(result)
       );
 
-      // 3. 初始化玩家系统
+      // 4. 初始化玩家系统
       this.playerSystem = getPlayerSystemInstance();
       this.playerSystem.setResourceSystem(this.resourceSystem);
 
-      // 4. 初始化宠物系统
+      // 5. 初始化宠物系统
       this.petSystem = getPetSystemInstance();
       this.petSystem.setResourceSystem(this.resourceSystem);
       this.petSystem.setPlayerSystem(this.playerSystem);
@@ -83,7 +91,7 @@ class Game {
         }
       }
 
-      // 5. 初始化战斗系统
+      // 6. 初始化战斗系统
       this.combatSystem = getCombatSystemInstance();
       this.combatSystem.setPlayerSystem(this.playerSystem);
       this.combatSystem.setResourceSystem(this.resourceSystem);
@@ -93,7 +101,7 @@ class Game {
       }
       this.petSystem.setCombatSystem(this.combatSystem);
 
-      // 6. 初始化领地系统
+      // 7. 初始化领地系统
       this.territorySystem = getTerritorySystemInstance(
         this.resourceSystem,
         this.playerSystem
@@ -103,7 +111,7 @@ class Game {
         this.combatSystem.setTerritorySystem(this.territorySystem);
       }
 
-      // 7. 初始化存档系统
+      // 8. 初始化存档系统
       this.saveSystem = getSaveSystemInstance();
       this.saveSystem.setGameSystems({
         player: this.playerSystem,
@@ -112,12 +120,13 @@ class Game {
         pet: this.petSystem,
         territory: this.territorySystem,
         fate: this.fateCoinSystem,
+        progression: this.progressionSystem,
       });
 
-      // 8. 初始化 UI 系统
+      // 9. 初始化 UI 系统
       this.uiSystem = getUISystemInstance();
 
-      // 9. 初始化游戏核心
+      // 10. 初始化游戏核心
       this.gameCore = getGameCoreInstance(this.canvas);
       this.gameCore.setSystems({
         player: this.playerSystem,
@@ -135,6 +144,9 @@ class Game {
 
       // 绑定事件
       this.bindEvents();
+      this.sceneRouter.bindHistory((scene) => {
+        this.handleNavigation(scene, true);
+      });
 
       // 尝试加载存档
       await this.saveSystem.loadGame(1);
@@ -142,7 +154,7 @@ class Game {
 
       // 更新 UI
       this.updateUI();
-      this.handleNavigation("fate", true);
+      this.handleNavigation(this.sceneRouter.getRequestedScene(), true);
 
       // 启动游戏循环
       this.gameCore.start();
@@ -341,6 +353,7 @@ class Game {
     this.updatePlayerModalInfo();
 
     modalOverlay.classList.add("active");
+    this.modalFocusManager.activate(modalOverlay, "#player-modal-close");
   }
 
   /**
@@ -350,6 +363,7 @@ class Game {
     const modalOverlay = document.getElementById("player-modal-overlay");
     if (modalOverlay) {
       modalOverlay.classList.remove("active");
+      this.modalFocusManager.release(modalOverlay);
     }
   }
 
@@ -362,6 +376,7 @@ class Game {
       this.updateSettingsPanelStatus();
       modalOverlay.querySelector(".settings-content")?.scrollTo({ top: 0 });
       modalOverlay.classList.add("active");
+      this.modalFocusManager.activate(modalOverlay, "#settings-modal-close");
     }
   }
 
@@ -372,6 +387,7 @@ class Game {
     const modalOverlay = document.getElementById("settings-modal-overlay");
     if (modalOverlay) {
       modalOverlay.classList.remove("active");
+      this.modalFocusManager.release(modalOverlay);
     }
   }
 
@@ -885,12 +901,43 @@ class Game {
     this.syncFateTableCoins(data.fateCoins);
     this.syncFateHelpers(data.assistants);
     const territorySummary = this.syncTerritoryProgress();
+    const progressionContext = this.getProgressionContext(data);
+    const pathSummary = this.progressionSystem?.getPathSummary(
+      progressionContext
+    );
     const recommendation = this.getFateUpgradeRecommendation(
       data,
-      territorySummary
+      territorySummary,
+      pathSummary
     );
     this.updateFateShopRecommendation(recommendation);
     this.updateFateNextGoal(data, territorySummary, recommendation);
+    this.updateFateProgressionGuide(progressionContext, pathSummary);
+  }
+
+  updateFateProgressionGuide(context, pathSummary) {
+    const guideEl = document.getElementById("fate-first-session-guide");
+    const pathEl = document.getElementById("fate-path-summary");
+    const guide = this.progressionSystem?.getFirstSessionGuide(context);
+
+    if (guideEl && guide) {
+      guideEl.textContent = guide.complete
+        ? guide.title
+        : `首局 ${guide.current}/${guide.total} · ${guide.title} ${this.formatGameNumber(
+            guide.value
+          )}/${this.formatGameNumber(guide.target)}`;
+      guideEl.dataset.route = guide.routeType || "mixed";
+      guideEl.title = guide.detail || guide.title;
+    }
+
+    if (pathEl) {
+      const leadingPath = pathSummary?.leadingPath;
+      pathEl.textContent = leadingPath
+        ? `倾向：${leadingPath.label}`
+        : "倾向：自由探索";
+      pathEl.dataset.path = leadingPath?.id || "neutral";
+      pathEl.title = leadingPath?.detail || "先尝试不同成长项，再形成倾向";
+    }
   }
 
   getFateAutoRatePreview(data, overrides = {}) {
@@ -924,7 +971,9 @@ class Game {
     )}/秒`;
   }
 
-  getFateUpgradeRecommendation(data, territorySummary) {
+  getFateUpgradeRecommendation(data, territorySummary, pathSummary = null) {
+    const activePathSummary =
+      pathSummary || this.progressionSystem?.getPathSummary(this.getProgressionContext(data));
     const candidates = this.getFateUpgradeCandidates(data, territorySummary)
       .map((candidate, index) => {
         const gap = this.getFateCostGap(candidate.cost, data);
@@ -932,6 +981,10 @@ class Game {
           candidate,
           territorySummary
         );
+        const pathBoost = this.progressionSystem?.getRecommendationBoost(
+          candidate.action,
+          activePathSummary
+        ) || 0;
         const availabilityScore = gap.affordable ? 28 : Math.round(gap.progress * 18);
         const score = Math.max(
           0,
@@ -939,6 +992,7 @@ class Game {
             candidate.baseScore +
               candidate.benefitScore +
               territoryScore +
+              pathBoost +
               availabilityScore -
               gap.missingPenalty
           )
@@ -950,7 +1004,9 @@ class Game {
           reason: this.getFateRecommendationReason(
             candidate,
             gap,
-            territoryScore
+            territoryScore,
+            activePathSummary,
+            pathBoost
           ),
           score,
           order: index,
@@ -1110,11 +1166,20 @@ class Game {
     };
   }
 
-  getFateRecommendationReason(candidate, gap, territoryScore = 0) {
+  getFateRecommendationReason(
+    candidate,
+    gap,
+    territoryScore = 0,
+    pathSummary = null,
+    pathBoost = 0
+  ) {
     if (candidate.action === "assistant" && candidate.title.includes("第 1 个")) {
       return "解锁自动化";
     }
     if (territoryScore >= 72) return "可推进领地";
+    if (pathBoost > 0 && pathSummary?.leadingPath) {
+      return `遵循${pathSummary.leadingPath.label}倾向`;
+    }
 
     const reasons = {
       assistant: "提升自动频率",
@@ -1156,24 +1221,30 @@ class Game {
       ])
     );
 
-    document
-      .querySelectorAll(".fate-upgrade[data-fate-action]")
-      .forEach((button) => {
-        const action = button.dataset.fateAction;
-        const isPrimary = action === primaryAction;
-        const isSecondary = action === secondaryAction;
+    const buttons = Array.from(
+      document.querySelectorAll(".fate-upgrade[data-fate-action]")
+    );
 
-        button.classList.toggle("is-recommended", isPrimary);
-        button.classList.toggle("is-secondary-recommendation", isSecondary);
-        button.dataset.recommendation = isPrimary
-          ? "primary"
-          : isSecondary
-          ? "secondary"
-          : "none";
-        button.dataset.recommendationReason =
-          isPrimary || isSecondary ? reasonByAction.get(action) || "" : "";
-        this.updateFateUpgradeReason(button, button.dataset.recommendationReason);
-      });
+    buttons.forEach((button, index) => {
+      if (!button.dataset.fateShopOrder) {
+        button.dataset.fateShopOrder = String(index);
+      }
+
+      const action = button.dataset.fateAction;
+      const isPrimary = action === primaryAction;
+      const isSecondary = action === secondaryAction;
+
+      button.classList.toggle("is-recommended", isPrimary);
+      button.classList.toggle("is-secondary-recommendation", isSecondary);
+      button.dataset.recommendation = isPrimary
+        ? "primary"
+        : isSecondary
+        ? "secondary"
+        : "none";
+      button.dataset.recommendationReason =
+        isPrimary || isSecondary ? reasonByAction.get(action) || "" : "";
+      this.updateFateUpgradeReason(button, button.dataset.recommendationReason);
+    });
 
     this.updateFateShopFilter();
   }
@@ -1213,15 +1284,44 @@ class Game {
       button.setAttribute("aria-selected", active ? "true" : "false");
     });
 
-    document
-      .querySelectorAll(".fate-upgrade[data-fate-action]")
-      .forEach((button) => {
-        const visible = this.isFateShopCardVisible(button, filter);
-        button.hidden = !visible;
-      });
+    const cards = Array.from(
+      document.querySelectorAll(".fate-upgrade[data-fate-action]")
+    );
+
+    cards.forEach((button) => {
+      const visible = this.isFateShopCardVisible(button, filter);
+      button.hidden = !visible;
+    });
+
+    const list = document.querySelector(".fate-shop-list");
+    if (list) {
+      cards
+        .sort(
+          (a, b) =>
+            this.getFateShopCardDisplayOrder(a, filter) -
+            this.getFateShopCardDisplayOrder(b, filter)
+        )
+        .forEach((button) => list.appendChild(button));
+    }
 
     const title = document.getElementById("fate-shop-title");
     if (title) title.textContent = labels[filter] || "推荐";
+  }
+
+  getFateShopCardDisplayOrder(button, filter) {
+    const originalOrder = Number(button.dataset.fateShopOrder || 0);
+    if (filter !== "recommended") return originalOrder;
+
+    const recommendationRank = {
+      primary: 0,
+      secondary: 1,
+      none: 2,
+    };
+
+    return (
+      (recommendationRank[button.dataset.recommendation] ?? 2) * 100 +
+      originalOrder
+    );
   }
 
   isFateShopCardVisible(button, filter) {
@@ -2002,13 +2102,14 @@ class Game {
     this.closeAchievementModal();
     this.petModalTab = activeTab || "formation";
     this.renderPetModal();
-    document
-      .querySelector("#pet-modal .pet-modal-close")
-      ?.focus({ preventScroll: true });
   }
 
   closePetModal() {
-    document.getElementById("pet-modal")?.remove();
+    const modal = document.getElementById("pet-modal");
+    if (modal) {
+      modal.remove();
+      this.modalFocusManager.release(modal);
+    }
   }
 
   renderPetModal() {
@@ -2058,6 +2159,7 @@ class Game {
     });
 
     document.body.appendChild(modal);
+    this.modalFocusManager.activate(modal, ".pet-modal-close");
   }
 
   renderPetTabButton(tab, label) {
@@ -2304,13 +2406,14 @@ class Game {
     this.closePetModal();
     this.achievementModalTab = activeTab || "achievements";
     this.renderAchievementModal();
-    document
-      .querySelector("#achievement-modal .achievement-close-btn")
-      ?.focus({ preventScroll: true });
   }
 
   closeAchievementModal() {
-    document.getElementById("achievement-modal")?.remove();
+    const modal = document.getElementById("achievement-modal");
+    if (modal) {
+      modal.remove();
+      this.modalFocusManager.release(modal);
+    }
   }
 
   renderAchievementModal() {
@@ -2345,6 +2448,12 @@ class Game {
         return;
       }
 
+      const claimButton = target.closest("[data-achievement-claim]");
+      if (claimButton) {
+        this.claimAchievementReward(claimButton.dataset.achievementClaim);
+        return;
+      }
+
       const tabButton = target.closest("[data-achievement-tab]");
       if (tabButton) {
         this.achievementModalTab =
@@ -2354,6 +2463,7 @@ class Game {
     });
 
     document.body.appendChild(modal);
+    this.modalFocusManager.activate(modal, ".achievement-close-btn");
   }
 
   renderAchievementTabButton(tab, label) {
@@ -2401,7 +2511,7 @@ class Game {
         desc: "累计翻面 10 次",
         current: totalFlips,
         target: 10,
-        reward: "金币 80",
+        reward: { coins: 80 },
       },
       {
         id: "fate_100",
@@ -2411,7 +2521,7 @@ class Game {
         desc: "累计翻面 100 次",
         current: totalFlips,
         target: 100,
-        reward: "金币 500",
+        reward: { coins: 500 },
       },
       {
         id: "table_coin_2",
@@ -2421,7 +2531,7 @@ class Game {
         desc: "桌面硬币达到 2 枚",
         current: fateCoins,
         target: 2,
-        reward: "红宝石 20",
+        reward: { rubies: 20 },
       },
       {
         id: "pet_first",
@@ -2431,7 +2541,7 @@ class Game {
         desc: "解锁 1 只宠物",
         current: unlockedPets,
         target: 1,
-        reward: "金币 120",
+        reward: { coins: 120 },
       },
       {
         id: "pet_team",
@@ -2441,7 +2551,7 @@ class Game {
         desc: "同时上阵 3 只宠物",
         current: equippedPets,
         target: 3,
-        reward: "红宝石 50",
+        reward: { rubies: 50 },
       },
       {
         id: "territory_first",
@@ -2451,7 +2561,7 @@ class Game {
         desc: "建造 1 座领地建筑",
         current: buildings,
         target: 1,
-        reward: "水晶 80",
+        reward: { crystals: 80 },
       },
       {
         id: "hero_level_5",
@@ -2461,7 +2571,7 @@ class Game {
         desc: "角色等级达到 Lv.5",
         current: playerLevel,
         target: 5,
-        reward: "金币 800",
+        reward: { coins: 800 },
       },
       {
         id: "task_flip_30",
@@ -2471,7 +2581,7 @@ class Game {
         desc: "累计翻面达到 30 次",
         current: totalFlips,
         target: 30,
-        reward: "金币 150",
+        reward: { coins: 150 },
       },
       {
         id: "task_power_200",
@@ -2481,7 +2591,7 @@ class Game {
         desc: "战力达到 200",
         current: battlePower,
         target: 200,
-        reward: "金币 300",
+        reward: { coins: 300 },
       },
       {
         id: "task_pet_level",
@@ -2491,7 +2601,7 @@ class Game {
         desc: "上阵宠物等级合计达到 3",
         current: petLevelTotal,
         target: 3,
-        reward: "红宝石 15",
+        reward: { rubies: 15 },
       },
       {
         id: "task_coins_1000",
@@ -2501,7 +2611,7 @@ class Game {
         desc: "当前金币达到 1000",
         current: coins,
         target: 1000,
-        reward: "水晶 60",
+        reward: { crystals: 60 },
       },
       {
         id: "task_fate_coins",
@@ -2511,9 +2621,55 @@ class Game {
         desc: "命运硬币达到 3 枚",
         current: fateCoins,
         target: 3,
-        reward: "金币 240",
+        reward: { coins: 240 },
       },
     ];
+  }
+
+  formatAchievementReward(reward = {}) {
+    const labels = [
+      ["coins", "金币"],
+      ["rubies", "红宝石"],
+      ["crystals", "水晶"],
+    ];
+    return labels
+      .filter(([key]) => (reward[key] || 0) > 0)
+      .map(
+        ([key, label]) => `${label} ${this.formatGameNumber(reward[key])}`
+      )
+      .join(" / ") || "无奖励";
+  }
+
+  claimAchievementReward(id) {
+    const item = this.getAchievementDefinitions().find(
+      (definition) => definition.id === id
+    );
+    if (!item || !this.resourceSystem || !this.progressionSystem) return;
+
+    const complete = (item.current || 0) >= (item.target || 1);
+    if (!complete) {
+      this.uiSystem?.showToast("目标尚未完成", "info");
+      return;
+    }
+    if (!this.progressionSystem.claimAchievement(id)) {
+      this.uiSystem?.showToast("奖励已领取", "info");
+      return;
+    }
+
+    const reward = item.reward || {};
+    if (reward.coins) this.resourceSystem.addCoins(reward.coins);
+    if (reward.rubies) this.resourceSystem.addRubies(reward.rubies);
+    if (reward.crystals) this.resourceSystem.addCrystals(reward.crystals);
+
+    this.resourceSystem.updateDisplay();
+    this.updateFateDisplay();
+    this.updateTerritoryDisplay();
+    this.saveSystem?.saveGame(1);
+    this.uiSystem?.showToast(
+      `领取奖励：${this.formatAchievementReward(reward)}`,
+      "success"
+    );
+    this.renderAchievementModal();
   }
 
   renderAchievementItem(item) {
@@ -2521,11 +2677,16 @@ class Game {
     const target = Math.max(1, Number(item.target) || 1);
     const percent = Math.min(100, Math.round((current / target) * 100));
     const complete = current >= target;
+    const claimed = this.progressionSystem?.isAchievementClaimed(item.id) || false;
+    const claimable = complete && !claimed;
+    const status = claimed ? "已领取" : claimable ? "可领取" : "进行中";
 
     return `
-      <article class="achievement-item ${complete ? "completed" : ""}" data-achievement-id="${this.escapeHTML(
-      item.id
-    )}">
+      <article class="achievement-item ${complete ? "completed" : ""} ${
+        claimed ? "claimed" : ""
+      }" data-achievement-id="${this.escapeHTML(
+        item.id
+      )}">
         <div class="achievement-icon">${this.escapeHTML(item.icon)}</div>
         <div class="achievement-info">
           <div class="achievement-title">${this.escapeHTML(item.title)}</div>
@@ -2538,10 +2699,13 @@ class Game {
           <div class="achievement-progress-text">${this.formatGameNumber(current)} / ${this.formatGameNumber(target)}</div>
         </div>
         <div class="achievement-reward">
-          <span>${this.escapeHTML(item.reward)}</span>
-          <span class="achievement-status ${complete ? "is-complete" : ""}">${
-      complete ? "达成" : "进行中"
-    }</span>
+          <span>${this.escapeHTML(this.formatAchievementReward(item.reward))}</span>
+          <span class="achievement-status ${claimable ? "is-complete" : ""}">${this.escapeHTML(
+            status
+          )}</span>
+          <button class="achievement-claim-btn" type="button" data-achievement-claim="${this.escapeHTML(
+            item.id
+          )}" ${claimable ? "" : "disabled"}>${claimed ? "已领取" : "领取"}</button>
         </div>
       </article>
     `;
@@ -2561,9 +2725,8 @@ class Game {
       return;
     }
 
-    const availableTabs = ["fate", "dungeon", "territory"];
     const requestedTab = tab;
-    if (!availableTabs.includes(tab)) {
+    if (!this.sceneRouter.isPrimaryScene(tab)) {
       tab = "fate";
       if (!silent && this.uiSystem) {
         const tabNames = {
@@ -2578,43 +2741,23 @@ class Game {
       }
     }
 
-    // 更新按钮状态
-    document.querySelectorAll(".nav-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.tab === tab);
+    this.currentScene = this.sceneRouter.activate(tab, {
+      syncHistory: !silent,
     });
-
-    // 切换场景
-    this.currentScene = tab;
-
-    const fateScene = document.getElementById("fate-scene");
-    const battleScene = document.getElementById("battle-scene");
-    const territoryScene = document.getElementById("territory-scene");
     const upgradePanel = document.getElementById("upgrade-panel");
 
-    if (tab === "fate") {
-      if (fateScene) fateScene.style.display = "flex";
-      if (battleScene) battleScene.style.display = "none";
-      if (territoryScene) territoryScene.style.display = "none";
+    if (this.currentScene === "fate") {
       if (upgradePanel) upgradePanel.style.display = "none";
       if (this.combatSystem) this.combatSystem.isPaused = true;
 
       this.updateFateDisplay();
-    } else if (tab === "territory") {
-      // 显示领地场景
-      if (fateScene) fateScene.style.display = "none";
-      if (battleScene) battleScene.style.display = "none";
-      if (territoryScene) territoryScene.style.display = "flex";
+    } else if (this.currentScene === "territory") {
       if (upgradePanel) upgradePanel.style.display = "none";
 
       if (this.combatSystem) this.combatSystem.isPaused = true;
 
-      // 更新领地显示
       this.updateTerritoryDisplay();
-    } else if (tab === "dungeon") {
-      // 显示战斗场景
-      if (fateScene) fateScene.style.display = "none";
-      if (battleScene) battleScene.style.display = "flex";
-      if (territoryScene) territoryScene.style.display = "none";
+    } else if (this.currentScene === "dungeon") {
       if (upgradePanel) upgradePanel.style.display = "flex";
 
       if (this.combatSystem) this.combatSystem.isPaused = false;
@@ -2626,7 +2769,7 @@ class Game {
       }
     }
 
-    console.log("[Game] 切换到:", tab);
+    console.log("[Game] 切换到:", this.currentScene);
   }
 
   /**
@@ -2680,8 +2823,8 @@ class Game {
     this.updateFateDisplay();
   }
 
-  getTerritoryProgressContext() {
-    const fate = this.fateCoinSystem?.getDisplayData?.() || {};
+  getProgressionContext(fateData = null) {
+    const fate = fateData || this.fateCoinSystem?.getDisplayData?.() || {};
     const player = this.playerSystem?.player || {};
     const equippedPets = this.petSystem?.equippedPets?.length || 0;
     const petLevelTotal =
@@ -2697,13 +2840,24 @@ class Game {
       totalFlips: fate.totalFlips || 0,
       fateCoins: fate.fateCoins || 1,
       assistants: fate.assistants || 0,
+      manualPower: fate.manualPower || 1,
+      assistantPower: fate.assistantPower || 1,
+      assistantSpeedLevel: Math.max(
+        0,
+        Math.round((3000 - (fate.autoInterval || 3000)) / 250)
+      ),
       heroTrainingLevel,
       playerLevel: player.level || 1,
       equippedPets,
       petLevelTotal,
+      petTrainingLevels: Math.max(0, petLevelTotal - equippedPets),
       buildings: this.territorySystem?.buildings?.length || 0,
       expansionCount: this.territorySystem?.expansionCount || 0,
     };
+  }
+
+  getTerritoryProgressContext() {
+    return this.getProgressionContext();
   }
 
   syncTerritoryProgress({ silent = false } = {}) {
@@ -2847,6 +3001,7 @@ class Game {
         ? `脉冲 ${summary.pulse} / ${summary.nextTargetPulse}`
         : `脉冲 ${summary.pulse}`
     );
+    this.renderTerritoryPulseBreakdown(summary.pulseBreakdown || []);
 
     const nextBuilding = summary.nextBuilding;
     setText(
@@ -2877,6 +3032,30 @@ class Game {
 
     // 重新渲染网格
     this.renderTerritoryGrid();
+  }
+
+  renderTerritoryPulseBreakdown(breakdown) {
+    const container = document.getElementById("territory-pulse-breakdown");
+    if (!container) return;
+
+    const contributions = breakdown.filter(
+      (contribution) => (contribution.value || 0) > 0
+    );
+    container.replaceChildren();
+
+    if (contributions.length === 0) {
+      container.textContent = "翻转后将显示脉冲构成";
+      return;
+    }
+
+    contributions.forEach((contribution) => {
+      const item = document.createElement("span");
+      item.className = "territory-pulse-item is-active";
+      item.textContent = `${contribution.label} +${this.formatGameNumber(
+        contribution.value
+      )}`;
+      container.appendChild(item);
+    });
   }
 
   formatTerritoryProductionRate() {

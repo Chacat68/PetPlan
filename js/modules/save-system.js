@@ -71,6 +71,10 @@ export class SaveSystem {
             if (this.gameSystems.fate) {
                 saveData.data.fate = this.gameSystems.fate.getSaveData();
             }
+
+            if (this.gameSystems.progression) {
+                saveData.data.progression = this.gameSystems.progression.getSaveData();
+            }
             
             // 保存到 LocalStorage
             const key = this.storagePrefix + slot;
@@ -134,6 +138,10 @@ export class SaveSystem {
 
             if (saveData.data.fate && this.gameSystems.fate) {
                 this.gameSystems.fate.loadSaveData(saveData.data.fate);
+            }
+
+            if (saveData.data.progression && this.gameSystems.progression) {
+                this.gameSystems.progression.loadSaveData(saveData.data.progression);
             }
             
             console.log('[SaveSystem] ✅ 加载成功:', slot);

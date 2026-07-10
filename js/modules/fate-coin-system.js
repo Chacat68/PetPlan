@@ -3,6 +3,8 @@
  * Produces heads and tails through manual flips and assistant automation.
  */
 
+import { FATE_COST_CONFIG } from "./progression-config.js";
+
 let instance = null;
 
 export class FateCoinSystem {
@@ -136,10 +138,11 @@ export class FateCoinSystem {
   }
 
   getUpgradeAssistantPowerCost() {
-    const scale = Math.pow(1.55, Math.max(0, this.assistantPower - 1));
+    const config = FATE_COST_CONFIG.assistantPower;
+    const scale = Math.pow(config.multiplier, Math.max(0, this.assistantPower - 1));
     return {
-      heads: Math.floor(10 * scale),
-      tails: Math.floor(10 * scale),
+      heads: Math.floor(config.heads * scale),
+      tails: Math.floor(config.tails * scale),
     };
   }
 
@@ -148,32 +151,44 @@ export class FateCoinSystem {
   }
 
   getBuyAssistantCost() {
+    const config = FATE_COST_CONFIG.assistant;
     return {
       heads: 0,
-      tails: Math.floor(25 * Math.pow(1.65, this.assistants)),
+      tails: Math.floor(
+        config.tails * Math.pow(config.multiplier, this.assistants)
+      ),
     };
   }
 
   getBuyGoldCoinCost() {
-    const scale = Math.pow(1.45, Math.max(0, this.fateCoins - 1));
+    const config = FATE_COST_CONFIG.goldCoin;
+    const scale = Math.pow(config.multiplier, Math.max(0, this.fateCoins - 1));
     return {
-      heads: Math.floor(5 * scale),
+      heads: Math.floor(config.heads * scale),
       tails: 0,
     };
   }
 
   getUpgradeManualCost() {
+    const config = FATE_COST_CONFIG.manual;
     return {
-      heads: Math.floor(20 * Math.pow(1.55, this.manualPower - 1)),
+      heads: Math.floor(
+        config.heads * Math.pow(config.multiplier, this.manualPower - 1)
+      ),
       tails: 0,
     };
   }
 
   getUpgradeAssistantSpeedCost() {
-    const speedLevel = Math.round((3000 - this.autoInterval) / 250);
+    const config = FATE_COST_CONFIG.assistantSpeed;
+    const speedLevel = Math.round(
+      (3000 - this.autoInterval) / config.intervalStep
+    );
     return {
       heads: 0,
-      tails: Math.floor(40 * Math.pow(1.7, speedLevel)),
+      tails: Math.floor(
+        config.tails * Math.pow(config.multiplier, speedLevel)
+      ),
     };
   }
 

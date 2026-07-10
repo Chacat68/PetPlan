@@ -3,6 +3,8 @@
  * 管理领地建设、建筑升级和资源产出
  */
 
+import { TERRITORY_PROGRESSION_CONFIG } from "./progression-config.js";
+
 let instance = null;
 
 export class TerritorySystem {
@@ -25,11 +27,7 @@ export class TerritorySystem {
                     value: 2  // 每级解锁2个额外地块
                 },
                 productionInterval: 0,  // 不产出资源
-                unlock: {
-                    stage: 1,
-                    pulse: 0,
-                    label: '初始开放'
-                }
+                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.main_base
             },
             training_ground: {
                 name: '训练场',
@@ -43,11 +41,7 @@ export class TerritorySystem {
                     value: 5  // 每级+5攻击
                 },
                 productionInterval: 0,
-                unlock: {
-                    stage: 2,
-                    pulse: 8,
-                    label: '循环脉冲 8'
-                }
+                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.training_ground
             },
             temple: {
                 name: '神庙',
@@ -61,11 +55,7 @@ export class TerritorySystem {
                     value: 5  // 每级+5防御
                 },
                 productionInterval: 0,
-                unlock: {
-                    stage: 4,
-                    pulse: 42,
-                    label: '循环脉冲 42'
-                }
+                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.temple
             },
             barracks: {
                 name: '兵营',
@@ -80,11 +70,7 @@ export class TerritorySystem {
                     defense: 3
                 },
                 productionInterval: 0,
-                unlock: {
-                    stage: 5,
-                    pulse: 64,
-                    label: '循环脉冲 64'
-                }
+                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.barracks
             },
             workshop: {
                 name: '工坊',
@@ -99,11 +85,7 @@ export class TerritorySystem {
                     value: 50  // 基础产出
                 },
                 productionInterval: 45000,  // 45秒产出一次
-                unlock: {
-                    stage: 3,
-                    pulse: 24,
-                    label: '循环脉冲 24'
-                }
+                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.workshop
             },
             crystal_mine: {
                 name: '水晶矿',
@@ -118,11 +100,7 @@ export class TerritorySystem {
                     value: 10  // 基础产出
                 },
                 productionInterval: 90000,  // 90秒产出一次
-                unlock: {
-                    stage: 6,
-                    pulse: 88,
-                    label: '循环脉冲 88'
-                }
+                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.crystal_mine
             },
             library: {
                 name: '图书馆',
@@ -136,11 +114,7 @@ export class TerritorySystem {
                     value: 5  // 每级+5%经验
                 },
                 productionInterval: 0,
-                unlock: {
-                    stage: 7,
-                    pulse: 118,
-                    label: '循环脉冲 118'
-                }
+                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.library
             }
         };
         
@@ -148,15 +122,11 @@ export class TerritorySystem {
         this.slotConfig = {
             initialSlots: 1,
             maxSlots: 12,
-            unlockPulses: [0, 8, 18, 32, 50, 72, 98, 130, 166, 206, 250, 300]
+            unlockPulses: TERRITORY_PROGRESSION_CONFIG.slotUnlockPulses
         };
         
         // ==================== 扩张成本配置 ====================
-        this.expansionCosts = [
-            { coins: 10000, crystals: 500, requiredMainBaseLevel: 1 },
-            { coins: 25000, crystals: 1500, requiredMainBaseLevel: 1 },
-            { coins: 50000, crystals: 3000, requiredMainBaseLevel: 2 }
-        ];
+        this.expansionCosts = TERRITORY_PROGRESSION_CONFIG.expansionCosts;
         
         // ==================== 领地状态 ====================
         this.slots = [];           // 地块数组
@@ -231,22 +201,32 @@ export class TerritorySystem {
         return this.getProgressSummary();
     }
 
-    getLoopPulse(context = this.progressContext) {
+    getLoopPulseBreakdown(context = this.progressContext) {
         const safe = {
             ...this.createDefaultProgressContext(),
             ...context
         };
         const extraPetLevels = Math.max(0, safe.petLevelTotal - safe.equippedPets);
+        const weights = TERRITORY_PROGRESSION_CONFIG.pulseWeights;
 
+        return [
+            { id: 'flips', label: '翻转', value: safe.totalFlips * weights.totalFlips },
+            { id: 'table', label: '硬币', value: Math.max(0, safe.fateCoins - 1) * weights.fateCoins },
+            { id: 'assistants', label: '助手', value: safe.assistants * weights.assistants },
+            { id: 'hero', label: '训练', value: safe.heroTrainingLevel * weights.heroTrainingLevel },
+            { id: 'pets', label: '上阵', value: safe.equippedPets * weights.equippedPets },
+            { id: 'petLevels', label: '宠物成长', value: extraPetLevels * weights.extraPetLevels },
+            { id: 'buildings', label: '建筑', value: safe.buildings * weights.buildings },
+            { id: 'expansion', label: '扩张', value: safe.expansionCount * weights.expansionCount }
+        ];
+    }
+
+    getLoopPulse(context = this.progressContext) {
         return Math.floor(
-            safe.totalFlips +
-            Math.max(0, safe.fateCoins - 1) * 24 +
-            safe.assistants * 26 +
-            safe.heroTrainingLevel * 16 +
-            safe.equippedPets * 18 +
-            extraPetLevels * 6 +
-            safe.buildings * 14 +
-            safe.expansionCount * 20
+            this.getLoopPulseBreakdown(context).reduce(
+                (total, contribution) => total + contribution.value,
+                0
+            )
         );
     }
 
@@ -357,6 +337,7 @@ export class TerritorySystem {
 
         return {
             pulse,
+            pulseBreakdown: this.getLoopPulseBreakdown(context),
             stage: this.getUnlockedBuildingTypes(context).length,
             unlockedSlots: this.getEffectiveUnlockedSlots(context),
             maxSlots: this.slotConfig.maxSlots,

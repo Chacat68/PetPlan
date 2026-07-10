@@ -4,9 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=fate-shop-filter-20260709a" />
+    <link rel="stylesheet" href="css/style.css?v=progression-20260710a" />
   </head>
   <body>
+    <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
+      <div class="orientation-lock-card">
+        <span class="orientation-lock-icon" aria-hidden="true">↻</span>
+        <h1 id="orientation-lock-title">请横屏继续</h1>
+        <p>PetPlan 为横屏游戏。旋转设备后即可进入命运桌、战斗和领地。</p>
+      </div>
+    </section>
     <div class="game-container">
       <!-- 游戏画布区域 -->
       <main class="game-area">
@@ -169,6 +176,8 @@
                 </span>
                 <span class="goal-route" id="fate-next-goal-route">反面路线</span>
                 <span class="goal-alt" id="fate-next-goal-alt">备选：金色硬币</span>
+                <span class="goal-guide" id="fate-first-session-guide" data-route="mixed">首局 1/4 · 熟悉翻转 0/8</span>
+                <span class="goal-path" id="fate-path-summary" data-path="neutral">倾向：自由探索</span>
               </div>
 
               <div class="fate-runner">
@@ -178,7 +187,7 @@
 
             <div class="fate-bottom-dock">
               <button class="skill-tree-btn" id="fate-skill-tree-btn" type="button">
-                技能树 <span id="fate-manual-power-display">1</span>
+                银色点击 <span id="fate-manual-power-display">1</span>
               </button>
             </div>
           </section>
@@ -287,6 +296,7 @@
                   <span class="territory-loop-track" aria-hidden="true">
                     <span id="territory-loop-fill"></span>
                   </span>
+                  <span class="territory-pulse-breakdown" id="territory-pulse-breakdown" aria-label="脉冲构成">翻转 +0</span>
                 </span>
                 <span class="upgrade-effect" id="territory-loop-stage">1</span>
               </div>
@@ -385,13 +395,13 @@
 
       <!-- 玩家信息弹窗 -->
       <div class="player-modal-overlay" id="player-modal-overlay">
-        <div class="player-modal">
+        <div class="player-modal" role="dialog" aria-modal="true" aria-labelledby="player-modal-title">
           <button class="modal-close" id="player-modal-close">✕</button>
           <div class="modal-header">
             <div class="modal-avatar">
               <img src="images/player/table_hero.png?v=anime-gunner-20260702a" alt="" aria-hidden="true">
             </div>
-            <h2>主角升级</h2>
+            <h2 id="player-modal-title">主角升级</h2>
           </div>
           <div class="modal-content">
             <div class="player-upgrade-list" id="player-upgrade-list">
@@ -590,7 +600,7 @@
     <script>
       (function () {
         var localUrl = "http://localhost:4174/index.html";
-        var moduleSrc = "js/main.js?v=fate-shop-filter-20260709a";
+        var moduleSrc = "js/main.js?v=progression-20260710a";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");
