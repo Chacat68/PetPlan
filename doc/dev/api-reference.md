@@ -4,15 +4,30 @@
 
 ## Game
 
-`js/main.js` 的 `Game` 负责系统装配、场景副作用和管理 UI。
+`js/main.js` 的 `Game` 负责系统装配、跨系统回调和高层场景协调。
 
 | 方法 | 说明 |
 | --- | --- |
-| `init()` | 初始化系统、加载槽位 1、启动主循环 |
+| `init()` | 初始化系统和控制器、加载槽位 1、启动主循环 |
 | `handleNavigation(tab, silent)` | 切换命运、战斗或领地；宠物和成就打开模态 |
-| `quickSave()` / `quickLoad()` | 保存或加载槽位 1 |
-| `updateFateDisplay()` | 刷新命运桌、商店推荐和下一目标 |
-| `updateTerritoryDisplay()` | 刷新领地网格、建筑和产出信息 |
+| `updateUI()` | 协调资源、玩家、命运和战斗控制器的全局刷新 |
+| `getProgressionContext()` | 汇总首局目标、成长倾向和领地脉冲所需上下文 |
+| `destroy()` | 解绑控制器、系统回调、路由和主循环 |
+
+## 控制器
+
+控制器由 `Game` 通过构造参数显式注入依赖，不自行获取系统单例。
+
+| 控制器 | 主要接口 |
+| --- | --- |
+| `FateSceneController` | `bind()`、`updateDisplay()`、`handleUpgrade()`、`handleAutoFlip()`、`destroy()` |
+| `ShopRecommendationController` | `bind()`、`update()`、`setFateShopFilter()`、`destroy()` |
+| `BattleSceneController` | `bind()`、`updateBattleDisplay()`、`destroy()` |
+| `TerritorySceneController` | `bind()`、`syncProgress()`、`updateDisplay()`、`destroy()` |
+| `PlayerModalController` | `bindEvents()`、`open()`、`close()`、`updateUpgradeControls()`、`destroy()` |
+| `SettingsController` | `bindEvents()`、`open()`、`close()`、`quickSave()`、`quickLoad()`、`destroy()` |
+| `PetModalController` | `open()`、`close()`、`render()`、`handleAction()` |
+| `AchievementController` | `open()`、`close()`、`render()`、`claimReward()` |
 
 ## 玩法系统
 

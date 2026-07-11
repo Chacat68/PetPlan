@@ -56,9 +56,16 @@ export class SceneRouter {
   }
 
   bindHistory(onNavigate) {
+    this.destroy();
     this.onPopState = () =>
       onNavigate(this.getRequestedScene("fate", { normalize: true }));
     window.addEventListener("popstate", this.onPopState);
+  }
+
+  destroy() {
+    if (!this.onPopState) return;
+    window.removeEventListener("popstate", this.onPopState);
+    this.onPopState = null;
   }
 
   writeSceneToLocation(scene, { replace = false } = {}) {

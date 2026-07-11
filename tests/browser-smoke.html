@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PetPlan 浏览器冒烟测试</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        background: #111827;
+        color: #e5e7eb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 24px;
+        background:
+          radial-gradient(circle at top right, #1e3a5f 0, transparent 38%),
+          #111827;
+      }
+
+      main {
+        width: min(1120px, 100%);
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-family: system-ui, sans-serif;
+        font-size: clamp(24px, 4vw, 38px);
+      }
+
+      .description {
+        margin: 0 0 20px;
+        color: #9ca3af;
+        line-height: 1.6;
+      }
+
+      .summary,
+      .results,
+      .frame-shell {
+        border: 1px solid #374151;
+        border-radius: 12px;
+        background: rgb(17 24 39 / 82%);
+        box-shadow: 0 18px 50px rgb(0 0 0 / 24%);
+      }
+
+      .summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 24px;
+        align-items: center;
+        padding: 14px 18px;
+      }
+
+      #status {
+        font-weight: 700;
+        color: #fbbf24;
+      }
+
+      #status.passed {
+        color: #34d399;
+      }
+
+      #status.failed {
+        color: #f87171;
+      }
+
+      #counts {
+        color: #9ca3af;
+      }
+
+      .results {
+        margin: 16px 0;
+        padding: 0;
+        overflow: hidden;
+        list-style: none;
+      }
+
+      .results:empty::before {
+        display: block;
+        padding: 16px 18px;
+        color: #9ca3af;
+        content: "等待测试开始…";
+      }
+
+      .result {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid #273244;
+      }
+
+      .result:last-child {
+        border-bottom: 0;
+      }
+
+      .result.pass .icon {
+        color: #34d399;
+      }
+
+      .result.fail .icon {
+        color: #f87171;
+      }
+
+      .result strong {
+        display: block;
+        font-family: system-ui, sans-serif;
+      }
+
+      .detail {
+        display: block;
+        margin-top: 4px;
+        color: #9ca3af;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .frame-shell {
+        min-height: 360px;
+        padding: 10px;
+      }
+
+      #frame-host {
+        min-height: 340px;
+      }
+
+      #frame-host:empty {
+        display: grid;
+        place-items: center;
+        color: #6b7280;
+      }
+
+      #frame-host:empty::before {
+        content: "测试完成后，游戏 iframe 会自动移除";
+      }
+
+      iframe {
+        display: block;
+        width: 100%;
+        height: min(68vw, 630px);
+        min-height: 340px;
+        border: 0;
+        border-radius: 8px;
+        background: #020617;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PetPlan 浏览器冒烟测试</h1>
+      <p class="description">
+        自动验证第二阶段控制器接线、弹窗与分类交互、命运桌成长、战斗开波、
+        领地建造及 F5 存档恢复。测试会临时隔离并在结束时恢复当前来源下的
+        PetPlan 存档。
+      </p>
+
+      <section class="summary" aria-live="polite">
+        <span id="status">运行中…</span>
+        <span id="counts">通过 0 · 失败 0</span>
+      </section>
+
+      <ol class="results" id="results" aria-label="测试结果"></ol>
+
+      <section class="frame-shell" aria-label="被测游戏">
+        <div id="frame-host"></div>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const result = {
+          status: "running",
+          done: false,
+          ok: false,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          error: null,
+          counts: { passed: 0, failed: 0, total: 0 },
+          checks: [],
+        };
+        window.__PETPLAN_BROWSER_SMOKE__ = result;
+
+        const statusEl = document.getElementById("status");
+        const countsEl = document.getElementById("counts");
+        const resultsEl = document.getElementById("results");
+        const frameHost = document.getElementById("frame-host");
+        const storageSnapshot = new Map();
+        let snapshotReady = false;
+        let cleanupDone = false;
+        let frame = null;
+
+        function getPetPlanStorageKeys() {
+          const keys = [];
+          for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index);
+            if (key && key.startsWith("petplan_")) keys.push(key);
+          }
+          return keys.sort();
+        }
+
+        function refreshSummary() {
+          result.counts.passed = result.checks.filter(
+            (check) => check.status === "pass",
+          ).length;
+          result.counts.failed = result.checks.filter(
+            (check) => check.status === "fail",
+          ).length;
+          result.counts.total = result.checks.length;
+          countsEl.textContent = `通过 ${result.counts.passed} · 失败 ${result.counts.failed}`;
+        }
+
+        function record(status, name, detail = "") {
+          const check = { status, name, detail: String(detail || "") };
+          result.checks.push(check);
+
+          const item = document.createElement("li");
+          item.className = `result ${status}`;
+
+          const icon = document.createElement("span");
+          icon.className = "icon";
+          icon.setAttribute("aria-hidden", "true");
+          icon.textContent = status === "pass" ? "✓" : "✕";
+
+          const content = document.createElement("span");
+          const title = document.createElement("strong");
+          title.textContent = name;
+          content.appendChild(title);
+
+          if (check.detail) {
+            const detailEl = document.createElement("span");
+            detailEl.className = "detail";
+            detailEl.textContent = check.detail;
+            content.appendChild(detailEl);
+          }
+
+          item.append(icon, content);
+          resultsEl.appendChild(item);
+          refreshSummary();
+          return check;
+        }
+
+        function assert(condition, message) {
+          if (!condition) throw new Error(message);
+        }
+
+        async function step(name, callback) {
+          try {
+            const detail = await callback();
+            record("pass", name, detail);
+            return detail;
+          } catch (error) {
+            record("fail", name, error?.message || error);
+            throw error;
+          }
+        }
+
+        function waitFor(predicate, label, timeout = 20000) {
+          const startedAt = performance.now();
+          let lastError = null;
+
+          return new Promise((resolve, reject) => {
+            const poll = () => {
+              try {
+                const value = predicate();
+                if (value) {
+                  resolve(value);
+                  return;
+                }
+              } catch (error) {
+                lastError = error;
+              }
+
+              if (performance.now() - startedAt >= timeout) {
+                const suffix = lastError
+                  ? `；最后错误：${lastError.message || lastError}`
+                  : "";
+                reject(new Error(`等待${label}超时（${timeout}ms）${suffix}`));
+                return;
+              }
+
+              window.setTimeout(poll, 50);
+            };
+
+            poll();
+          });
+        }
+
+        function parseSlotOneSave() {
+          const serialized = localStorage.getItem("petplan_save_1");
+          if (!serialized) return null;
+          try {
+            return JSON.parse(serialized);
+          } catch (error) {
+            throw new Error(`槽位 1 不是有效 JSON：${error.message}`);
+          }
+        }
+
+        function snapshotMatchesStorage() {
+          const currentKeys = getPetPlanStorageKeys();
+          if (currentKeys.length !== storageSnapshot.size) return false;
+          return currentKeys.every(
+            (key) => localStorage.getItem(key) === storageSnapshot.get(key),
+          );
+        }
+
+        function cleanup() {
+          if (cleanupDone) return;
+
+          if (frame?.isConnected) frame.remove();
+          frame = null;
+
+          if (snapshotReady) {
+            getPetPlanStorageKeys().forEach((key) => localStorage.removeItem(key));
+            storageSnapshot.forEach((value, key) => {
+              localStorage.setItem(key, value);
+            });
+          }
+
+          cleanupDone = true;
+        }
+
+        window.addEventListener("pagehide", cleanup, { once: true });
+
+        async function run() {
+          let savedFate = null;
+          let savedScene = null;
+          let savedBuilding = null;
+
+          try {
+            await step("隔离现有 PetPlan 存档", () => {
+              getPetPlanStorageKeys().forEach((key) => {
+                storageSnapshot.set(key, localStorage.getItem(key));
+              });
+              snapshotReady = true;
+              getPetPlanStorageKeys().forEach((key) => localStorage.removeItem(key));
+              assert(
+                getPetPlanStorageKeys().length === 0,
+                "未能清空测试所需的 PetPlan localStorage 键",
+              );
+              return `已快照 ${storageSnapshot.size} 个 petplan_* 键`;
+            });
+
+            await step("同源 iframe 加载并初始化游戏", async () => {
+              frame = document.createElement("iframe");
+              frame.title = "PetPlan 被测游戏";
+              frame.src = "../index.html";
+              frameHost.appendChild(frame);
+
+              const game = await waitFor(
+                () => frame.contentWindow?.game?.isInitialized && frame.contentWindow.game,
+                "window.game.isInitialized",
+              );
+              await waitFor(
+                () => frame.contentDocument?.querySelector(".fate-table-coin"),
+                "桌面硬币渲染",
+              );
+
+              assert(
+                frame.contentWindow.location.origin === window.location.origin,
+                "iframe 不是同源页面",
+              );
+              assert(game.currentScene === "fate", "新存档未从命运场景启动");
+              return `${frame.contentWindow.location.pathname} · scene=${game.currentScene}`;
+            });
+
+            await step("第二阶段的 8 个控制器均已接线", () => {
+              const game = frame.contentWindow.game;
+              const controllerNames = [
+                "achievementController",
+                "battleSceneController",
+                "fateSceneController",
+                "petModalController",
+                "playerModalController",
+                "settingsController",
+                "shopRecommendationController",
+                "territorySceneController",
+              ];
+              const missing = controllerNames.filter(
+                (name) => !game[name] || typeof game[name] !== "object",
+              );
+
+              assert(
+                missing.length === 0,
+                `缺少控制器：${missing.join("、")}`,
+              );
+              return controllerNames.join(" · ");
+            });
+
+            await step("玩家按钮可打开并关闭玩家弹窗", async () => {
+              const doc = frame.contentDocument;
+              const trigger = doc.getElementById("game-player-btn");
+              const overlay = doc.getElementById("player-modal-overlay");
+              assert(trigger && overlay, "未找到玩家按钮或玩家弹窗");
+
+              trigger.click();
+              await waitFor(
+                () => overlay.classList.contains("active"),
+                "玩家弹窗打开",
+              );
+              assert(
+                overlay.querySelector('[role="dialog"]'),
+                "玩家弹窗缺少 dialog 容器",
+              );
+
+              const closeButton = doc.getElementById("player-modal-close");
+              assert(closeButton, "未找到玩家弹窗关闭按钮");
+              closeButton.click();
+              await waitFor(
+                () => !overlay.classList.contains("active"),
+                "玩家弹窗关闭",
+              );
+              return "#game-player-btn → #player-modal-overlay → #player-modal-close";
+            });
+
+            await step("设置按钮可打开并关闭设置弹窗", async () => {
+              const doc = frame.contentDocument;
+              const trigger = doc.getElementById("game-settings-btn");
+              const overlay = doc.getElementById("settings-modal-overlay");
+              assert(trigger && overlay, "未找到设置按钮或设置弹窗");
+
+              trigger.click();
+              await waitFor(
+                () => overlay.classList.contains("active"),
+                "设置弹窗打开",
+              );
+              assert(
+                overlay.querySelector('[role="dialog"]'),
+                "设置弹窗缺少 dialog 容器",
+              );
+
+              const closeButton = doc.getElementById("settings-modal-close");
+              assert(closeButton, "未找到设置弹窗关闭按钮");
+              closeButton.click();
+              await waitFor(
+                () => !overlay.classList.contains("active"),
+                "设置弹窗关闭",
+              );
+              return "#game-settings-btn → #settings-modal-overlay → #settings-modal-close";
+            });
+
+            await step("宠物导航可打开弹窗、切到背包并关闭", async () => {
+              const doc = frame.contentDocument;
+              const trigger = doc.querySelector('.nav-btn[data-tab="pet"]');
+              assert(trigger, "未找到宠物导航按钮");
+
+              trigger.click();
+              await waitFor(() => doc.getElementById("pet-modal"), "宠物弹窗打开");
+
+              const bagTab = doc.querySelector(
+                '#pet-modal [data-pet-tab="bag"]',
+              );
+              assert(bagTab, "未找到宠物背包标签");
+              bagTab.click();
+              await waitFor(
+                () =>
+                  doc.querySelector(
+                    '#pet-modal [data-pet-tab="bag"][aria-selected="true"]',
+                  ),
+                "宠物背包标签激活",
+              );
+              assert(
+                doc.querySelector("#pet-modal .pet-bag-list"),
+                "宠物背包内容未渲染",
+              );
+
+              const closeButton = doc.querySelector(
+                "#pet-modal [data-pet-close]",
+              );
+              assert(closeButton, "未找到宠物弹窗关闭按钮");
+              closeButton.click();
+              await waitFor(
+                () => !doc.getElementById("pet-modal"),
+                "宠物弹窗关闭",
+              );
+              return "pet → bag → close";
+            });
+
+            await step("成就导航可打开弹窗、切到任务并关闭", async () => {
+              const doc = frame.contentDocument;
+              const trigger = doc.querySelector(
+                '.nav-btn[data-tab="achievement"]',
+              );
+              assert(trigger, "未找到成就导航按钮");
+
+              trigger.click();
+              await waitFor(
+                () => doc.getElementById("achievement-modal"),
+                "成就弹窗打开",
+              );
+
+              const tasksTab = doc.querySelector(
+                '#achievement-modal [data-achievement-tab="tasks"]',
+              );
+              assert(tasksTab, "未找到任务标签");
+              tasksTab.click();
+              await waitFor(
+                () =>
+                  doc.querySelector(
+                    '#achievement-modal [data-achievement-tab="tasks"][aria-selected="true"]',
+                  ),
+                "任务标签激活",
+              );
+
+              const closeButton = doc.querySelector(
+                "#achievement-modal [data-achievement-close]",
+              );
+              assert(closeButton, "未找到成就弹窗关闭按钮");
+              closeButton.click();
+              await waitFor(
+                () => !doc.getElementById("achievement-modal"),
+                "成就弹窗关闭",
+              );
+              return "achievement → tasks → close";
+            });
+
+            await step("点击桌面硬币并增加翻转进度", async () => {
+              const game = frame.contentWindow.game;
+              const fate = game.fateCoinSystem;
+              const before = fate.getSaveData();
+              const coin = frame.contentDocument.querySelector(".fate-table-coin");
+
+              assert(coin instanceof frame.contentWindow.HTMLButtonElement, "未找到可点击的桌面硬币");
+              coin.click();
+
+              await waitFor(
+                () => fate.totalFlips >= before.totalFlips + before.manualPower,
+                "手动翻转结算",
+              );
+              assert(
+                fate.heads + fate.tails >= before.heads + before.tails + before.manualPower,
+                "点击未增加正面或反面资源",
+              );
+              assert(coin.classList.contains("clicked"), "桌面硬币未触发点击反馈");
+              return `翻转 ${before.totalFlips} → ${fate.totalFlips}`;
+            });
+
+            await step("推荐筛选与命运、自动分类可切换", async () => {
+              const doc = frame.contentDocument;
+              const recommended = doc.querySelector(
+                '[data-fate-shop-filter="recommended"]',
+              );
+              const fateFilter = doc.querySelector(
+                '[data-fate-shop-filter="fate"]',
+              );
+              const autoFilter = doc.querySelector(
+                '[data-fate-shop-filter="auto"]',
+              );
+              assert(
+                recommended && fateFilter && autoFilter,
+                "命运商店分类按钮不完整",
+              );
+
+              recommended.click();
+              await waitFor(
+                () => recommended.getAttribute("aria-selected") === "true",
+                "推荐分类激活",
+              );
+              const recommendedCards = Array.from(
+                doc.querySelectorAll(".fate-upgrade[data-fate-action]"),
+              ).filter((card) => !card.hidden);
+              assert(recommendedCards.length > 0, "推荐分类没有可见卡片");
+              assert(
+                recommendedCards.every((card) =>
+                  ["primary", "secondary"].includes(
+                    card.dataset.recommendation,
+                  ),
+                ),
+                "推荐分类显示了非推荐卡片",
+              );
+
+              fateFilter.click();
+              await waitFor(
+                () => fateFilter.getAttribute("aria-selected") === "true",
+                "命运分类激活",
+              );
+              const fateCards = Array.from(
+                doc.querySelectorAll(".fate-upgrade[data-fate-action]"),
+              ).filter((card) => !card.hidden);
+              assert(
+                fateCards.length > 0 &&
+                  fateCards.every(
+                    (card) => card.dataset.fateShopCategory === "fate",
+                  ),
+                "命运分类显示内容不匹配",
+              );
+              assert(
+                !doc.getElementById("fate-buy-gold-btn")?.hidden,
+                "命运分类未显示桌面硬币",
+              );
+
+              autoFilter.click();
+              await waitFor(
+                () => autoFilter.getAttribute("aria-selected") === "true",
+                "自动分类激活",
+              );
+              const autoCards = Array.from(
+                doc.querySelectorAll(".fate-upgrade[data-fate-action]"),
+              ).filter((card) => !card.hidden);
+              assert(
+                autoCards.length > 0 &&
+                  autoCards.every(
+                    (card) => card.dataset.fateShopCategory === "auto",
+                  ),
+                "自动分类显示内容不匹配",
+              );
+              assert(
+                !doc.getElementById("fate-buy-assistant-btn")?.hidden,
+                "自动分类未显示助手",
+              );
+
+              recommended.click();
+              await waitFor(
+                () =>
+                  recommended.getAttribute("aria-selected") === "true" &&
+                  doc.getElementById("fate-shop-title")?.textContent === "推荐",
+                "返回推荐分类",
+              );
+              return `推荐 ${recommendedCards.length} · 命运 ${fateCards.length} · 自动 ${autoCards.length}`;
+            });
+
+            await step("准备资源并点击购买桌面硬币", async () => {
+              const game = frame.contentWindow.game;
+              const fate = game.fateCoinSystem;
+              const cost = fate.getBuyGoldCoinCost();
+              fate.heads = Math.max(fate.heads, cost.heads);
+              fate.tails = Math.max(fate.tails, cost.tails || 0);
+              fate.notifyChange();
+
+              const filter = frame.contentDocument.querySelector(
+                '[data-fate-shop-filter="fate"]',
+              );
+              const button = frame.contentDocument.getElementById("fate-buy-gold-btn");
+              assert(filter && button, "未找到命运商店或购买桌面硬币按钮");
+              filter.click();
+              assert(!button.hidden && !button.disabled, "购买桌面硬币按钮不可交互");
+
+              const beforeCount = fate.fateCoins;
+              button.click();
+              await waitFor(
+                () => fate.fateCoins === beforeCount + 1,
+                "桌面硬币购买结算",
+              );
+              await waitFor(
+                () =>
+                  frame.contentDocument.querySelectorAll(".fate-table-coin").length ===
+                  fate.fateCoins,
+                "桌面硬币数量刷新",
+              );
+              return `桌面硬币 ${beforeCount} → ${fate.fateCoins}，花费 ${cost.heads} 正面`;
+            });
+
+            await step("准备资源并点击招募助手", async () => {
+              const game = frame.contentWindow.game;
+              const fate = game.fateCoinSystem;
+              const cost = fate.getBuyAssistantCost();
+              fate.heads = Math.max(fate.heads, cost.heads || 0);
+              fate.tails = Math.max(fate.tails, cost.tails);
+              fate.notifyChange();
+
+              const filter = frame.contentDocument.querySelector(
+                '[data-fate-shop-filter="auto"]',
+              );
+              const button = frame.contentDocument.getElementById(
+                "fate-buy-assistant-btn",
+              );
+              assert(filter && button, "未找到自动商店或助手按钮");
+              filter.click();
+              assert(!button.hidden && !button.disabled, "助手按钮不可交互");
+
+              const beforeCount = fate.assistants;
+              button.click();
+              await waitFor(
+                () => fate.assistants === beforeCount + 1,
+                "助手招募结算",
+              );
+              await waitFor(
+                () =>
+                  frame.contentDocument.querySelectorAll(".fate-helper").length ===
+                  fate.assistants,
+                "助手渲染",
+              );
+              return `助手 ${beforeCount} → ${fate.assistants}，花费 ${cost.tails} 反面`;
+            });
+
+            await step("点击战斗导航", async () => {
+              const button = frame.contentDocument.querySelector(
+                '.nav-btn[data-tab="dungeon"]',
+              );
+              assert(button, "未找到战斗导航按钮");
+              button.click();
+              await waitFor(
+                () => frame.contentWindow.game.currentScene === "dungeon",
+                "战斗场景激活",
+              );
+
+              const url = new URL(frame.contentWindow.location.href);
+              const scene = frame.contentDocument.getElementById("battle-scene");
+              assert(url.searchParams.get("scene") === "dungeon", "战斗场景未写入 URL");
+              assert(scene?.style.display === "flex", "战斗场景容器未显示");
+              return url.search;
+            });
+
+            await step("点击开始第一波并离开 ready 阶段", async () => {
+              const game = frame.contentWindow.game;
+              const button = frame.contentDocument.getElementById(
+                "battle-start-wave-btn",
+              );
+              const before = game.combatSystem.getBattleState();
+
+              assert(button, "未找到开始第一波按钮");
+              assert(before.phase === "ready", `开波前阶段不是 ready：${before.phase}`);
+              assert(!button.disabled, "开始第一波按钮不可交互");
+              button.click();
+
+              const after = await waitFor(() => {
+                const state = game.combatSystem.getBattleState();
+                return state.phase !== "ready" ? state : null;
+              }, "战斗阶段离开 ready");
+              assert(after.currentWave === 1, `首波编号异常：${after.currentWave}`);
+              return `phase ${before.phase} → ${after.phase} · wave=${after.currentWave}`;
+            });
+
+            await step("点击领地导航", async () => {
+              const button = frame.contentDocument.querySelector(
+                '.nav-btn[data-tab="territory"]',
+              );
+              assert(button, "未找到领地导航按钮");
+              button.click();
+              await waitFor(
+                () => frame.contentWindow.game.currentScene === "territory",
+                "领地场景激活",
+              );
+
+              const url = new URL(frame.contentWindow.location.href);
+              const scene = frame.contentDocument.getElementById("territory-scene");
+              assert(url.searchParams.get("scene") === "territory", "领地场景未写入 URL");
+              assert(scene?.style.display === "flex", "领地场景容器未显示");
+              savedScene = "territory";
+              return url.search;
+            });
+
+            await step("通过空地块弹窗建造免费主基地", async () => {
+              const game = frame.contentWindow.game;
+              const doc = frame.contentDocument;
+              const territory = game.territorySystem;
+              assert(
+                territory.buildings.length === 0,
+                `新存档已有 ${territory.buildings.length} 座建筑`,
+              );
+
+              const emptySlot = doc.querySelector(
+                '.territory-slot[data-slot="0"]',
+              );
+              assert(
+                emptySlot instanceof frame.contentWindow.HTMLButtonElement,
+                "未找到首个可点击空地块",
+              );
+              assert(!emptySlot.classList.contains("built"), "首个地块不是空地块");
+              emptySlot.click();
+
+              const modal = await waitFor(() => {
+                const candidate = doc.getElementById("build-modal");
+                return candidate?.classList.contains("show") ? candidate : null;
+              }, "建造弹窗打开");
+              const mainBaseOption = Array.from(
+                doc.querySelectorAll("#building-options .building-option"),
+              ).find(
+                (option) =>
+                  option.querySelector(".building-option-name")?.textContent ===
+                  "主基地",
+              );
+              assert(mainBaseOption, "建造弹窗未显示主基地");
+              assert(!mainBaseOption.disabled, "免费主基地不可建造");
+              mainBaseOption.click();
+
+              const building = await waitFor(
+                () =>
+                  territory.buildings.length === 1
+                    ? territory.buildings[0]
+                    : null,
+                "主基地建造结算",
+              );
+              await waitFor(
+                () =>
+                  !modal.classList.contains("show") &&
+                  doc
+                    .querySelector('.territory-slot[data-slot="0"]')
+                    ?.classList.contains("built"),
+                "主基地渲染",
+              );
+              assert(building.type === "main_base", `建筑类型异常：${building.type}`);
+              assert(building.slotIndex === 0, `建筑地块异常：${building.slotIndex}`);
+              savedBuilding = {
+                count: territory.buildings.length,
+                type: building.type,
+                slotIndex: building.slotIndex,
+              };
+              return `${building.type} · slot=${building.slotIndex} · buildings=${savedBuilding.count}`;
+            });
+
+            await step("通过 F5 快捷键保存槽位 1", async () => {
+              const gameWindow = frame.contentWindow;
+              const beforeTimestamp = parseSlotOneSave()?.timestamp || 0;
+              const event = new gameWindow.KeyboardEvent("keydown", {
+                key: "F5",
+                code: "F5",
+                bubbles: true,
+                cancelable: true,
+              });
+              gameWindow.document.dispatchEvent(event);
+
+              const save = await waitFor(() => {
+                const candidate = parseSlotOneSave();
+                return candidate?.timestamp > beforeTimestamp ? candidate : null;
+              }, "F5 存档写入");
+
+              assert(event.defaultPrevented, "F5 未被游戏快捷键处理");
+              assert(save.version && save.data?.fate, "槽位 1 缺少有效命运数据");
+              savedFate = { ...save.data.fate };
+              assert(savedFate.fateCoins >= 2, "存档未包含购买后的桌面硬币");
+              assert(savedFate.assistants >= 1, "存档未包含招募后的助手");
+              assert(savedFate.totalFlips >= 1, "存档未包含手动翻转进度");
+              assert(savedBuilding, "保存前未完成主基地建造");
+              assert(
+                save.data.territory?.buildings?.length === savedBuilding.count,
+                "存档未包含建造后的主基地",
+              );
+              assert(
+                save.data.territory.buildings[0]?.type === savedBuilding.type,
+                "存档中的建筑类型不一致",
+              );
+              return `fateCoins=${savedFate.fateCoins} · assistants=${savedFate.assistants} · totalFlips=${savedFate.totalFlips} · buildings=${savedBuilding.count}`;
+            });
+
+            await step("重载 iframe 并恢复进度与场景", async () => {
+              const previousDocument = frame.contentDocument;
+              frame.contentWindow.location.reload();
+
+              const game = await waitFor(
+                () =>
+                  frame.contentDocument !== previousDocument &&
+                  frame.contentWindow?.game?.isInitialized &&
+                  frame.contentWindow.game,
+                "iframe 重载与游戏重新初始化",
+              );
+              const restored = game.fateCoinSystem.getSaveData();
+              const restoredBuildings = game.territorySystem.buildings;
+              const currentUrl = new URL(frame.contentWindow.location.href);
+
+              assert(
+                restored.fateCoins === savedFate.fateCoins,
+                `桌面硬币恢复不一致：${restored.fateCoins} !== ${savedFate.fateCoins}`,
+              );
+              assert(
+                restored.assistants === savedFate.assistants,
+                `助手恢复不一致：${restored.assistants} !== ${savedFate.assistants}`,
+              );
+              assert(
+                restored.totalFlips >= savedFate.totalFlips,
+                `翻转进度倒退：${restored.totalFlips} < ${savedFate.totalFlips}`,
+              );
+              assert(game.currentScene === savedScene, "重载后未恢复领地场景");
+              assert(
+                currentUrl.searchParams.get("scene") === savedScene,
+                "重载后 URL 未保留领地场景",
+              );
+              assert(
+                frame.contentDocument
+                  .querySelector('.nav-btn[data-tab="territory"]')
+                  ?.classList.contains("active"),
+                "重载后领地导航未激活",
+              );
+              assert(savedBuilding, "重载前未记录主基地状态");
+              assert(
+                restoredBuildings.length === savedBuilding.count,
+                `建筑恢复不一致：${restoredBuildings.length} !== ${savedBuilding.count}`,
+              );
+              assert(
+                restoredBuildings[0]?.type === savedBuilding.type &&
+                  restoredBuildings[0]?.slotIndex === savedBuilding.slotIndex,
+                "重载后主基地类型或地块不一致",
+              );
+              assert(
+                frame.contentDocument
+                  .querySelector(
+                    `.territory-slot[data-slot="${savedBuilding.slotIndex}"]`,
+                  )
+                  ?.classList.contains("built"),
+                "重载后主基地未在领地网格中渲染",
+              );
+              return `硬币 ${restored.fateCoins} · 助手 ${restored.assistants} · 翻转 ${restored.totalFlips} · 建筑 ${restoredBuildings.length} · scene=${game.currentScene}`;
+            });
+          } catch (error) {
+            result.error = error?.message || String(error);
+          } finally {
+            try {
+              cleanup();
+              assert(snapshotReady, "测试开始前未完成 localStorage 快照");
+              assert(snapshotMatchesStorage(), "PetPlan localStorage 未完整恢复");
+              record(
+                "pass",
+                "移除 iframe 并恢复原有存档",
+                `已恢复 ${storageSnapshot.size} 个 petplan_* 键`,
+              );
+            } catch (error) {
+              result.error ||= error?.message || String(error);
+              record("fail", "移除 iframe 并恢复原有存档", result.error);
+            }
+
+            result.done = true;
+            result.ok = result.counts.failed === 0;
+            result.status = result.ok ? "passed" : "failed";
+            result.finishedAt = new Date().toISOString();
+            statusEl.textContent = result.ok ? "全部通过" : "测试失败";
+            statusEl.className = result.status;
+            document.title = result.ok
+              ? "✓ PetPlan 浏览器冒烟测试"
+              : "✕ PetPlan 浏览器冒烟测试";
+          }
+        }
+
+        run();
+      })();
+    </script>
+  </body>
+</html>

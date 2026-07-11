@@ -4,7 +4,8 @@
 
 - 现代桌面浏览器，或可横屏的移动浏览器。
 - Python 3 用于本地静态服务。
-- 不需要 Node、打包器或数据库。
+- Node.js 用于自动化测试。
+- 不需要打包器、第三方 npm 依赖或数据库。
 
 ## 启动
 
@@ -17,15 +18,22 @@ python3 -m http.server 4174 --directory .
 
 ## 修改与验证
 
-每次修改 JavaScript 后至少运行：
+每次修改 JavaScript 后至少运行统一的 Node 测试入口和差异检查：
 
 ```bash
-node --check js/main.js
-node --check js/modules/scene-router.js
-node --check js/modules/modal-focus-manager.js
-node --experimental-default-type=module tests/phase-one-smoke.mjs
+npm test
 git diff --check
 ```
+
+`npm test` 不安装或调用第三方依赖；它会先检查 `main.js`、控制器和本阶段改动模块的语法，再依次在独立的 Node 进程中运行控制器接口契约、核心逻辑、第一阶段回归和塔防冒烟测试。
+
+浏览器集成测试需要先启动本地静态服务：
+
+```bash
+python3 -m http.server 4174 --directory .
+```
+
+然后打开 `http://localhost:4174/tests/browser-smoke.html`。浏览器测试会临时使用测试存档，并在测试结束后自动恢复原有存档。
 
 视觉改动在以下状态检查：
 

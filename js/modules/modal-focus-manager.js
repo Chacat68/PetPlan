@@ -15,7 +15,14 @@ export class ModalFocusManager {
     this.activeModal = null;
     this.restoreTarget = null;
     this.handleKeydown = this.handleKeydown.bind(this);
+    this.isBound = false;
+    this.bind();
+  }
+
+  bind() {
+    if (this.isBound) return;
     document.addEventListener("keydown", this.handleKeydown);
+    this.isBound = true;
   }
 
   activate(modal, initialFocusSelector) {
@@ -44,6 +51,14 @@ export class ModalFocusManager {
     if (restoreTarget?.isConnected) {
       restoreTarget.focus({ preventScroll: true });
     }
+  }
+
+  destroy() {
+    if (!this.isBound) return;
+    document.removeEventListener("keydown", this.handleKeydown);
+    this.isBound = false;
+    this.activeModal = null;
+    this.restoreTarget = null;
   }
 
   handleKeydown(event) {
