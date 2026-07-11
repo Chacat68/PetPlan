@@ -4,25 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=tower-defense-20260710b" />
+    <link rel="stylesheet" href="css/style.css?v=extraction-rpg-20260711a" />
   </head>
   <body>
     <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
       <div class="orientation-lock-card">
         <span class="orientation-lock-icon" aria-hidden="true">↻</span>
         <h1 id="orientation-lock-title">请横屏继续</h1>
-        <p>PetPlan 为横屏游戏。旋转设备后即可进入命运桌、战斗和领地。</p>
+        <p>PetPlan 为横屏游戏。旋转设备后即可进入命运桌、远征和领地。</p>
       </div>
     </section>
     <div class="game-container">
       <!-- 游戏画布区域 -->
       <main class="game-area">
-        <!-- 战斗场景 -->
+        <!-- 宠物远征：单局 RPG 搜打撤 -->
         <div class="scene-container" id="battle-scene" style="display: none">
           <section class="battle-board-panel">
             <div class="battle-scorebar">
-              <span>PET DEFENSE</span>
-              <span class="score-dollar" id="battle-phase-badge">布置防线</span>
+              <span>PET EXPEDITION</span>
+              <span class="score-dollar" id="battle-phase-badge">远征整备</span>
             </div>
 
             <div class="battle-arena-surface">
@@ -45,64 +45,105 @@
                 </div>
               </div>
 
-              <div class="tower-defense-status" aria-live="polite">
-                <span>波次 <b id="battle-wave-display">0/10</b></span>
-                <span>基地 <b id="battle-base-hp-display">--/--</b></span>
-                <span>能量 <b id="battle-energy-display">100</b></span>
-                <span>敌军 <b id="battle-enemy-display">0</b></span>
+              <div class="extraction-run-status" aria-live="polite">
+                <span>区域 <b id="battle-depth-display">0/8</b></span>
+                <span>生命 <b id="battle-hp-display">--/--</b></span>
+                <span>威胁 <b id="battle-threat-display">0%</b></span>
+                <span>背包 <b id="battle-bag-display">0/8</b></span>
+                <span>敌人 <b id="battle-enemy-display">0</b></span>
               </div>
 
               <div class="battle-canvas-frame">
                 <canvas id="gameCanvas" width="750" height="1800"></canvas>
               </div>
+
+              <div class="battle-event-feed" id="battle-event-feed" aria-live="polite">
+                准备好后开始远征。撤离前获得的战利品都只是暂存。
+              </div>
+              <div class="battle-skill-dock" id="battle-skill-dock" aria-label="宠物主动技能"></div>
             </div>
           </section>
 
-          <!-- 宠物防线指挥面板 -->
+          <!-- 搜打撤远征终端 -->
           <aside class="battle-upgrade-panel upgrade-panel" id="upgrade-panel" style="display: none">
             <div class="battle-shop-tabs">
-              <span class="shop-tab active" aria-hidden="true">🛡</span>
-              <span class="shop-tab" aria-hidden="true">🐾</span>
-              <span class="shop-tab" aria-hidden="true">⚡</span>
+              <span class="shop-tab active" aria-hidden="true">⌖</span>
+              <span class="shop-tab" aria-hidden="true">🎒</span>
+              <span class="shop-tab" aria-hidden="true">⇥</span>
             </div>
-            <h3>防线指挥</h3>
+            <h3>远征终端</h3>
 
             <div class="battle-command-summary">
-              <div><span>当前波次</span><b id="battle-panel-wave">0 / 10</b></div>
-              <div><span>最佳记录</span><b id="battle-best-wave">0</b></div>
+              <div><span>已探索</span><b id="battle-rooms-display">0 / 8</b></div>
+              <div><span>成功撤离</span><b id="battle-extractions-display">0</b></div>
               <div><span>本局击杀</span><b id="battle-kills-display">0</b></div>
-              <div><span>待结算金币</span><b id="battle-reward-coins">0</b></div>
+              <div><span>携带价值</span><b id="battle-reward-coins">0</b></div>
             </div>
 
-            <section class="selected-tower-card" id="selected-tower-card">
-              <span class="selected-tower-kicker">已选择宠物塔</span>
-              <strong id="selected-tower-name">暂无上阵宠物</strong>
-              <span id="selected-tower-role">请先在宠物编队中上阵宠物</span>
-              <dl class="selected-tower-stats">
-                <div><dt>塔等级</dt><dd id="selected-tower-level">--</dd></div>
-                <div><dt>伤害</dt><dd id="selected-tower-damage">--</dd></div>
-                <div><dt>射程</dt><dd id="selected-tower-range">--</dd></div>
-                <div><dt>攻速</dt><dd id="selected-tower-speed">--</dd></div>
-              </dl>
+            <section class="expedition-room-card" id="expedition-room-card">
+              <span class="expedition-room-kicker" id="battle-room-kicker">行动简报</span>
+              <strong id="battle-room-name">未知禁区</strong>
+              <span class="expedition-room-risk" id="battle-room-risk">撤离后才会结算全部收益</span>
+              <p id="battle-room-desc">选择路线，搜索物资，击败阻拦者，并判断何时收手。</p>
+            </section>
+
+            <section class="expedition-route-panel" id="battle-route-panel" hidden>
+              <span class="expedition-section-title">选择下一处区域</span>
+              <div class="expedition-route-list" id="battle-route-list"></div>
+            </section>
+
+            <section class="expedition-loot-panel">
+              <div class="expedition-section-row">
+                <span class="expedition-section-title">远征背包</span>
+                <span id="battle-supplies-display">补给 0</span>
+              </div>
+              <div class="expedition-loot-list" id="battle-loot-list" aria-live="polite">
+                <span class="expedition-empty-loot">暂无战利品</span>
+              </div>
             </section>
 
             <div class="battle-command-actions">
-              <button type="button" class="tower-action-btn primary" id="battle-start-wave-btn">
-                开始第一波
+              <button type="button" class="expedition-action-btn primary" id="battle-start-expedition-btn">
+                开始远征
               </button>
-              <button type="button" class="tower-action-btn" id="battle-upgrade-tower-btn">
-                升级宠物塔 <span id="battle-upgrade-cost">40⚡</span>
+
+              <div class="expedition-action-group" id="battle-search-actions" hidden>
+                <button type="button" class="expedition-action-btn" data-search-mode="quick">
+                  快速搜索 <span>低风险</span>
+                </button>
+                <button type="button" class="expedition-action-btn" data-search-mode="thorough">
+                  仔细搜刮 <span>高收益</span>
+                </button>
+                <button type="button" class="expedition-action-btn" data-search-mode="pet">
+                  宠物侦察 <span>稳妥</span>
+                </button>
+              </div>
+
+              <div class="expedition-action-group" id="battle-camp-actions" hidden>
+                <button type="button" class="expedition-action-btn" id="battle-rest-btn">
+                  安全休整 <span>回血 / 降威胁</span>
+                </button>
+                <button type="button" class="expedition-action-btn" id="battle-leave-camp-btn">
+                  直接离开
+                </button>
+              </div>
+
+              <button type="button" class="expedition-action-btn" id="battle-use-supply-btn" hidden>
+                使用补给 <span id="battle-supply-heal-label">恢复 32% 生命</span>
               </button>
-              <button type="button" class="tower-action-btn" id="battle-repair-base-btn">
-                修复基地 <span>35⚡</span>
+              <button type="button" class="expedition-action-btn extract" id="battle-extract-btn" hidden>
+                启动撤离 <span id="battle-extract-label">守住信标</span>
               </button>
-              <button type="button" class="tower-action-btn danger" id="battle-restart-btn">
-                重整防线
+              <button type="button" class="expedition-action-btn danger" id="battle-abandon-btn" hidden>
+                放弃本局
+              </button>
+              <button type="button" class="expedition-action-btn primary" id="battle-restart-btn" hidden>
+                再次远征
               </button>
             </div>
 
             <p class="battle-command-tip" id="battle-command-tip">
-              点击有宠物的塔位进行选择；波次间先选塔，再点空塔位即可换位。
+              搜得越深，收益和威胁越高。至少探索 3 个区域后可以主动撤离。
             </p>
           </aside>
         </div>
@@ -342,9 +383,9 @@
               <span class="scene-icon">◎</span>
               <span class="scene-label">命运</span>
             </button>
-            <button class="hud-scene-btn nav-btn" data-tab="dungeon" type="button" aria-label="战斗">
+            <button class="hud-scene-btn nav-btn" data-tab="dungeon" type="button" aria-label="远征">
               <span class="scene-icon">⚔</span>
-              <span class="scene-label">战斗</span>
+              <span class="scene-label">远征</span>
             </button>
             <button class="hud-scene-btn nav-btn" data-tab="territory" type="button" aria-label="领地">
               <span class="scene-icon">▦</span>
@@ -576,7 +617,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=controllers-phase-two-20260711b";
+        var moduleSrc = "js/main.js?v=extraction-rpg-20260711a";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

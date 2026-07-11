@@ -266,8 +266,7 @@ export class GameCore {
     const { width, height } = this.config;
 
     if (
-      this.systems.combat?.mode === "towerDefense" &&
-      typeof this.systems.combat.renderBattlefieldBackground === "function"
+      typeof this.systems.combat?.renderBattlefieldBackground === "function"
     ) {
       this.systems.combat.renderBattlefieldBackground(ctx);
       return;

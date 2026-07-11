@@ -23,6 +23,8 @@ index.html
 | `controllers/` | 接收 DOM/Canvas 操作，调用系统能力并刷新所属场景或模态 |
 | `GameCore` | Canvas 帧循环、战斗画面、自动保存计时 |
 | `FateCoinSystem` | 命运资源、自动翻转、成长成本 |
+| `CombatSystem` | 远征战斗门面：遭遇实体、远征生命、宠物技能、撤离倒计时、Canvas 渲染与最终奖励发放 |
+| `ExpeditionRunSystem` | 单局远征规则：路线、节点、搜索、威胁、补给、背包、阶段流转与结算计算 |
 | `SceneRouter` | 命运/战斗/领地显示状态、HUD 状态、`?scene=` URL |
 | `ModalFocusManager` | 模态初始焦点、Tab 限制、关闭后的焦点恢复 |
 | `TerritorySystem` | 地块、建筑、循环脉冲、长期资源产出 |
@@ -37,7 +39,7 @@ index.html
 | 控制器 | 责任 |
 | --- | --- |
 | `achievement-controller.js` | 成就/任务模态、奖励领取和模态内标签状态 |
-| `battle-scene-controller.js` | 战斗按钮、Canvas 选塔、战斗面板刷新和结算反馈 |
+| `battle-scene-controller.js` | 远征开始、路线选择、三种搜索、安全屋、补给、宠物技能、撤离/放弃、Canvas 锁敌、面板刷新和结算反馈 |
 | `settings-controller.js` | 设置模态、显示设置、快捷存档/读档和存档状态 |
 | `player-modal-controller.js` | 玩家属性模态、属性升级和升级按钮状态 |
 | `pet-modal-controller.js` | 宠物编队、背包、图鉴以及解锁/上阵操作 |
@@ -64,7 +66,29 @@ Game 初始化
   -> LocalStorage
 ```
 
-场景路由只管理表现状态，不复制游戏数据。命运、战斗、领地共享同一批系统实例和槽位存档。旧版独立领地键只在没有可用槽位时作为一次性迁移回退。`ProgressionSystem` 只保存领取状态；首局步骤和成长倾向始终从当前玩法状态派生。
+场景路由只管理表现状态，不复制游戏数据。命运、远征、领地共享同一批系统实例和槽位存档。旧版独立领地键只在没有可用槽位时作为一次性迁移回退。`ProgressionSystem` 只保存领取状态；首局步骤和成长倾向始终从当前玩法状态派生。
+
+### 远征战斗数据流
+
+```text
+路线 / 搜索 / 撤离 DOM 操作
+  -> BattleSceneController
+  -> CombatSystem（对外战斗门面）
+  -> ExpeditionRunSystem（纯局内规则状态）
+  -> CombatSystem 生成或清理 Canvas 遭遇实体
+  -> getBattleState() 形成统一只读快照
+  -> BattleSceneController 刷新路线、背包、威胁、技能与操作按钮
+
+GameCore 帧循环
+  -> CombatSystem.update(deltaTime)
+  -> 怪物、投射物、宠物技能冷却与撤离倒计时
+  -> 状态回调
+  -> BattleSceneController.updateBattleDisplay(state)
+```
+
+`ExpeditionRunSystem` 不访问 DOM、Canvas 或永久资源；它只计算 `briefing`、`route`、`search`、`camp`、`combat`、`extraction-ready`、`extracting`、`extracted`、`defeat` 的状态流。`CombatSystem` 负责把规则结果转换为实时遭遇，并且只在整局结束时向资源和玩家系统发放一次奖励。
+
+远征路线、生命、补给、威胁、背包、怪物和撤离倒计时都是瞬时状态。切换场景只暂停 `CombatSystem`，刷新或载入存档会丢弃当前远征；存档仅记录最深探索、成功撤离和失败次数。
 
 ## 路由
 
@@ -97,6 +121,8 @@ PetPlan/
 │   ├── player-system.js
 │   ├── pet-system.js
 │   ├── combat-system.js
+│   ├── expedition-run-system.js
+│   ├── targeting-system.js
 │   ├── territory-system.js
 │   ├── resource-system.js
 │   ├── save-system.js
@@ -106,7 +132,9 @@ PetPlan/
 │   └── modal-focus-manager.js
 ├── images/
 ├── doc/
-└── tests/                      # Node 冒烟测试与浏览器诊断页
+└── tests/
+    ├── extraction-rpg-smoke.mjs # 远征规则与战斗集成冒烟
+    └── browser-smoke.html        # 主游戏浏览器集成诊断页
 ```
 
 ## 扩展原则
@@ -117,3 +145,5 @@ PetPlan/
 4. 控制器依赖由 `Game` 显式注入，并为长驻监听和计时器提供可重复的绑定/销毁生命周期。
 5. 所有入口都指向主游戏，避免为控制器或子系统创建第二份资源、存档或进度状态。
 6. 影响成长节奏的常量只写入 `progression-config.js`，不得在 UI 推荐或领地模块中复制魔法数值。
+7. 单局远征规则优先放入 `ExpeditionRunSystem`，DOM 操作留在 `BattleSceneController`，实体更新与 Canvas 表现留在 `CombatSystem`。
+8. 随机路线、搜索和掉落必须支持注入随机函数，测试使用固定随机源，避免概率用例不稳定。

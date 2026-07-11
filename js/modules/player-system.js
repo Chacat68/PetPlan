@@ -401,7 +401,10 @@ export class PlayerSystem {
      * 渲染玩家
      */
     render(ctx) {
-        const { x, y, width, height, hp, maxHp } = this.player;
+        const { x, y, width, height } = this.player;
+        const runHero = this.combatSystem?.getRunHeroState?.();
+        const hp = runHero?.hp ?? this.player.hp;
+        const maxHp = runHero?.maxHp ?? this.player.maxHp;
         
         const imageReady = (
             this.playerImageLoaded ||

@@ -1,134 +1,82 @@
 /**
- * CombatSystem - 宠物防线（竖版塔防）
- * 负责波次、路径、基地、宠物塔、投射物、奖励结算和战斗渲染。
+ * CombatSystem - 宠物远征（单局 RPG 搜打撤）
+ *
+ * ExpeditionRunSystem 负责路线和结算，本类负责战斗实体、主动技能与 Canvas 渲染。
  */
 
+import { ExpeditionRunSystem } from './expedition-run-system.js?v=extraction-rpg-20260711a';
 import { TargetingSystem } from './targeting-system.js?v=tower-defense-20260710b';
-import { WaveSystem } from './wave-system.js?v=tower-defense-20260710b';
 
 let instance = null;
-const MONSTER_ASSET_VERSION = 'tower-defense-20260710b';
+const MONSTER_ASSET_VERSION = 'extraction-rpg-20260711a';
 
-const TOWER_ROLES = {
-    fire: {
-        name: '烈焰炮台',
-        color: '#ff7043',
-        rangeRatio: 0.31,
-        damageScale: 1.05,
-        intervalScale: 1,
-        splashRadius: 54
-    },
-    phoenix: {
-        name: '涅槃火雨',
-        color: '#ff8a50',
-        rangeRatio: 0.34,
-        damageScale: 1.25,
-        intervalScale: 1.18,
-        splashRadius: 82
-    },
-    ice: {
-        name: '寒霜控制',
-        color: '#72d7ff',
-        rangeRatio: 0.33,
-        damageScale: 0.82,
-        intervalScale: 0.9,
-        slowFactor: 0.58,
-        slowDuration: 1900
-    },
-    thunder: {
-        name: '连锁闪电',
-        color: '#ffe66d',
-        rangeRatio: 0.34,
-        damageScale: 0.95,
-        intervalScale: 0.86,
-        chainCount: 2
-    },
-    earth: {
-        name: '大地震击',
-        color: '#b58b5a',
-        rangeRatio: 0.27,
-        damageScale: 1.45,
-        intervalScale: 1.32,
-        stunDuration: 360
-    },
-    wind: {
-        name: '风暴穿透',
-        color: '#88f0d0',
-        rangeRatio: 0.39,
-        damageScale: 1.08,
-        intervalScale: 0.8,
-        chainCount: 1
-    },
-    light: {
-        name: '圣光支援',
-        color: '#fff4a8',
-        rangeRatio: 0.35,
-        damageScale: 0.72,
-        intervalScale: 1.05,
-        baseHeal: 4
-    },
-    dark: {
-        name: '暗影收割',
-        color: '#c38cff',
-        rangeRatio: 0.32,
-        damageScale: 1.12,
-        intervalScale: 0.88,
-        executeThreshold: 0.35,
-        executeScale: 1.8
-    },
-    default: {
-        name: '守卫炮台',
-        color: '#ffd167',
-        rangeRatio: 0.31,
-        damageScale: 1,
-        intervalScale: 1
-    }
-};
+const PET_ROLE_COLORS = Object.freeze({
+    fire: '#ff7043',
+    phoenix: '#ff8a50',
+    ice: '#72d7ff',
+    thunder: '#ffe66d',
+    earth: '#b58b5a',
+    wind: '#88f0d0',
+    light: '#fff4a8',
+    dark: '#c38cff',
+    default: '#ffd167'
+});
 
 export class CombatSystem {
-    constructor() {
-        this.mode = 'towerDefense';
+    constructor({ random = Math.random, runOptions = {} } = {}) {
+        this.mode = 'extractionRpg';
         this.isPaused = true;
+        this.random = typeof random === 'function' ? random : Math.random;
+        this.targetingSystem = new TargetingSystem();
+        this.runSystem = new ExpeditionRunSystem({ random: this.random, ...runOptions });
 
         this.monsters = [];
         this.bullets = [];
         this.explosions = [];
         this.combatTexts = [];
+        this.encounterQueue = [];
+        this.currentEncounter = null;
+        this.encounterRewards = this.createEmptyRewards();
+        this.encounterRewardsCommitted = false;
         this.nextMonsterId = 1;
         this.nextBulletId = 1;
-        this.targetingSystem = new TargetingSystem();
-        this.waveSystem = new WaveSystem({ totalWaves: 10 });
+        this.encounterSpawnTimer = 0;
+        this.attackTimer = 0;
+        this.uiNotifyTimer = 0;
+        this.extractionTimer = 0;
+        this.guardTimer = 0;
+        this.focusTargetId = null;
 
         this.monsterTemplates = [
             {
                 id: 'slime', name: '史莱姆', image: 'images/monsters/slime_table.png',
-                baseHp: 32, baseAttack: 7, speed: 42, coinReward: 8,
-                crystalReward: 0, expReward: 5, size: 34
+                baseHp: 34, baseAttack: 7, speed: 54, coinReward: 8,
+                crystalReward: 0, expReward: 5, size: 34, attackInterval: 1250
             },
             {
                 id: 'bat', name: '疾风蝙蝠', image: 'images/monsters/bat_table.png',
-                baseHp: 25, baseAttack: 8, speed: 70, coinReward: 11,
-                crystalReward: 0, expReward: 7, size: 31
-            },
-            {
-                id: 'skeleton', name: '重甲骷髅', image: 'images/monsters/skeleton_table.png',
-                baseHp: 75, baseAttack: 13, speed: 34, coinReward: 19,
-                crystalReward: 1, expReward: 14, size: 40
+                baseHp: 27, baseAttack: 8, speed: 82, coinReward: 11,
+                crystalReward: 0, expReward: 7, size: 31, attackInterval: 950
             },
             {
                 id: 'goblin', name: '哥布林', image: 'images/monsters/goblin_table.png',
-                baseHp: 43, baseAttack: 9, speed: 50, coinReward: 14,
-                crystalReward: 0, expReward: 9, size: 36
+                baseHp: 46, baseAttack: 10, speed: 62, coinReward: 14,
+                crystalReward: 0, expReward: 9, size: 36, attackInterval: 1120
+            },
+            {
+                id: 'skeleton', name: '重甲骷髅', image: 'images/monsters/skeleton_table.png',
+                baseHp: 78, baseAttack: 14, speed: 42, coinReward: 20,
+                crystalReward: 1, expReward: 14, size: 40, attackInterval: 1380
             },
             {
                 id: 'demon', name: '深渊恶魔', image: 'images/monsters/demon_table.png',
-                baseHp: 105, baseAttack: 18, speed: 38, coinReward: 30,
-                crystalReward: 2, expReward: 23, size: 44
+                baseHp: 112, baseAttack: 19, speed: 48, coinReward: 32,
+                crystalReward: 2, expReward: 24, size: 46, attackInterval: 1180
             },
             {
-                id: 'dragon', name: '防线终结者', image: 'images/monsters/dragon_table.png',
-                baseHp: 520, baseAttack: 55, speed: 27, coinReward: 150,
-                crystalReward: 15, expReward: 120, size: 62, isBoss: true
+                id: 'dragon', name: '核心守卫', image: 'images/monsters/dragon_table.png',
+                baseHp: 560, baseAttack: 45, speed: 35, coinReward: 150,
+                crystalReward: 10, expReward: 120, size: 64, attackInterval: 1450, isBoss: true
             }
         ];
 
@@ -138,42 +86,35 @@ export class CombatSystem {
         this.preloadImages();
 
         this.config = {
-            attackInterval: 760,
-            bulletSpeed: 520,
-            towerBulletSpeed: 460,
-            maxMonsters: 40,
-            initialEnergy: 100,
-            waveEnergyBonus: 28,
-            towerMaxLevel: 5
+            attackInterval: 720,
+            bulletSpeed: 560,
+            maxMonsters: 32,
+            spawnInterval: 460,
+            heroEngageRange: 64,
+            skillGuardReduction: 0.42
         };
 
         this.mapWidth = 750;
         this.mapHeight = 900;
-        this.attackTimer = 0;
-        this.baseRegenTimer = 0;
         this.playerSystem = null;
         this.resourceSystem = null;
         this.territorySystem = null;
         this.petSystem = null;
         this.onStateChange = null;
+        this.skillCooldowns = new Map();
 
-        this.towers = [];
-        this.selectedTowerId = null;
-        this.energy = this.config.initialEnergy;
-        this.baseHp = 300;
-        this.baseMaxHp = 300;
-        this.runRewards = this.createEmptyRewards();
+        this.runHp = 100;
+        this.runMaxHp = 100;
         this.lastSettlement = null;
         this.settled = false;
         this.battleInitialized = false;
-        this.runSerial = 0;
         this.meta = {
-            bestWave: 0,
-            victories: 0,
-            defeats: 0
+            bestDepth: 0,
+            extractions: 0,
+            losses: 0
         };
 
-        console.log('[CombatSystem] 宠物防线模式初始化完成');
+        console.log('[CombatSystem] 宠物远征模式初始化完成');
     }
 
     preloadImages() {
@@ -186,9 +127,7 @@ export class CombatSystem {
                 console.warn(`[CombatSystem] 图片加载失败: ${template.image}`);
             };
             image.src = `${template.image}?v=${MONSTER_ASSET_VERSION}`;
-            if (image.complete && image.naturalWidth > 0) {
-                this.monsterImages[template.id] = image;
-            }
+            if (image.complete && image.naturalWidth > 0) this.monsterImages[template.id] = image;
 
             this.monsterAnimationSheets[template.id] = {};
             this.combatStates.forEach(state => {
@@ -226,7 +165,6 @@ export class CombatSystem {
 
     setPetSystem(petSystem) {
         this.petSystem = petSystem;
-        this.syncTowersWithPets();
     }
 
     setOnStateChange(callback) {
@@ -234,192 +172,400 @@ export class CombatSystem {
     }
 
     prepareBattle() {
-        if (!this.battleInitialized) {
-            this.resetBattle();
-        } else {
-            this.syncTowersWithPets();
-            this.placeHeroAtBase();
+        if (!this.battleInitialized) this.resetBattle();
+        else {
+            if (!this.isCombatActive()) this.placeHeroAtCamp();
             this.notifyStateChange();
         }
         return this.getBattleState();
     }
 
     resetBattle() {
-        this.monsters = [];
-        this.bullets = [];
-        this.explosions = [];
-        this.combatTexts = [];
-        this.nextMonsterId = 1;
-        this.nextBulletId = 1;
-        this.attackTimer = 0;
-        this.baseRegenTimer = 0;
-        this.runSerial += 1;
-        this.waveSystem.reset();
-        this.energy = this.config.initialEnergy;
-        this.baseMaxHp = this.calculateBaseMaxHp();
-        this.baseHp = this.baseMaxHp;
-        this.runRewards = this.createEmptyRewards();
+        this.clearEncounter();
+        this.runSystem.reset();
+        this.runMaxHp = this.calculateRunMaxHp();
+        this.runHp = this.runMaxHp;
+        this.skillCooldowns.clear();
+        this.guardTimer = 0;
         this.lastSettlement = null;
         this.settled = false;
-        this.towers = [];
-        this.selectedTowerId = null;
-        this.syncTowersWithPets();
-        this.placeHeroAtBase();
         this.battleInitialized = true;
+        this.placeHeroAtCamp();
         this.notifyStateChange();
-
-        return { success: true, message: '防线已重整，可以开始第一波' };
+        return { success: true, message: '远征终端已就绪' };
     }
 
-    createEmptyRewards() {
-        return { coins: 0, crystals: 0, exp: 0, kills: 0 };
-    }
+    startRun() {
+        if (!this.battleInitialized) this.resetBattle();
+        const phase = this.runSystem.phase;
+        if (phase === 'extracted' || phase === 'defeat') this.resetBattle();
 
-    calculateBaseMaxHp() {
-        const player = this.playerSystem?.player || {};
-        const bonuses = this.territorySystem?.calculateBonuses?.() || {};
-        const defense = (player.defense || 0) + (bonuses.defense || 0);
-        return Math.max(250, Math.round(180 + (player.maxHp || 100) * 1.4 + defense * 8));
-    }
+        const result = this.runSystem.startRun({ supplies: 2, backpackCapacity: 8 });
+        if (!result.success) return result;
 
-    startNextWave() {
-        this.prepareBattle();
-        const result = this.waveSystem.startNextWave();
-        if (result.success) {
-            this.addBannerText(`第 ${result.wave} 波`, '#ffd167');
-            this.notifyStateChange();
-        }
+        this.clearEncounter();
+        this.runMaxHp = this.calculateRunMaxHp();
+        this.runHp = this.runMaxHp;
+        this.skillCooldowns.clear();
+        this.lastSettlement = null;
+        this.settled = false;
+        this.placeHeroAtCamp();
+        this.addBannerText('远征开始', '#ffd167');
+        this.notifyStateChange();
         return result;
     }
 
+    startExpedition() {
+        return this.startRun();
+    }
+
+    chooseRoute(nodeId) {
+        const result = this.runSystem.chooseNode(nodeId);
+        if (result.success && result.encounter) this.beginEncounter(result.encounter);
+        else if (result.success) this.placeHeroAtCamp();
+        this.notifyStateChange();
+        return result;
+    }
+
+    searchArea(mode) {
+        const result = this.runSystem.resolveSearch(mode, {
+            hasPet: Boolean(this.petSystem?.equippedPets?.length)
+        });
+        if (result.success && result.encounter) this.beginEncounter(result.encounter);
+        this.notifyStateChange();
+        return result;
+    }
+
+    searchCurrentArea(mode = 'quick') {
+        return this.searchArea(mode);
+    }
+
+    restAtCamp() {
+        const result = this.runSystem.restAtCamp();
+        if (result.success) {
+            const heal = Math.max(1, Math.ceil(this.runMaxHp * result.healRatio));
+            this.healHero(heal);
+            this.placeHeroAtCamp();
+        }
+        this.notifyStateChange();
+        return result;
+    }
+
+    leaveCamp() {
+        const result = this.runSystem.leaveCamp();
+        if (result.success) this.placeHeroAtCamp();
+        this.notifyStateChange();
+        return result;
+    }
+
+    requestExtraction() {
+        const result = this.runSystem.startExtraction();
+        if (result.success) {
+            this.extractionTimer = result.durationMs;
+            this.beginEncounter({ ...result.encounter, durationMs: result.durationMs });
+            this.addBannerText('撤离信标启动', '#72d7ff');
+        }
+        this.notifyStateChange();
+        return result;
+    }
+
+    useSupply() {
+        if (this.runHp >= this.runMaxHp) return { success: false, message: '远征生命已满' };
+        const result = this.runSystem.spendSupply();
+        if (result.success) {
+            const heal = Math.max(1, Math.ceil(this.runMaxHp * result.healRatio));
+            const actualHeal = this.healHero(heal);
+            result.message = `使用补给，恢复 ${actualHeal} 点生命`;
+        }
+        this.notifyStateChange();
+        return result;
+    }
+
+    useMedkit() {
+        return this.useSupply();
+    }
+
+    usePetSkill(instanceId) {
+        if (!this.isCombatActive()) return { success: false, message: '宠物技能只能在战斗中使用' };
+        const pet = this.petSystem?.equippedPets?.find(item => String(item.instanceId) === String(instanceId));
+        if (!pet) return { success: false, message: '该宠物未上阵' };
+        const template = this.petSystem?.getTemplate?.(pet.templateId);
+        if (!template) return { success: false, message: '宠物数据不存在' };
+
+        const remaining = this.skillCooldowns.get(pet.instanceId) || 0;
+        if (remaining > 0) {
+            return { success: false, message: `${template.skill.name}还需 ${(remaining / 1000).toFixed(1)} 秒` };
+        }
+
+        const targets = this.getTargets(this.getHeroCenter(), { strategy: 'nearest', limit: 4 });
+        const type = template.type || 'default';
+        const levelScale = 1 + Math.max(0, (pet.level || 1) - 1) * 0.1;
+        const baseDamage = Math.max(
+            1,
+            Math.floor(((template.skill?.damage || template.baseStats?.attack * 2 || 20) * levelScale))
+        );
+        let affected = 0;
+
+        if (type === 'light') {
+            const heal = Math.max(12, Math.floor((template.skill?.heal || 50) * levelScale));
+            affected = this.healHero(heal);
+            this.addBannerText(`${template.name} · ${template.skill.name}`, PET_ROLE_COLORS.light);
+        } else if (targets.length === 0) {
+            return { success: false, message: '当前没有可攻击的目标' };
+        } else if (type === 'fire' || type === 'phoenix') {
+            targets.forEach((target, index) => {
+                if (this.applyDamage(target, baseDamage * (index === 0 ? 1.25 : 0.72))) affected += 1;
+            });
+        } else if (type === 'ice') {
+            targets.forEach(target => {
+                if (this.applyDamage(target, baseDamage * 0.72)) affected += 1;
+                target.slowFactor = 0.48;
+                target.slowTimer = Math.max(target.slowTimer || 0, 3200);
+            });
+        } else if (type === 'earth') {
+            targets.forEach(target => {
+                if (this.applyDamage(target, baseDamage * 0.82)) affected += 1;
+                target.stunTimer = Math.max(target.stunTimer || 0, 700);
+            });
+            this.guardTimer = 4200;
+        } else if (type === 'thunder' || type === 'wind') {
+            targets.slice(0, 3).forEach((target, index) => {
+                if (this.applyDamage(target, baseDamage * Math.max(0.55, 1 - index * 0.2))) affected += 1;
+                if (type === 'wind') target.stunTimer = Math.max(target.stunTimer || 0, 320);
+            });
+        } else if (type === 'dark') {
+            const target = targets[0];
+            const executeScale = target.hp / target.maxHp <= 0.35 ? 1.8 : 1;
+            if (this.applyDamage(target, baseDamage * executeScale, { isCrit: executeScale > 1 })) affected = 1;
+        } else if (this.applyDamage(targets[0], baseDamage)) {
+            affected = 1;
+        }
+
+        const cooldown = Math.max(3000, Math.floor(template.skill?.cooldown || 6000));
+        this.skillCooldowns.set(pet.instanceId, cooldown);
+        const color = PET_ROLE_COLORS[type] || PET_ROLE_COLORS.default;
+        this.addBannerText(`${template.name} · ${template.skill?.name || '伙伴技能'}`, color);
+        this.notifyStateChange();
+        return {
+            success: true,
+            message: type === 'light'
+                ? `${template.skill.name}恢复 ${affected} 点生命`
+                : `${template.skill?.name || '伙伴技能'}命中 ${affected} 个目标`
+        };
+    }
+
+    abandonRun() {
+        if (!this.runSystem.active) return { success: false, message: '当前没有进行中的远征' };
+        const settlement = this.finishExpedition(false, 'abandoned');
+        return { success: true, message: '已放弃本局并结算保底收益', settlement };
+    }
+
     restartBattle() {
+        if (this.runSystem.active) {
+            return { success: false, message: '远征进行中，请先使用“放弃本局”' };
+        }
         return this.resetBattle();
+    }
+
+    // 旧入口兼容：不再存在波次、塔位和基地升级。
+    startNextWave() {
+        return this.startRun();
+    }
+
+    upgradeSelectedTower() {
+        return { success: false, message: '远征模式中请使用宠物主动技能' };
+    }
+
+    repairBase() {
+        return this.useSupply();
+    }
+
+    selectTowerAt(x, y) {
+        return this.selectTargetAt(x, y);
+    }
+
+    selectTargetAt(x, y) {
+        if (!this.isCombatActive()) return { success: false, message: '' };
+        const target = this.monsters
+            .map(monster => ({
+                monster,
+                distance: Math.hypot(
+                    x - (monster.x + monster.width / 2),
+                    y - (monster.y + monster.height / 2)
+                )
+            }))
+            .filter(item => item.distance <= Math.max(34, item.monster.width))
+            .sort((a, b) => a.distance - b.distance)[0]?.monster;
+        if (!target) return { success: false, message: '' };
+        this.focusTargetId = target.id;
+        this.notifyStateChange();
+        return { success: true, message: `已锁定 ${target.name}` };
     }
 
     update(deltaTime) {
         if (!this.battleInitialized) this.resetBattle();
-
-        // 避免标签页休眠后恢复时整条怪物队伍瞬移到底线。
         const safeDelta = Math.max(0, Math.min(deltaTime, 100));
-        this.syncTowersWithPets();
-        this.placeHeroAtBase();
+        this.updateSkillCooldowns(safeDelta);
+        this.guardTimer = Math.max(0, this.guardTimer - safeDelta);
+        this.uiNotifyTimer += safeDelta;
 
-        const waveEvent = this.waveSystem.update(
-            safeDelta,
-            (spec, wave) => this.spawnMonster(spec, wave),
-            this.monsters.length
-        );
+        if (this.isCombatActive()) {
+            this.updateEncounterSpawns(safeDelta);
+            this.updateAttack(safeDelta);
+            this.updateMonsters(safeDelta);
+            this.updateBullets(safeDelta);
 
-        if (waveEvent.spawned > 0) this.notifyStateChange();
+            if (this.runSystem.phase === 'extracting') {
+                this.extractionTimer = Math.max(0, this.extractionTimer - safeDelta);
+                if (this.extractionTimer <= 0 && !this.settled) this.finishExpedition(true, 'extracted');
+            } else if (
+                this.runSystem.phase === 'combat' &&
+                this.currentEncounter &&
+                this.encounterQueue.length === 0 &&
+                this.monsters.length === 0
+            ) {
+                this.finishEncounter();
+            }
+        }
 
-        this.updateAttack(safeDelta);
-        this.updateTowers(safeDelta);
-        this.updateMonsters(safeDelta);
-        this.updateBullets(safeDelta);
-        this.updateBaseRegen(safeDelta);
         this.updateExplosions(safeDelta);
         this.updateCombatTexts(safeDelta);
-
-        if (waveEvent.waveCompleted) {
-            this.handleWaveCompleted(waveEvent.victory);
+        if (this.uiNotifyTimer >= 250) {
+            this.uiNotifyTimer %= 250;
+            this.notifyStateChange();
         }
     }
 
-    updateSpawn(deltaTime) {
-        const event = this.waveSystem.update(
-            Math.max(0, Math.min(deltaTime, 100)),
-            (spec, wave) => this.spawnMonster(spec, wave),
-            this.monsters.length
-        );
-        if (event.waveCompleted) this.handleWaveCompleted(event.victory);
-        return event;
+    beginEncounter(spec = {}) {
+        this.monsters = [];
+        this.bullets = [];
+        this.explosions = [];
+        this.focusTargetId = null;
+        this.currentEncounter = { ...spec };
+        this.encounterQueue = this.buildEncounterQueue(spec);
+        this.encounterRewards = this.createEmptyRewards();
+        this.encounterRewardsCommitted = false;
+        this.encounterSpawnTimer = 0;
+        this.attackTimer = 0;
+        this.uiNotifyTimer = 0;
+        this.placeHeroAtCamp();
+        this.addBannerText(this.getEncounterTitle(spec.type), spec.boss ? '#ff7043' : '#ffd167');
     }
 
-    spawnMonster(spec = null, waveNumber = null) {
-        if (this.monsters.length >= this.config.maxMonsters) return null;
+    buildEncounterQueue(spec = {}) {
+        const depth = Math.max(1, Math.floor(spec.depth || 1));
+        const enemyCount = Math.max(1, Math.floor(spec.enemyCount || 3));
+        const eliteCount = Math.max(0, Math.floor(spec.eliteCount || 0));
+        const available = ['slime', 'bat', 'goblin'];
+        if (depth >= 3) available.push('skeleton');
+        if (depth >= 5 || spec.type === 'elite' || spec.type === 'extraction') available.push('demon');
 
-        const wave = waveNumber || Math.max(1, this.waveSystem.currentWave);
-        const normalizedSpec = typeof spec === 'string'
-            ? { templateId: spec }
-            : (spec || { templateId: 'slime' });
+        const queue = [];
+        const normalCount = Math.max(0, enemyCount - (spec.boss ? 1 : 0));
+        for (let index = 0; index < normalCount; index += 1) {
+            queue.push({
+                templateId: available[Math.floor(this.random() * available.length)],
+                elite: index < eliteCount,
+                depth
+            });
+        }
+        if (spec.boss) queue.push({ templateId: 'dragon', boss: true, depth });
+        return queue;
+    }
+
+    updateEncounterSpawns(deltaTime) {
+        if (this.encounterQueue.length === 0 || this.monsters.length >= this.config.maxMonsters) return;
+        this.encounterSpawnTimer -= deltaTime;
+        if (this.encounterSpawnTimer > 0) return;
+        const spec = this.encounterQueue.shift();
+        this.spawnMonster(spec, spec.depth);
+        this.encounterSpawnTimer = this.config.spawnInterval;
+        this.notifyStateChange();
+    }
+
+    spawnMonster(spec = null, depthNumber = null) {
+        if (this.monsters.length >= this.config.maxMonsters) return null;
+        const normalizedSpec = typeof spec === 'string' ? { templateId: spec } : (spec || { templateId: 'slime' });
         const template = this.monsterTemplates.find(item => item.id === normalizedSpec.templateId)
             || this.monsterTemplates[0];
+        const depth = Math.max(1, depthNumber || normalizedSpec.depth || this.runSystem.depth + 1);
         const playerLevel = this.playerSystem?.player?.level || 1;
-        const waveScale = 1 + (wave - 1) * 0.18;
-        const levelScale = 1 + (playerLevel - 1) * 0.06;
-        const eliteScale = normalizedSpec.elite ? 1.6 : 1;
-        const hpScale = waveScale * levelScale * eliteScale;
-        const start = this.getPathPointAtDistance(0);
-        const size = template.size * (normalizedSpec.elite && !template.isBoss ? 1.12 : 1);
+        const threat = this.runSystem.threat || 0;
+        const depthScale = 1 + (depth - 1) * 0.16;
+        const threatScale = 1 + threat * 0.006;
+        const levelScale = 1 + Math.max(0, playerLevel - 1) * 0.045;
+        const eliteScale = normalizedSpec.elite ? 1.65 : 1;
+        const bossScale = template.isBoss ? 1 + Math.max(0, depth - 5) * 0.08 : 1;
+        const size = template.size * (normalizedSpec.elite && !template.isBoss ? 1.14 : 1);
+        const maxHp = Math.max(1, Math.floor(template.baseHp * depthScale * threatScale * levelScale * eliteScale * bossScale));
+        const startX = this.mapWidth * (0.82 + this.random() * 0.1);
+        const startY = this.mapHeight * (0.18 + this.random() * 0.64);
 
         const monster = {
             id: this.nextMonsterId++,
             templateId: template.id,
             name: template.name,
-            x: start.x - size / 2,
-            y: start.y - size / 2,
+            x: startX - size / 2,
+            y: startY - size / 2,
             width: size,
             height: size,
-            hp: Math.floor(template.baseHp * hpScale),
-            maxHp: Math.floor(template.baseHp * hpScale),
-            attack: Math.max(1, Math.floor(template.baseAttack * waveScale * eliteScale)),
-            speed: template.speed * (1 + Math.min(0.24, wave * 0.012)),
-            coinReward: Math.max(1, Math.floor(template.coinReward * waveScale)),
+            hp: maxHp,
+            maxHp,
+            attack: Math.max(1, Math.floor(template.baseAttack * depthScale * threatScale * eliteScale)),
+            speed: template.speed * (1 + Math.min(0.28, threat * 0.0025)),
+            coinReward: Math.max(1, Math.floor(template.coinReward * depthScale * eliteScale)),
             crystalReward: Math.max(0, Math.floor((template.crystalReward || 0) * eliteScale)),
-            expReward: Math.max(1, Math.floor(template.expReward * waveScale)),
-            energyReward: template.isBoss ? 35 : (normalizedSpec.elite ? 15 : 7),
+            expReward: Math.max(1, Math.floor(template.expReward * depthScale * eliteScale)),
+            attackInterval: Math.max(620, template.attackInterval / (1 + threat * 0.002)),
+            attackCooldown: 260 + this.random() * 420,
+            engageRange: Math.max(42, size * 0.9),
             isBoss: Boolean(template.isBoss || normalizedSpec.boss),
             isElite: Boolean(normalizedSpec.elite),
-            pathDistance: 0,
-            progress: 0,
             slowFactor: 1,
             slowTimer: 0,
             stunTimer: 0,
-            animationOffset: Math.random() * 400,
+            animationOffset: this.random() * 400,
             combatState: 'move',
+            progress: 0,
             rewardGranted: false
         };
-
         this.monsters.push(monster);
         return monster;
     }
 
     updateAttack(deltaTime) {
-        if (!this.playerSystem || this.monsters.length === 0 || !this.isWaveActive()) return;
-
+        if (!this.playerSystem || this.monsters.length === 0) return;
         const player = this.playerSystem.player;
         const attackInterval = this.config.attackInterval / Math.max(0.1, player.attackSpeed || 1);
         this.attackTimer += deltaTime;
-
-        if (this.attackTimer >= attackInterval) {
-            this.attackTimer %= attackInterval;
-            this.fireAtNearestMonsters();
-        }
+        if (this.attackTimer < attackInterval) return;
+        this.attackTimer %= attackInterval;
+        this.fireAtNearestMonsters();
     }
 
     fireAtNearestMonsters() {
         if (!this.playerSystem) return;
-
         const player = this.playerSystem.player;
         const origin = this.getEntityCenter(player);
-        const targets = this.getTargets(origin, {
-            strategy: 'path-progress',
-            limit: Math.max(1, player.multiShot || 1)
+        const limit = Math.max(1, player.multiShot || 1);
+        const targets = [];
+        const focus = this.monsters.find(monster => monster.id === this.focusTargetId && monster.hp > 0);
+        if (focus) targets.push(focus);
+        this.getTargets(origin, { strategy: 'nearest', limit: limit + 1 }).forEach(target => {
+            if (!targets.includes(target) && targets.length < limit) targets.push(target);
         });
         targets.forEach(target => this.fireBullet(target));
     }
 
     fireBullet(target) {
         if (!this.playerSystem || !target) return null;
-
         const player = this.playerSystem.player;
-        this.playerSystem.playAttackAnimation?.();
         const targetPoint = this.getEntityCenter(target);
         const origin = this.getPlayerBulletOrigin(targetPoint);
-        const isCrit = Math.random() * 100 < (player.crit || 0);
+        const isCrit = this.random() * 100 < (player.crit || 0);
         let damage = this.getPlayerAttackDamage();
         if (isCrit) damage *= (player.critDamage || 150) / 100;
-
+        this.playerSystem.playAttackAnimation?.();
         const bullet = {
             id: this.nextBulletId++,
             source: 'hero',
@@ -441,7 +587,7 @@ export class CombatSystem {
         if (typeof this.playerSystem?.getGunMuzzlePosition === 'function') {
             return this.playerSystem.getGunMuzzlePosition(targetPoint);
         }
-        return this.getEntityCenter(this.playerSystem?.player);
+        return this.getHeroCenter();
     }
 
     getPlayerAttackDamage() {
@@ -450,229 +596,94 @@ export class CombatSystem {
         return baseAttack + (territoryBonuses.attack || 0);
     }
 
-    syncTowersWithPets() {
-        const equippedPets = this.petSystem?.equippedPets || [];
-        const activeIds = new Set(equippedPets.map(pet => pet.instanceId));
-        let changed = false;
-
-        const retained = this.towers.filter(tower => activeIds.has(tower.petInstanceId));
-        if (retained.length !== this.towers.length) changed = true;
-        this.towers = retained;
-
-        this.towers.forEach(tower => {
-            const pet = equippedPets.find(item => item.instanceId === tower.petInstanceId);
-            if (pet) {
-                tower.petLevel = pet.level || 1;
-                tower.templateId = pet.templateId;
-            }
-        });
-
-        const preferredSlots = [0, 3, 2, 5, 1, 4];
-        equippedPets.forEach(pet => {
-            if (this.towers.some(tower => tower.petInstanceId === pet.instanceId)) return;
-
-            const occupied = new Set(this.towers.map(tower => tower.slotIndex));
-            const slotIndex = preferredSlots.find(index => !occupied.has(index));
-            if (slotIndex === undefined) return;
-
-            this.towers.push({
-                id: `pet-tower-${pet.instanceId}`,
-                petInstanceId: pet.instanceId,
-                templateId: pet.templateId,
-                petLevel: pet.level || 1,
-                slotIndex,
-                upgradeLevel: 1,
-                cooldown: 250 + Math.random() * 250,
-                attackAnimationTimer: 0
-            });
-            changed = true;
-        });
-
-        if (!this.towers.some(tower => tower.id === this.selectedTowerId)) {
-            this.selectedTowerId = this.towers[0]?.id || null;
-            changed = true;
-        }
-
-        if (changed && this.battleInitialized) this.notifyStateChange();
-    }
-
-    updateTowers(deltaTime) {
-        if (!this.isWaveActive()) return;
-
-        this.towers.forEach(tower => {
-            tower.cooldown -= deltaTime;
-            tower.attackAnimationTimer = Math.max(0, tower.attackAnimationTimer - deltaTime);
-            if (tower.cooldown > 0) return;
-
-            const stats = this.getTowerStats(tower);
-            const position = this.getTowerSlotPosition(tower.slotIndex);
-            const target = this.acquireTarget(position, {
-                strategy: 'path-progress',
-                maxRange: stats.range
-            });
-
-            if (!target) {
-                tower.cooldown = 120;
-                return;
-            }
-
-            tower.cooldown = stats.attackInterval;
-            tower.attackAnimationTimer = 280;
-            this.fireTowerBullet(tower, target, stats);
-        });
-    }
-
-    getTowerStats(tower) {
-        const template = this.petSystem?.getTemplate?.(tower.templateId);
-        const role = this.getTowerRole(template?.type);
-        const petLevelScale = 1 + Math.max(0, (tower.petLevel || 1) - 1) * 0.1;
-        const upgradeScale = 1 + Math.max(0, (tower.upgradeLevel || 1) - 1) * 0.34;
-        const attackSpeed = template?.baseStats?.attackSpeed || 1;
-        const baseAttack = template?.baseStats?.attack || 10;
-        const territoryAttack = this.territorySystem?.calculateBonuses?.().attack || 0;
-        const boardSize = Math.max(280, Math.min(this.mapWidth, this.mapHeight));
-
-        return {
-            roleName: role.name,
-            color: role.color,
-            damage: Math.max(1, Math.floor((baseAttack * petLevelScale * upgradeScale + territoryAttack * 0.35) * role.damageScale)),
-            range: Math.max(105, boardSize * role.rangeRatio),
-            attackInterval: Math.max(260, (1050 / attackSpeed) * role.intervalScale / (1 + (tower.upgradeLevel - 1) * 0.08)),
-            effects: {
-                splashRadius: role.splashRadius || 0,
-                slowFactor: role.slowFactor || 1,
-                slowDuration: role.slowDuration || 0,
-                stunDuration: role.stunDuration || 0,
-                chainCount: role.chainCount || 0,
-                baseHeal: role.baseHeal || 0,
-                executeThreshold: role.executeThreshold || 0,
-                executeScale: role.executeScale || 1
-            }
-        };
-    }
-
-    getTowerRole(type) {
-        return TOWER_ROLES[type] || TOWER_ROLES.default;
-    }
-
-    fireTowerBullet(tower, target, stats) {
-        const position = this.getTowerSlotPosition(tower.slotIndex);
-        if (stats.effects.baseHeal > 0 && this.baseHp < this.baseMaxHp) {
-            const heal = stats.effects.baseHeal + tower.upgradeLevel;
-            this.baseHp = Math.min(this.baseMaxHp, this.baseHp + heal);
-            this.addStatusText(position.x, position.y - 28, `+${heal}`, '#8dffb5');
-        }
-
-        this.bullets.push({
-            id: this.nextBulletId++,
-            source: 'tower',
-            towerId: tower.id,
-            x: position.x,
-            y: position.y,
-            targetId: target.id,
-            speed: this.config.towerBulletSpeed,
-            damage: stats.damage,
-            isCrit: false,
-            size: 7 + tower.upgradeLevel,
-            color: stats.color,
-            effects: { ...stats.effects }
-        });
-    }
-
     updateMonsters(deltaTime) {
         const dt = deltaTime / 1000;
-        const pathLength = this.getPathLength();
-        const reachedBase = [];
-
-        this.monsters.forEach(monster => {
+        const hero = this.getHeroCenter();
+        this.monsters.slice().forEach(monster => {
             monster.slowTimer = Math.max(0, (monster.slowTimer || 0) - deltaTime);
             monster.stunTimer = Math.max(0, (monster.stunTimer || 0) - deltaTime);
             if (monster.slowTimer <= 0) monster.slowFactor = 1;
-
             if (monster.stunTimer > 0) {
                 monster.combatState = 'idle';
-            } else {
-                monster.combatState = 'move';
-                monster.pathDistance += monster.speed * (monster.slowFactor || 1) * dt;
+                return;
             }
 
-            monster.progress = Math.max(0, Math.min(1, monster.pathDistance / pathLength));
-            const point = this.getPathPointAtDistance(monster.pathDistance);
-            monster.x = point.x - monster.width / 2;
-            monster.y = point.y - monster.height / 2;
+            const center = this.getEntityCenter(monster);
+            const dx = hero.x - center.x;
+            const dy = hero.y - center.y;
+            const distance = Math.hypot(dx, dy);
+            monster.progress = Math.max(0, Math.min(1, 1 - distance / Math.max(1, this.mapWidth)));
+            if (distance > monster.engageRange) {
+                const safeDistance = distance || 1;
+                const travel = Math.min(distance - monster.engageRange, monster.speed * (monster.slowFactor || 1) * dt);
+                monster.x += (dx / safeDistance) * travel;
+                monster.y += (dy / safeDistance) * travel;
+                monster.combatState = 'move';
+                return;
+            }
 
-            if (monster.pathDistance >= pathLength) reachedBase.push(monster);
+            monster.combatState = 'attack';
+            monster.attackCooldown -= deltaTime;
+            if (monster.attackCooldown <= 0) {
+                monster.attackCooldown += monster.attackInterval;
+                this.damageHero(monster.attack, monster);
+            }
         });
-
-        if (reachedBase.length > 0) {
-            reachedBase.forEach(monster => this.damageBase(monster.attack, monster));
-            const reachedIds = new Set(reachedBase.map(monster => monster.id));
-            this.monsters = this.monsters.filter(monster => !reachedIds.has(monster.id));
-            this.notifyStateChange();
-        }
     }
 
-    damageBase(rawDamage, monster = null) {
-        if (this.waveSystem.phase === 'defeat') return 0;
-
+    damageHero(rawDamage, monster = null) {
+        if (this.settled || this.runHp <= 0) return 0;
         const playerDefense = this.playerSystem?.player?.defense || 0;
         const territoryDefense = this.territorySystem?.calculateBonuses?.().defense || 0;
-        const damage = Math.max(1, Math.floor(rawDamage - (playerDefense + territoryDefense) * 0.25));
-        this.baseHp = Math.max(0, this.baseHp - damage);
-        const point = this.getBasePosition();
-        this.addStatusText(point.x, point.y - 42, `-${damage}`, '#ff667d', true);
+        let damage = Math.max(1, Math.floor(rawDamage - (playerDefense + territoryDefense) * 0.32));
+        if (this.guardTimer > 0) damage = Math.max(1, Math.floor(damage * (1 - this.config.skillGuardReduction)));
+        this.runHp = Math.max(0, this.runHp - damage);
+        const hero = this.getHeroCenter();
+        this.addStatusText(hero.x, hero.y - 34, `-${damage}`, '#ff667d', true);
         this.explosions.push({
-            x: point.x,
-            y: point.y,
-            radius: monster?.isBoss ? 30 : 18,
-            life: 420,
+            x: hero.x,
+            y: hero.y,
+            radius: monster?.isBoss ? 25 : 14,
+            life: 340,
             color: '#ff4757'
         });
-
-        if (this.baseHp <= 0) this.finishBattle(false);
+        if (this.runHp <= 0) this.finishExpedition(false, 'defeated');
         this.notifyStateChange();
         return damage;
     }
 
-    updateBaseRegen(deltaTime) {
-        if (
-            this.baseHp >= this.baseMaxHp ||
-            this.waveSystem.phase === 'victory' ||
-            this.waveSystem.phase === 'defeat'
-        ) {
-            return;
-        }
+    damageBase(rawDamage, monster = null) {
+        return this.damageHero(rawDamage, monster);
+    }
 
-        this.baseRegenTimer += deltaTime;
-        if (this.baseRegenTimer < 1000) return;
-        this.baseRegenTimer %= 1000;
-        const regen = Math.max(0, Math.floor(this.playerSystem?.player?.hpRegen || 0));
-        if (regen <= 0) return;
-        this.baseHp = Math.min(this.baseMaxHp, this.baseHp + regen);
-        this.notifyStateChange();
+    healHero(amount) {
+        const previous = this.runHp;
+        this.runHp = Math.min(this.runMaxHp, this.runHp + Math.max(0, Math.floor(amount || 0)));
+        const actual = this.runHp - previous;
+        if (actual > 0) {
+            const hero = this.getHeroCenter();
+            this.addStatusText(hero.x, hero.y - 34, `+${actual}`, '#8dffb5', true);
+        }
+        return actual;
     }
 
     updateBullets(deltaTime) {
         const dt = deltaTime / 1000;
         const remaining = [];
-
         this.bullets.forEach(bullet => {
             const target = this.monsters.find(monster => monster.id === bullet.targetId && monster.hp > 0);
             if (!target) return;
-
             const targetPoint = this.getEntityCenter(target);
             const dx = targetPoint.x - bullet.x;
             const dy = targetPoint.y - bullet.y;
             const distance = Math.hypot(dx, dy);
             const travel = bullet.speed * dt;
-
             if (distance <= travel + Math.max(5, target.width * 0.25)) {
                 bullet.x = targetPoint.x;
                 bullet.y = targetPoint.y;
                 this.resolveBulletHit(bullet, target);
                 return;
             }
-
             const safeDistance = distance || 1;
             bullet.vx = (dx / safeDistance) * bullet.speed;
             bullet.vy = (dy / safeDistance) * bullet.speed;
@@ -680,83 +691,22 @@ export class CombatSystem {
             bullet.y += bullet.vy * dt;
             remaining.push(bullet);
         });
-
         this.bullets = remaining;
     }
 
     resolveBulletHit(bullet, target) {
-        const effects = bullet.effects || {};
-        let damage = bullet.damage;
-        if (
-            effects.executeThreshold > 0 &&
-            target.hp / target.maxHp <= effects.executeThreshold
-        ) {
-            damage *= effects.executeScale || 1;
-        }
-
-        this.applyDamage(target, damage, { isCrit: bullet.isCrit });
-
-        if (effects.slowDuration > 0 && target.hp > 0) {
-            target.slowFactor = Math.min(target.slowFactor || 1, effects.slowFactor || 1);
-            target.slowTimer = Math.max(target.slowTimer || 0, effects.slowDuration);
-        }
-        if (effects.stunDuration > 0 && target.hp > 0) {
-            target.stunTimer = Math.max(target.stunTimer || 0, effects.stunDuration);
-        }
-
-        if (effects.splashRadius > 0) {
-            const center = this.getEntityCenter(target);
-            this.monsters
-                .filter(monster => monster !== target && monster.hp > 0)
-                .filter(monster => {
-                    const point = this.getEntityCenter(monster);
-                    return Math.hypot(point.x - center.x, point.y - center.y) <= effects.splashRadius;
-                })
-                .forEach(monster => this.applyDamage(monster, damage * 0.48));
-        }
-
-        if (effects.chainCount > 0) {
-            const center = this.getEntityCenter(target);
-            this.monsters
-                .filter(monster => monster !== target && monster.hp > 0)
-                .map(monster => ({
-                    monster,
-                    distance: Math.hypot(
-                        this.getEntityCenter(monster).x - center.x,
-                        this.getEntityCenter(monster).y - center.y
-                    )
-                }))
-                .filter(item => item.distance <= 150)
-                .sort((a, b) => a.distance - b.distance)
-                .slice(0, effects.chainCount)
-                .forEach(item => this.applyDamage(item.monster, damage * 0.62));
-        }
-
+        this.applyDamage(target, bullet.damage, { isCrit: bullet.isCrit });
         this.explosions.push({
             x: bullet.x,
             y: bullet.y,
-            radius: effects.splashRadius > 0 ? 18 : 9,
-            life: 280,
+            radius: bullet.isCrit ? 13 : 8,
+            life: 260,
             color: bullet.color
         });
     }
 
-    checkCollisions() {
-        // 投射物采用追踪 + 扫掠距离判定；保留方法供旧调用兼容。
-        return this.bullets.length;
-    }
-
-    isColliding(a, b) {
-        const aCenter = this.getEntityCenter(a);
-        const bCenter = this.getEntityCenter(b);
-        const aRadius = (a.size || Math.max(a.width || 0, a.height || 0)) / 2;
-        const bRadius = (b.size || Math.max(b.width || 0, b.height || 0)) / 2;
-        return Math.hypot(aCenter.x - bCenter.x, aCenter.y - bCenter.y) <= aRadius + bRadius;
-    }
-
     applyDamage(monster, damage, options = {}) {
         if (!monster || monster.hp <= 0 || !this.monsters.includes(monster)) return false;
-
         const finalDamage = Math.max(1, Math.floor(damage));
         monster.hp -= finalDamage;
         this.addCombatText(
@@ -765,10 +715,10 @@ export class CombatSystem {
             finalDamage,
             Boolean(options.isCrit)
         );
-
         if (monster.hp <= 0) {
             this.onMonsterKilled(monster);
             this.monsters = this.monsters.filter(item => item !== monster);
+            if (this.focusTargetId === monster.id) this.focusTargetId = null;
         }
         return true;
     }
@@ -780,254 +730,233 @@ export class CombatSystem {
     onMonsterKilled(monster) {
         if (!monster || monster.rewardGranted) return;
         monster.rewardGranted = true;
-        this.energy += monster.energyReward || 5;
-        this.runRewards.coins += monster.coinReward || 0;
-        this.runRewards.crystals += monster.crystalReward || 0;
-        this.runRewards.exp += monster.expReward || 0;
-        this.runRewards.kills += 1;
+        this.encounterRewards.coins += monster.coinReward || 0;
+        this.encounterRewards.crystals += monster.crystalReward || 0;
+        this.encounterRewards.exp += monster.expReward || 0;
+        this.encounterRewards.kills += 1;
         this.explosions.push({
             x: monster.x + monster.width / 2,
             y: monster.y + monster.height / 2,
-            radius: monster.isBoss ? 28 : 12,
+            radius: monster.isBoss ? 30 : 13,
             life: monster.isBoss ? 520 : 300,
             color: monster.isBoss ? '#ff7043' : '#ffd167'
         });
         this.notifyStateChange();
     }
 
-    handleWaveCompleted(victory) {
-        this.meta.bestWave = Math.max(this.meta.bestWave, this.waveSystem.currentWave);
-        if (victory) {
-            this.finishBattle(true);
-            return;
-        }
-
-        const bonus = this.config.waveEnergyBonus + this.waveSystem.currentWave * 2;
-        this.energy += bonus;
-        this.addBannerText(`第 ${this.waveSystem.currentWave} 波守住了`, '#8dffb5');
+    finishEncounter() {
+        if (!this.currentEncounter || this.runSystem.phase !== 'combat') return null;
+        const type = this.currentEncounter.type;
+        const lootQuality = type === 'boss' ? 5 : type === 'elite' ? 3 : type === 'ambush' ? 1 : 0;
+        const lootCount = type === 'boss' ? 3 : type === 'elite' ? 2 : 1;
+        const rewards = { ...this.encounterRewards };
+        const result = this.runSystem.completeCombat(rewards, { lootQuality, lootCount });
+        this.encounterRewardsCommitted = true;
+        this.currentEncounter = null;
+        this.encounterQueue = [];
+        this.bullets = [];
+        this.addBannerText(type === 'boss' ? '核心守卫已击败' : '区域清理完成', '#8dffb5');
+        this.placeHeroAtCamp();
         this.notifyStateChange();
+        return result;
     }
 
-    finishBattle(victory) {
+    commitEncounterRewards() {
+        if (this.encounterRewardsCommitted) return;
+        if (this.encounterRewards.kills > 0) this.runSystem.addPendingRewards(this.encounterRewards);
+        this.encounterRewardsCommitted = true;
+    }
+
+    finishExpedition(extracted, reason) {
         if (this.settled) return this.lastSettlement;
-
+        this.commitEncounterRewards();
         this.settled = true;
-        this.waveSystem.phase = victory ? 'victory' : 'defeat';
-        this.meta.bestWave = Math.max(this.meta.bestWave, this.waveSystem.currentWave);
-        if (victory) this.meta.victories += 1;
-        else this.meta.defeats += 1;
-
+        const baseSettlement = this.runSystem.finishRun({ extracted, reason });
         const territoryExpBonus = this.territorySystem?.calculateBonuses?.().expBonus || 0;
-        const rewardScale = victory ? 1 : 0.4;
-        const crystalScale = victory ? 1 : 0.25;
         const settlement = {
-            runId: this.runSerial,
-            victory,
-            wave: this.waveSystem.currentWave,
-            coins: Math.floor(this.runRewards.coins * rewardScale),
-            crystals: Math.floor(this.runRewards.crystals * crystalScale),
-            exp: Math.floor(this.runRewards.exp * rewardScale * (1 + territoryExpBonus / 100)),
-            kills: this.runRewards.kills
+            ...baseSettlement,
+            exp: Math.floor(baseSettlement.exp * (1 + territoryExpBonus / 100))
         };
 
         this.resourceSystem?.addCoins?.(settlement.coins);
         this.resourceSystem?.addCrystals?.(settlement.crystals);
         this.playerSystem?.addExperience?.(settlement.exp);
+        this.meta.bestDepth = Math.max(this.meta.bestDepth, settlement.depth);
+        if (settlement.extracted) this.meta.extractions += 1;
+        else this.meta.losses += 1;
         this.lastSettlement = settlement;
         this.monsters = [];
         this.bullets = [];
-        this.addBannerText(victory ? '防线胜利！' : '基地失守', victory ? '#ffd167' : '#ff667d');
+        this.encounterQueue = [];
+        this.currentEncounter = null;
+        this.extractionTimer = 0;
+        this.addBannerText(settlement.extracted ? '撤离成功！' : '远征失败', settlement.extracted ? '#72d7ff' : '#ff667d');
         this.notifyStateChange();
         return settlement;
     }
 
-    getTowerUpgradeCost(tower = this.getSelectedTower()) {
-        if (!tower) return 0;
-        return 40 + Math.max(0, tower.upgradeLevel - 1) * 35;
+    clearEncounter() {
+        this.monsters = [];
+        this.bullets = [];
+        this.explosions = [];
+        this.combatTexts = [];
+        this.encounterQueue = [];
+        this.currentEncounter = null;
+        this.encounterRewards = this.createEmptyRewards();
+        this.encounterRewardsCommitted = false;
+        this.nextMonsterId = 1;
+        this.nextBulletId = 1;
+        this.encounterSpawnTimer = 0;
+        this.attackTimer = 0;
+        this.extractionTimer = 0;
+        this.focusTargetId = null;
     }
 
-    upgradeSelectedTower() {
-        const tower = this.getSelectedTower();
-        if (!tower) return { success: false, message: '请先点击一个宠物塔' };
-        if (tower.upgradeLevel >= this.config.towerMaxLevel) {
-            return { success: false, message: '该宠物塔已满级' };
-        }
-
-        const cost = this.getTowerUpgradeCost(tower);
-        if (this.energy < cost) return { success: false, message: `战斗能量不足，需要 ${cost}` };
-
-        this.energy -= cost;
-        tower.upgradeLevel += 1;
-        const position = this.getTowerSlotPosition(tower.slotIndex);
-        this.addStatusText(position.x, position.y - 35, `塔 Lv.${tower.upgradeLevel}`, '#ffd167');
-        this.notifyStateChange();
-        return { success: true, message: `宠物塔升至 Lv.${tower.upgradeLevel}` };
+    createEmptyRewards() {
+        return { coins: 0, crystals: 0, exp: 0, kills: 0 };
     }
 
-    repairBase() {
-        const cost = 35;
-        if (this.baseHp >= this.baseMaxHp) return { success: false, message: '基地生命已满' };
-        if (this.energy < cost) return { success: false, message: `战斗能量不足，需要 ${cost}` };
-        if (this.waveSystem.phase === 'defeat' || this.waveSystem.phase === 'victory') {
-            return { success: false, message: '本局已经结束' };
-        }
-
-        const heal = Math.ceil(this.baseMaxHp * 0.22);
-        const previousHp = this.baseHp;
-        this.energy -= cost;
-        this.baseHp = Math.min(this.baseMaxHp, this.baseHp + heal);
-        const actualHeal = this.baseHp - previousHp;
-        const base = this.getBasePosition();
-        this.addStatusText(base.x, base.y - 45, `+${actualHeal}`, '#8dffb5');
-        this.notifyStateChange();
-        return { success: true, message: `基地恢复 ${actualHeal} 点生命` };
+    calculateRunMaxHp() {
+        const player = this.playerSystem?.player || {};
+        const bonuses = this.territorySystem?.calculateBonuses?.() || {};
+        return Math.max(80, Math.floor((player.maxHp || 100) + (bonuses.defense || 0) * 3));
     }
 
-    selectTowerAt(x, y) {
-        const slotRadius = this.getTowerSlotRadius() * 1.25;
-        let nearestSlot = null;
-        let nearestDistance = Infinity;
-
-        for (let index = 0; index < 6; index += 1) {
-            const position = this.getTowerSlotPosition(index);
-            const distance = Math.hypot(x - position.x, y - position.y);
-            if (distance <= slotRadius && distance < nearestDistance) {
-                nearestSlot = index;
-                nearestDistance = distance;
-            }
-        }
-
-        if (nearestSlot === null) return { success: false, message: '' };
-        const clickedTower = this.towers.find(tower => tower.slotIndex === nearestSlot);
-        if (clickedTower) {
-            this.selectedTowerId = clickedTower.id;
-            this.notifyStateChange();
-            return { success: true, message: `${this.getTowerDetails(clickedTower).name} 已选中` };
-        }
-
-        const selected = this.getSelectedTower();
-        if (!selected) return { success: false, message: '这是空塔位，请先选择一只宠物' };
-        if (this.isWaveActive()) return { success: false, message: '战斗中不能移动宠物塔' };
-
-        selected.slotIndex = nearestSlot;
-        this.notifyStateChange();
-        return { success: true, message: '宠物塔已移动到新塔位' };
-    }
-
-    getSelectedTower() {
-        return this.towers.find(tower => tower.id === this.selectedTowerId) || null;
-    }
-
-    getTowerDetails(tower = this.getSelectedTower()) {
-        if (!tower) return null;
-        const template = this.petSystem?.getTemplate?.(tower.templateId);
-        const stats = this.getTowerStats(tower);
+    getRunHeroState() {
         return {
-            id: tower.id,
-            name: template?.name || '宠物塔',
-            role: stats.roleName,
-            level: tower.upgradeLevel,
-            petLevel: tower.petLevel,
-            damage: stats.damage,
-            range: Math.round(stats.range),
-            attackSpeed: Number((1000 / stats.attackInterval).toFixed(2)),
-            upgradeCost: this.getTowerUpgradeCost(tower),
-            maxLevel: this.config.towerMaxLevel,
-            color: stats.color,
-            slotIndex: tower.slotIndex
+            hp: this.runHp,
+            maxHp: this.runMaxHp,
+            guardActive: this.guardTimer > 0
         };
     }
 
-    getTowerRenderData() {
-        return this.towers.map(tower => ({
-            ...tower,
-            ...this.getTowerSlotPosition(tower.slotIndex),
-            selected: tower.id === this.selectedTowerId,
-            role: this.getTowerRole(this.petSystem?.getTemplate?.(tower.templateId)?.type)
-        }));
+    getPetSkillsState() {
+        return (this.petSystem?.equippedPets || []).map(pet => {
+            const template = this.petSystem?.getTemplate?.(pet.templateId);
+            const cooldownMs = Math.max(0, this.skillCooldowns.get(pet.instanceId) || 0);
+            return {
+                instanceId: pet.instanceId,
+                name: template?.name || '宠物',
+                emoji: template?.emoji || '●',
+                type: template?.type || 'default',
+                color: PET_ROLE_COLORS[template?.type] || PET_ROLE_COLORS.default,
+                skillName: template?.skill?.name || '伙伴技能',
+                cooldownMs,
+                cooldownSeconds: Math.ceil(cooldownMs / 1000),
+                ready: cooldownMs <= 0 && this.isCombatActive()
+            };
+        });
     }
 
-    getTowerSlotPosition(index) {
-        const positions = [
-            [0.18, 0.18], [0.82, 0.25], [0.16, 0.40],
-            [0.84, 0.50], [0.18, 0.64], [0.82, 0.72]
-        ];
-        const point = positions[index] || positions[0];
-        return { x: this.mapWidth * point[0], y: this.mapHeight * point[1] };
-    }
-
-    getTowerSlotRadius() {
-        return Math.max(24, Math.min(42, Math.min(this.mapWidth, this.mapHeight) * 0.055));
-    }
-
-    getHeroPosition() {
-        const width = this.playerSystem?.player?.width || 40;
-        const height = this.playerSystem?.player?.height || 40;
-        const base = this.getBasePosition();
-        return {
-            x: base.x - width / 2,
-            y: base.y - height * 0.72
-        };
-    }
-
-    getBasePosition() {
-        return { x: this.mapWidth * 0.5, y: this.mapHeight * 0.92 };
-    }
-
-    placeHeroAtBase() {
-        if (!this.playerSystem?.player) return;
-        const position = this.getHeroPosition();
-        this.playerSystem.player.x = position.x;
-        this.playerSystem.player.y = position.y;
-    }
-
-    getPathPoints() {
-        return [
-            { x: this.mapWidth * 0.50, y: -this.mapHeight * 0.05 },
-            { x: this.mapWidth * 0.50, y: this.mapHeight * 0.10 },
-            { x: this.mapWidth * 0.38, y: this.mapHeight * 0.27 },
-            { x: this.mapWidth * 0.62, y: this.mapHeight * 0.46 },
-            { x: this.mapWidth * 0.40, y: this.mapHeight * 0.65 },
-            { x: this.mapWidth * 0.55, y: this.mapHeight * 0.82 },
-            this.getBasePosition()
-        ];
-    }
-
-    getPathSegments() {
-        const points = this.getPathPoints();
-        const segments = [];
-        let total = 0;
-        for (let index = 1; index < points.length; index += 1) {
-            const start = points[index - 1];
-            const end = points[index];
-            const length = Math.hypot(end.x - start.x, end.y - start.y);
-            segments.push({ start, end, length, startDistance: total });
-            total += length;
+    updateSkillCooldowns(deltaTime) {
+        for (const [instanceId, remaining] of this.skillCooldowns.entries()) {
+            const next = Math.max(0, remaining - deltaTime);
+            if (next <= 0) this.skillCooldowns.delete(instanceId);
+            else this.skillCooldowns.set(instanceId, next);
         }
-        return { segments, total };
     }
 
-    getPathLength() {
-        return this.getPathSegments().total || 1;
+    isCombatActive() {
+        return this.runSystem.phase === 'combat' || this.runSystem.phase === 'extracting';
     }
 
-    getPathPointAtDistance(distance) {
-        const { segments, total } = this.getPathSegments();
-        const clamped = Math.max(0, Math.min(total, distance));
-        const segment = segments.find(item => clamped <= item.startDistance + item.length)
-            || segments[segments.length - 1];
-        if (!segment) return this.getBasePosition();
-        const ratio = segment.length > 0
-            ? (clamped - segment.startDistance) / segment.length
-            : 0;
+    isWaveActive() {
+        return this.isCombatActive();
+    }
+
+    getBattleState() {
+        const run = this.runSystem.getState();
+        const pendingRewards = {
+            coins: run.pendingRewards.coins + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.coins),
+            crystals: run.pendingRewards.crystals + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.crystals),
+            exp: run.pendingRewards.exp + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.exp),
+            kills: run.pendingRewards.kills + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.kills)
+        };
+        const pendingValue = pendingRewards.coins + run.backpackRewards.score;
+        const phase = run.phase;
         return {
-            x: segment.start.x + (segment.end.x - segment.start.x) * ratio,
-            y: segment.start.y + (segment.end.y - segment.start.y) * ratio
+            mode: this.mode,
+            phase,
+            phaseLabel: this.getPhaseLabel(phase),
+            depth: run.depth,
+            maxDepth: run.maxDepth,
+            currentWave: run.depth,
+            totalWaves: run.maxDepth,
+            hp: this.runHp,
+            maxHp: this.runMaxHp,
+            baseHp: this.runHp,
+            baseMaxHp: this.runMaxHp,
+            threat: run.threat,
+            supplies: run.supplies,
+            energy: run.supplies,
+            activeEnemies: this.monsters.length,
+            queuedEnemies: this.encounterQueue.length,
+            backpack: run.backpack,
+            backpackCount: run.backpack.length,
+            backpackCapacity: run.backpackCapacity,
+            backpackRewards: run.backpackRewards,
+            pendingValue,
+            rewards: pendingRewards,
+            currentNode: run.currentNode,
+            routeChoices: run.routeChoices,
+            lastAction: run.lastAction,
+            petSkills: this.getPetSkillsState(),
+            extraction: {
+                unlocked: run.depth >= run.minExtractionDepth,
+                canExtract: run.canExtract,
+                remainingMs: this.extractionTimer,
+                remainingSeconds: Math.ceil(this.extractionTimer / 1000)
+            },
+            actions: {
+                canStart: phase === 'briefing' || phase === 'extracted' || phase === 'defeat',
+                canChooseRoute: phase === 'route',
+                canSearch: phase === 'search',
+                canRest: phase === 'camp',
+                canExtract: run.canExtract,
+                canHeal: run.active && run.supplies > 0 && this.runHp < this.runMaxHp,
+                canAbandon: run.active,
+                canRestart: !run.active
+            },
+            canStartWave: phase === 'briefing',
+            isWaveActive: this.isCombatActive(),
+            settlement: this.lastSettlement ? { ...this.lastSettlement } : null,
+            meta: { ...this.meta }
         };
     }
 
-    getNearestMonster(x, y) {
-        return this.acquireTarget({ x, y }, { strategy: 'nearest' });
+    getPhaseLabel(phase = this.runSystem.phase) {
+        const labels = {
+            briefing: '远征整备',
+            route: '选择路线',
+            search: '搜索区域',
+            camp: '安全休整',
+            combat: '遭遇战斗',
+            'extraction-ready': '等待撤离',
+            extracting: '撤离守点',
+            extracted: '撤离成功',
+            defeat: '远征失败'
+        };
+        return labels[phase] || '远征终端';
+    }
+
+    getEncounterTitle(type) {
+        const labels = {
+            combat: '巡逻队来袭',
+            elite: '精英遭遇',
+            boss: '核心守卫出现',
+            ambush: '搜索遭伏击',
+            extraction: '撤离守点开始'
+        };
+        return labels[type] || '遭遇战斗';
+    }
+
+    notifyStateChange() {
+        if (!this.onStateChange) return;
+        try {
+            this.onStateChange(this.getBattleState());
+        } catch (error) {
+            console.warn('[CombatSystem] 战斗状态回调失败:', error);
+        }
     }
 
     acquireTarget(origin, options = {}) {
@@ -1036,6 +965,10 @@ export class CombatSystem {
 
     getTargets(origin, options = {}) {
         return this.targetingSystem.getTargets(origin, this.monsters, options);
+    }
+
+    getNearestMonster(x, y) {
+        return this.acquireTarget({ x, y }, { strategy: 'nearest' });
     }
 
     getAliveMonsters() {
@@ -1049,52 +982,55 @@ export class CombatSystem {
         };
     }
 
-    isWaveActive() {
-        return this.waveSystem.phase === 'spawning' || this.waveSystem.phase === 'combat';
+    getHeroCenter() {
+        return this.getEntityCenter(this.playerSystem?.player || this.getHeroPosition());
     }
 
-    getBattleState() {
-        const tower = this.getTowerDetails();
+    getHeroPosition() {
+        const width = this.playerSystem?.player?.width || 40;
+        const height = this.playerSystem?.player?.height || 40;
         return {
-            mode: this.mode,
-            phase: this.waveSystem.phase,
-            phaseLabel: this.getPhaseLabel(),
-            currentWave: this.waveSystem.currentWave,
-            totalWaves: this.waveSystem.totalWaves,
-            baseHp: this.baseHp,
-            baseMaxHp: this.baseMaxHp,
-            energy: this.energy,
-            activeEnemies: this.monsters.length,
-            queuedEnemies: this.waveSystem.getRemainingSpawnCount(),
-            selectedTower: tower,
-            towerCount: this.towers.length,
-            canStartWave: this.waveSystem.canStartNextWave(),
-            isWaveActive: this.isWaveActive(),
-            rewards: { ...this.runRewards },
-            settlement: this.lastSettlement ? { ...this.lastSettlement } : null,
-            meta: { ...this.meta }
+            x: this.mapWidth * 0.18 - width / 2,
+            y: this.mapHeight * 0.58 - height / 2,
+            width,
+            height
         };
     }
 
-    getPhaseLabel() {
-        const labels = {
-            ready: '布置防线',
-            spawning: '敌军来袭',
-            combat: '防守中',
-            intermission: '波次间歇',
-            victory: '防线胜利',
-            defeat: '基地失守'
-        };
-        return labels[this.waveSystem.phase] || '防线待命';
+    getBasePosition() {
+        const hero = this.getHeroPosition();
+        return { x: hero.x + hero.width / 2, y: hero.y + hero.height / 2 };
     }
 
-    notifyStateChange() {
-        if (!this.onStateChange) return;
-        try {
-            this.onStateChange(this.getBattleState());
-        } catch (error) {
-            console.warn('[CombatSystem] 战斗状态回调失败:', error);
-        }
+    placeHeroAtCamp() {
+        if (!this.playerSystem?.player) return;
+        const position = this.getHeroPosition();
+        this.playerSystem.player.x = position.x;
+        this.playerSystem.player.y = position.y;
+    }
+
+    placeHeroAtBase() {
+        this.placeHeroAtCamp();
+    }
+
+    getTowerRenderData() {
+        return [];
+    }
+
+    getTowerSlotRadius() {
+        return 0;
+    }
+
+    checkCollisions() {
+        return this.bullets.length;
+    }
+
+    isColliding(a, b) {
+        const aCenter = this.getEntityCenter(a);
+        const bCenter = this.getEntityCenter(b);
+        const aRadius = (a.size || Math.max(a.width || 0, a.height || 0)) / 2;
+        const bRadius = (b.size || Math.max(b.width || 0, b.height || 0)) / 2;
+        return Math.hypot(aCenter.x - bCenter.x, aCenter.y - bCenter.y) <= aRadius + bRadius;
     }
 
     addCombatText(x, y, damage, isCrit = false) {
@@ -1113,30 +1049,31 @@ export class CombatSystem {
         this.combatTexts.push({
             x,
             y,
-            text: String(text),
+            text,
             color,
-            life: 950,
-            maxLife: 950,
-            size: large ? 22 : 16
+            life: large ? 1050 : 800,
+            maxLife: large ? 1050 : 800,
+            size: large ? 22 : 15
         });
     }
 
-    addBannerText(text, color) {
+    addBannerText(text, color = '#ffd167') {
         this.combatTexts.push({
             x: this.mapWidth / 2,
-            y: this.mapHeight * 0.36,
+            y: this.mapHeight * 0.28,
             text,
             color,
             life: 1500,
             maxLife: 1500,
-            size: Math.max(22, Math.min(34, this.mapWidth * 0.045))
+            size: Math.max(20, Math.min(34, this.mapWidth * 0.035)),
+            banner: true
         });
     }
 
     updateExplosions(deltaTime) {
         this.explosions = this.explosions.filter(explosion => {
             explosion.life -= deltaTime;
-            explosion.radius += deltaTime * 0.045;
+            explosion.radius += deltaTime * 0.025;
             return explosion.life > 0;
         });
     }
@@ -1144,7 +1081,7 @@ export class CombatSystem {
     updateCombatTexts(deltaTime) {
         this.combatTexts = this.combatTexts.filter(text => {
             text.life -= deltaTime;
-            text.y -= deltaTime * 0.025;
+            if (!text.banner) text.y -= deltaTime * 0.035;
             return text.life > 0;
         });
     }
@@ -1155,16 +1092,18 @@ export class CombatSystem {
     }
 
     renderBattlefieldBackground(ctx) {
-        const { mapWidth: width, mapHeight: height } = this;
-        const gradient = ctx.createLinearGradient(0, 0, 0, height);
-        gradient.addColorStop(0, '#111b27');
-        gradient.addColorStop(0.55, '#182725');
-        gradient.addColorStop(1, '#211a20');
+        const width = this.mapWidth;
+        const height = this.mapHeight;
+        const threatRatio = (this.runSystem.threat || 0) / 100;
+        const gradient = ctx.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, '#101b24');
+        gradient.addColorStop(0.56, '#182726');
+        gradient.addColorStop(1, threatRatio > 0.6 ? '#3a1d25' : '#211b24');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
-        const tile = Math.max(34, Math.floor(Math.min(width, height) / 12));
-        ctx.strokeStyle = 'rgba(123, 215, 255, 0.07)';
+        const tile = Math.max(38, Math.floor(Math.min(width, height) / 10));
+        ctx.strokeStyle = `rgba(123, 215, 255, ${0.06 + (1 - threatRatio) * 0.03})`;
         ctx.lineWidth = 1;
         for (let x = 0; x <= width; x += tile) {
             ctx.beginPath();
@@ -1179,41 +1118,30 @@ export class CombatSystem {
             ctx.stroke();
         }
 
-        const points = this.getPathPoints();
         ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        points.forEach((point, index) => {
-            if (index === 0) ctx.moveTo(point.x, point.y);
-            else ctx.lineTo(point.x, point.y);
-        });
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
-        ctx.lineWidth = Math.max(68, Math.min(width, height) * 0.16);
-        ctx.stroke();
-        ctx.strokeStyle = '#5d483d';
-        ctx.lineWidth = Math.max(58, Math.min(width, height) * 0.135);
-        ctx.stroke();
-        ctx.setLineDash([12, 18]);
-        ctx.strokeStyle = 'rgba(255, 209, 103, 0.28)';
+        ctx.fillStyle = 'rgba(5, 7, 12, 0.42)';
+        ctx.strokeStyle = 'rgba(255, 209, 103, 0.14)';
         ctx.lineWidth = 3;
-        ctx.stroke();
+        const roomMargin = Math.min(width, height) * 0.08;
+        ctx.fillRect(roomMargin, height * 0.14, width - roomMargin * 2, height * 0.72);
+        ctx.strokeRect(roomMargin, height * 0.14, width - roomMargin * 2, height * 0.72);
         ctx.restore();
 
-        const spawn = points[1];
-        const portal = ctx.createRadialGradient(spawn.x, spawn.y, 3, spawn.x, spawn.y, 46);
-        portal.addColorStop(0, 'rgba(195, 140, 255, 0.85)');
-        portal.addColorStop(1, 'rgba(82, 34, 120, 0)');
-        ctx.fillStyle = portal;
-        ctx.fillRect(spawn.x - 50, spawn.y - 50, 100, 100);
+        if (threatRatio > 0.35) {
+            const danger = ctx.createRadialGradient(width * 0.82, height * 0.46, 0, width * 0.82, height * 0.46, width * 0.5);
+            danger.addColorStop(0, `rgba(255, 71, 87, ${threatRatio * 0.15})`);
+            danger.addColorStop(1, 'rgba(255, 71, 87, 0)');
+            ctx.fillStyle = danger;
+            ctx.fillRect(0, 0, width, height);
+        }
     }
 
     renderWorld(ctx) {
-        this.renderTowerSlots(ctx);
-        this.renderBase(ctx);
+        this.renderFocusTarget(ctx);
         this.monsters.forEach(monster => this.renderMonster(ctx, monster));
         this.bullets.forEach(bullet => this.renderBullet(ctx, bullet));
         this.explosions.forEach(explosion => this.renderExplosion(ctx, explosion));
+        this.renderExtractionProgress(ctx);
         this.renderPhasePrompt(ctx);
     }
 
@@ -1221,75 +1149,25 @@ export class CombatSystem {
         this.combatTexts.forEach(text => this.renderCombatText(ctx, text));
     }
 
-    renderTowerSlots(ctx) {
-        const radius = this.getTowerSlotRadius();
-        const selected = this.getSelectedTower();
-        if (selected) {
-            const position = this.getTowerSlotPosition(selected.slotIndex);
-            const range = this.getTowerStats(selected).range;
-            ctx.save();
-            ctx.fillStyle = 'rgba(255, 209, 103, 0.06)';
-            ctx.strokeStyle = 'rgba(255, 209, 103, 0.25)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(position.x, position.y, range, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        for (let index = 0; index < 6; index += 1) {
-            const position = this.getTowerSlotPosition(index);
-            const tower = this.towers.find(item => item.slotIndex === index);
-            const role = tower
-                ? this.getTowerRole(this.petSystem?.getTemplate?.(tower.templateId)?.type)
-                : TOWER_ROLES.default;
-
-            ctx.save();
-            ctx.fillStyle = tower ? 'rgba(18, 20, 29, 0.92)' : 'rgba(18, 20, 29, 0.48)';
-            ctx.strokeStyle = tower?.id === this.selectedTowerId ? '#fff1a7' : (tower ? role.color : '#66707c');
-            ctx.lineWidth = tower?.id === this.selectedTowerId ? 4 : 2;
-            ctx.beginPath();
-            ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = tower ? role.color : '#77808a';
-            ctx.font = `bold ${Math.max(10, radius * 0.42)}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(tower ? `Lv.${tower.upgradeLevel}` : '+', position.x, position.y + radius * 0.72);
-            ctx.restore();
-        }
-    }
-
-    renderBase(ctx) {
-        const base = this.getBasePosition();
-        const width = Math.max(130, this.mapWidth * 0.24);
-        const height = Math.max(36, this.mapHeight * 0.045);
+    renderFocusTarget(ctx) {
+        const target = this.monsters.find(monster => monster.id === this.focusTargetId);
+        if (!target) return;
+        const center = this.getEntityCenter(target);
         ctx.save();
-        ctx.fillStyle = 'rgba(17, 18, 25, 0.88)';
-        ctx.strokeStyle = this.baseHp > this.baseMaxHp * 0.3 ? '#ffd167' : '#ff667d';
-        ctx.lineWidth = 4;
-        ctx.fillRect(base.x - width / 2, base.y - height / 2, width, height);
-        ctx.strokeRect(base.x - width / 2, base.y - height / 2, width, height);
-
-        const barY = base.y + height * 0.7;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(base.x - width / 2, barY, width, 10);
-        ctx.fillStyle = this.baseHp > this.baseMaxHp * 0.3 ? '#63d471' : '#ff4757';
-        ctx.fillRect(base.x - width / 2, barY, width * (this.baseHp / this.baseMaxHp), 10);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(`基地 ${this.baseHp}/${this.baseMaxHp}`, base.x, barY + 24);
+        ctx.strokeStyle = '#fff1a7';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, Math.max(target.width, target.height) * 0.72, 0, Math.PI * 2);
+        ctx.stroke();
         ctx.restore();
     }
 
     renderMonster(ctx, monster) {
         const image = this.monsterImages[monster.templateId];
-        const animationState = monster.stunTimer > 0 ? 'idle' : 'move';
+        const animationState = monster.stunTimer > 0 ? 'idle' : monster.combatState;
         const sheet = this.getMonsterStateSheet(monster.templateId, animationState);
-        const visualScale = monster.isBoss ? 2.05 : (monster.isElite ? 1.82 : 1.62);
+        const visualScale = monster.isBoss ? 2.05 : (monster.isElite ? 1.8 : 1.58);
         const renderWidth = monster.width * visualScale;
         const renderHeight = monster.height * visualScale;
         const renderX = monster.x + monster.width / 2 - renderWidth / 2;
@@ -1318,15 +1196,14 @@ export class CombatSystem {
             ctx.fill();
         }
 
-        const barWidth = monster.isBoss ? monster.width * 1.4 : monster.width;
-        const barHeight = monster.isBoss ? 7 : 4;
+        const barWidth = monster.isBoss ? monster.width * 1.5 : monster.width;
+        const barHeight = monster.isBoss ? 7 : 5;
         const barX = monster.x + monster.width / 2 - barWidth / 2;
         const barY = monster.y - 10;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
         ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
         ctx.fillStyle = monster.isBoss ? '#ff7043' : (monster.slowTimer > 0 ? '#72d7ff' : '#63d471');
         ctx.fillRect(barX, barY, barWidth * Math.max(0, monster.hp / monster.maxHp), barHeight);
-
         if (monster.isBoss || monster.isElite) {
             ctx.fillStyle = monster.isBoss ? '#ffb36b' : '#d5a8ff';
             ctx.font = `bold ${monster.isBoss ? 13 : 10}px Arial`;
@@ -1341,14 +1218,14 @@ export class CombatSystem {
     }
 
     getMonsterFrameDuration(state) {
+        if (state === 'attack') return 82;
         return state === 'move' ? 115 : 175;
     }
 
     renderBullet(ctx, bullet) {
         ctx.save();
         ctx.translate(bullet.x, bullet.y);
-        const angle = Math.atan2(bullet.vy || -1, bullet.vx || 0);
-        ctx.rotate(angle);
+        ctx.rotate(Math.atan2(bullet.vy || 0, bullet.vx || 1));
         ctx.shadowColor = bullet.color;
         ctx.shadowBlur = 10;
         ctx.fillStyle = bullet.color;
@@ -1384,29 +1261,53 @@ export class CombatSystem {
         ctx.restore();
     }
 
-    renderPhasePrompt(ctx) {
-        if (this.isWaveActive()) return;
-        const messages = {
-            ready: '点击“开始第一波”部署敌军',
-            intermission: '调整塔位并升级，然后开始下一波',
-            victory: '防线胜利，点击“重新挑战”再来一局',
-            defeat: '基地失守，点击“重整防线”重新挑战'
-        };
-        const message = messages[this.waveSystem.phase];
-        if (!message) return;
-
+    renderExtractionProgress(ctx) {
+        if (this.runSystem.phase !== 'extracting') return;
+        const state = this.getBattleState();
+        const total = Math.max(1, this.currentEncounter?.durationMs || 1);
+        const ratio = 1 - Math.min(1, this.extractionTimer / total);
+        const width = Math.min(this.mapWidth * 0.54, 430);
+        const x = (this.mapWidth - width) / 2;
+        const y = this.mapHeight * 0.12;
         ctx.save();
-        ctx.fillStyle = 'rgba(5, 7, 12, 0.74)';
-        const boxWidth = Math.min(this.mapWidth * 0.72, 520);
-        const boxHeight = 54;
+        ctx.fillStyle = 'rgba(5, 7, 12, 0.82)';
+        ctx.fillRect(x - 12, y - 24, width + 24, 48);
+        ctx.fillStyle = '#1f2935';
+        ctx.fillRect(x, y, width, 10);
+        ctx.fillStyle = '#72d7ff';
+        ctx.fillRect(x, y, width * ratio, 10);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`撤离倒计时 ${state.extraction.remainingSeconds} 秒`, this.mapWidth / 2, y - 7);
+        ctx.restore();
+    }
+
+    renderPhasePrompt(ctx) {
+        if (this.isCombatActive()) return;
+        const messages = {
+            briefing: '开始远征：搜索物资，击败敌人，并选择合适时机撤离',
+            route: this.runSystem.canExtract() ? '继续深入，或现在撤离带走战利品' : '在右侧终端选择下一处区域',
+            search: '选择搜索方式：收益越高，伏击与威胁也越高',
+            camp: '安全屋可以恢复生命并降低威胁',
+            'extraction-ready': '已锁定撤离点，启动信标并守住倒计时',
+            extracted: '撤离成功，奖励已经结算',
+            defeat: '远征失败，点击“再次远征”重新整备'
+        };
+        const message = messages[this.runSystem.phase];
+        if (!message) return;
+        ctx.save();
+        ctx.fillStyle = 'rgba(5, 7, 12, 0.76)';
+        const boxWidth = Math.min(this.mapWidth * 0.72, 560);
+        const boxHeight = 58;
         const x = (this.mapWidth - boxWidth) / 2;
-        const y = this.mapHeight * 0.42;
+        const y = this.mapHeight * 0.43;
         ctx.fillRect(x, y, boxWidth, boxHeight);
-        ctx.strokeStyle = '#ffd167';
+        ctx.strokeStyle = this.runSystem.canExtract() ? '#72d7ff' : '#ffd167';
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, boxWidth, boxHeight);
         ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.max(13, Math.min(18, this.mapWidth * 0.024))}px Arial`;
+        ctx.font = `bold ${Math.max(12, Math.min(17, this.mapWidth * 0.023))}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(message, this.mapWidth / 2, y + boxHeight / 2);
@@ -1422,9 +1323,9 @@ export class CombatSystem {
 
     loadSaveData(data) {
         if (data?.meta) {
-            this.meta.bestWave = Math.max(0, Number(data.meta.bestWave) || 0);
-            this.meta.victories = Math.max(0, Number(data.meta.victories) || 0);
-            this.meta.defeats = Math.max(0, Number(data.meta.defeats) || 0);
+            this.meta.bestDepth = Math.max(0, Number(data.meta.bestDepth ?? data.meta.bestWave) || 0);
+            this.meta.extractions = Math.max(0, Number(data.meta.extractions ?? data.meta.victories) || 0);
+            this.meta.losses = Math.max(0, Number(data.meta.losses ?? data.meta.defeats) || 0);
         }
         this.resetBattle();
     }

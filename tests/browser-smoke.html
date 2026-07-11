@@ -158,7 +158,7 @@
     <main>
       <h1>PetPlan 浏览器冒烟测试</h1>
       <p class="description">
-        自动验证第二阶段控制器接线、弹窗与分类交互、命运桌成长、战斗开波、
+        自动验证第二阶段控制器接线、弹窗与分类交互、命运桌成长、远征搜打撤、
         领地建造及 F5 存档恢复。测试会临时隔离并在结束时恢复当前来源下的
         PetPlan 存档。
       </p>
@@ -693,42 +693,72 @@
               return `助手 ${beforeCount} → ${fate.assistants}，花费 ${cost.tails} 反面`;
             });
 
-            await step("点击战斗导航", async () => {
+            await step("点击远征导航", async () => {
               const button = frame.contentDocument.querySelector(
                 '.nav-btn[data-tab="dungeon"]',
               );
-              assert(button, "未找到战斗导航按钮");
+              assert(button, "未找到远征导航按钮");
               button.click();
               await waitFor(
                 () => frame.contentWindow.game.currentScene === "dungeon",
-                "战斗场景激活",
+                "远征场景激活",
               );
 
               const url = new URL(frame.contentWindow.location.href);
               const scene = frame.contentDocument.getElementById("battle-scene");
-              assert(url.searchParams.get("scene") === "dungeon", "战斗场景未写入 URL");
-              assert(scene?.style.display === "flex", "战斗场景容器未显示");
+              assert(url.searchParams.get("scene") === "dungeon", "远征场景未写入 URL");
+              assert(scene?.style.display === "flex", "远征场景容器未显示");
               return url.search;
             });
 
-            await step("点击开始第一波并离开 ready 阶段", async () => {
+            await step("开始远征并完成首个搜索区域", async () => {
               const game = frame.contentWindow.game;
               const button = frame.contentDocument.getElementById(
-                "battle-start-wave-btn",
+                "battle-start-expedition-btn",
               );
               const before = game.combatSystem.getBattleState();
 
-              assert(button, "未找到开始第一波按钮");
-              assert(before.phase === "ready", `开波前阶段不是 ready：${before.phase}`);
-              assert(!button.disabled, "开始第一波按钮不可交互");
+              assert(button, "未找到开始远征按钮");
+              assert(before.phase === "briefing", `开始前阶段不是 briefing：${before.phase}`);
+              assert(!button.disabled, "开始远征按钮不可交互");
               button.click();
+
+              const routeState = await waitFor(() => {
+                const state = game.combatSystem.getBattleState();
+                return state.phase === "route" ? state : null;
+              }, "远征路线生成");
+              assert(routeState.routeChoices.length === 2, "首层没有生成两条路线");
+
+              const firstRoute = frame.contentDocument.querySelector(
+                "#battle-route-list [data-route-id]",
+              );
+              assert(firstRoute, "未渲染首个路线按钮");
+              firstRoute.click();
+              await waitFor(
+                () => game.combatSystem.getBattleState().phase === "search",
+                "进入搜索区域",
+              );
+
+              game.combatSystem.runSystem.random = () => 0.5;
+              const quickSearch = frame.contentDocument.querySelector(
+                '[data-search-mode="quick"]',
+              );
+              assert(quickSearch, "未找到快速搜索按钮");
+              quickSearch.click();
 
               const after = await waitFor(() => {
                 const state = game.combatSystem.getBattleState();
-                return state.phase !== "ready" ? state : null;
-              }, "战斗阶段离开 ready");
-              assert(after.currentWave === 1, `首波编号异常：${after.currentWave}`);
-              return `phase ${before.phase} → ${after.phase} · wave=${after.currentWave}`;
+                return state.depth === 1 && state.backpackCount === 1 ? state : null;
+              }, "首个搜索区域结算");
+              assert(
+                frame.contentDocument.getElementById("battle-threat-display")?.textContent === "5%",
+                "威胁 HUD 未更新",
+              );
+              assert(
+                frame.contentDocument.getElementById("battle-bag-display")?.textContent === "1/8",
+                "背包 HUD 未更新",
+              );
+              return `phase ${before.phase} → ${after.phase} · depth=${after.depth} · bag=${after.backpackCount}`;
             });
 
             await step("点击领地导航", async () => {

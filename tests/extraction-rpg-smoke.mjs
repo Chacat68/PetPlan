@@ -1,0 +1,357 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+globalThis.Image = class ImageStub {
+  constructor() {
+    this.complete = false;
+    this.naturalWidth = 0;
+    this.onload = null;
+    this.onerror = null;
+  }
+
+  set src(value) {
+    this._src = value;
+  }
+
+  get src() {
+    return this._src;
+  }
+};
+
+const { ExpeditionRunSystem } = await import(
+  "../js/modules/expedition-run-system.js"
+);
+const { CombatSystem } = await import("../js/modules/combat-system.js");
+
+const fixedRandom = () => 0.5;
+
+function createLoot(id, score) {
+  return {
+    id,
+    name: id,
+    rarity: "common",
+    rarityLabel: "普通",
+    coins: score,
+    crystals: 0,
+    exp: 0,
+    score,
+  };
+}
+
+function createCombatHarness() {
+  const resourceTotals = { coins: 0, crystals: 0 };
+  const experience = { total: 0 };
+  const playerSystem = {
+    player: {
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 40,
+      level: 1,
+      hp: 100,
+      maxHp: 100,
+      attack: 24,
+      defense: 2,
+      attackSpeed: 1,
+      crit: 0,
+      critDamage: 150,
+      multiShot: 1,
+    },
+    playAttackAnimation() {},
+    getGunMuzzlePosition() {
+      return {
+        x: this.player.x + this.player.width / 2,
+        y: this.player.y + this.player.height / 2,
+      };
+    },
+    addExperience(amount) {
+      experience.total += amount;
+    },
+  };
+  const resourceSystem = {
+    addCoins(amount) {
+      resourceTotals.coins += amount;
+    },
+    addCrystals(amount) {
+      resourceTotals.crystals += amount;
+    },
+  };
+  const pet = {
+    instanceId: 101,
+    templateId: 1,
+    level: 1,
+    equipped: true,
+  };
+  const petTemplate = {
+    id: 1,
+    name: "火焰犬",
+    emoji: "🔥",
+    type: "fire",
+    baseStats: { attack: 15, attackSpeed: 1 },
+    skill: { name: "火球术", cooldown: 5000, damage: 12 },
+  };
+  const petSystem = {
+    equippedPets: [pet],
+    getTemplate(id) {
+      return id === petTemplate.id ? petTemplate : null;
+    },
+  };
+  const territorySystem = {
+    calculateBonuses() {
+      return { attack: 3, defense: 4, expBonus: 10 };
+    },
+  };
+
+  const combat = new CombatSystem({
+    random: fixedRandom,
+    runOptions: { maxDepth: 4, minExtractionDepth: 1 },
+  });
+  combat.mapWidth = 480;
+  combat.mapHeight = 800;
+  combat.setPlayerSystem(playerSystem);
+  combat.setResourceSystem(resourceSystem);
+  combat.setTerritorySystem(territorySystem);
+  combat.setPetSystem(petSystem);
+  combat.resetBattle();
+
+  return {
+    combat,
+    playerSystem,
+    resourceTotals,
+    experience,
+  };
+}
+
+function startCombatEncounter(combat) {
+  const startResult = combat.startRun();
+  assert.equal(startResult.success, true);
+
+  const combatNode = combat
+    .getBattleState()
+    .routeChoices.find((node) => node.type === "combat");
+  assert.ok(combatNode, "首层路线应提供一个可验证的战斗节点");
+
+  const routeResult = combat.chooseRoute(combatNode.id);
+  assert.equal(routeResult.success, true);
+  assert.equal(combat.getBattleState().phase, "combat");
+
+  combat.update(1);
+  assert.ok(combat.monsters.length > 0, "进入遭遇后应生成首个敌人");
+  return combat.monsters[0];
+}
+
+test("远征状态机完成路线、搜索、战斗节点和撤离幂等结算", () => {
+  const run = new ExpeditionRunSystem({
+    random: fixedRandom,
+    maxDepth: 4,
+    minExtractionDepth: 2,
+    backpackCapacity: 3,
+  });
+
+  assert.equal(run.getState().phase, "briefing");
+  assert.equal(run.startRun({ supplies: 2, backpackCapacity: 3 }).success, true);
+  assert.equal(run.startRun().success, false, "进行中的远征不能重复开始");
+
+  const searchNode = run.getState().routeChoices.find(
+    (node) => node.type === "search",
+  );
+  assert.ok(searchNode, "第一层应提供搜索路线");
+  assert.equal(run.chooseNode(searchNode.id).success, true);
+  assert.equal(run.getState().phase, "search");
+
+  const missingPet = run.resolveSearch("pet", { hasPet: false });
+  assert.equal(missingPet.success, false);
+  assert.equal(run.getState().backpack.length, 0);
+
+  const searchResult = run.resolveSearch("pet", { hasPet: true });
+  assert.equal(searchResult.success, true);
+  assert.equal(searchResult.ambushed, false);
+  assert.equal(run.getState().phase, "route");
+  assert.equal(run.getState().depth, 1);
+  assert.equal(run.getState().threat, 8);
+  assert.equal(run.getState().backpack.length, 2);
+  assert.equal(run.canExtract(), false);
+  assert.equal(
+    run.resolveSearch("quick").success,
+    false,
+    "同一搜索节点不能重复结算",
+  );
+
+  const combatNode = run.getState().routeChoices.find(
+    (node) => node.type === "combat",
+  );
+  assert.ok(combatNode, "第二层应提供战斗路线");
+  assert.equal(run.chooseNode(combatNode.id).success, true);
+  assert.equal(run.getState().phase, "combat");
+  assert.equal(
+    run.completeCombat(
+      { coins: 90, crystals: 2, exp: 30, kills: 3 },
+      { lootQuality: 0, lootCount: 1 },
+    ).success,
+    true,
+  );
+
+  const beforeExtraction = run.getState();
+  assert.equal(beforeExtraction.depth, 2);
+  assert.equal(beforeExtraction.canExtract, true);
+  assert.equal(beforeExtraction.backpack.length, 3);
+
+  const extraction = run.startExtraction();
+  assert.equal(extraction.success, true);
+  assert.equal(run.getState().phase, "extracting");
+  assert.ok(extraction.durationMs >= 8000);
+
+  const expectedCoins =
+    beforeExtraction.pendingRewards.coins +
+    beforeExtraction.backpackRewards.coins;
+  const expectedCrystals =
+    beforeExtraction.pendingRewards.crystals +
+    beforeExtraction.backpackRewards.crystals;
+  const expectedExp =
+    beforeExtraction.pendingRewards.exp + beforeExtraction.backpackRewards.exp;
+  const firstSettlement = run.finishRun({ extracted: true });
+  const secondSettlement = run.finishRun({
+    extracted: false,
+    reason: "duplicate-call",
+  });
+
+  assert.deepEqual(secondSettlement, firstSettlement);
+  assert.equal(firstSettlement.extracted, true);
+  assert.equal(firstSettlement.coins, expectedCoins);
+  assert.equal(firstSettlement.crystals, expectedCrystals);
+  assert.equal(firstSettlement.exp, expectedExp);
+  assert.equal(firstSettlement.lootExtracted, 3);
+  assert.equal(run.getState().phase, "extracted");
+  assert.equal(run.getState().active, false);
+});
+
+test("背包满载时拒绝低价值物品并用高价值物品替换最低项", () => {
+  const run = new ExpeditionRunSystem({
+    random: fixedRandom,
+    backpackCapacity: 3,
+  });
+  run.startRun({ backpackCapacity: 3 });
+
+  assert.equal(run.addLoot(createLoot("low", 10)).kept, true);
+  assert.equal(run.addLoot(createLoot("middle", 20)).kept, true);
+  assert.equal(run.addLoot(createLoot("high", 30)).kept, true);
+
+  const rejected = run.addLoot(createLoot("too-low", 5));
+  assert.deepEqual(rejected, {
+    kept: false,
+    discarded: createLoot("too-low", 5),
+  });
+
+  const upgraded = run.addLoot(createLoot("top", 40));
+  assert.equal(upgraded.kept, true);
+  assert.equal(upgraded.discarded.id, "low");
+  assert.deepEqual(
+    run
+      .getState()
+      .backpack.map((item) => item.score)
+      .sort((a, b) => a - b),
+    [20, 30, 40],
+  );
+});
+
+test("CombatSystem 遭遇生成、宠物技能冷却和主角承伤可回归", () => {
+  const { combat } = createCombatHarness();
+  const monster = startCombatEncounter(combat);
+  const monsterHpBefore = monster.hp;
+
+  const skillResult = combat.usePetSkill(101);
+  assert.equal(skillResult.success, true);
+  assert.ok(monster.hp < monsterHpBefore, "火系宠物技能应对敌人造成伤害");
+  assert.equal(combat.getPetSkillsState()[0].ready, false);
+  assert.equal(
+    combat.usePetSkill(101).success,
+    false,
+    "冷却中的宠物技能不能重复释放",
+  );
+  combat.updateSkillCooldowns(5000);
+  assert.equal(combat.getPetSkillsState()[0].ready, true);
+
+  const hpBefore = combat.runHp;
+  const damage = combat.damageHero(20, monster);
+  assert.equal(damage, 18, "主角承伤应扣除玩家与领地防御");
+  assert.equal(combat.runHp, hpBefore - damage);
+
+  combat.applyDamage(monster, monster.hp + 100);
+  const rewardsAfterKill = { ...combat.encounterRewards };
+  combat.onMonsterKilled(monster);
+  assert.deepEqual(
+    combat.encounterRewards,
+    rewardsAfterKill,
+    "同一敌人的击杀奖励只能登记一次",
+  );
+});
+
+test("CombatSystem 撤离成功的资源、经验和长期记录只结算一次", () => {
+  const { combat, resourceTotals, experience } = createCombatHarness();
+  startCombatEncounter(combat);
+
+  combat.monsters = [];
+  combat.encounterQueue = [];
+  combat.encounterRewards = {
+    coins: 100,
+    crystals: 2,
+    exp: 50,
+    kills: 2,
+  };
+  const encounterResult = combat.finishEncounter();
+  assert.equal(encounterResult.success, true);
+  assert.equal(combat.getBattleState().extraction.canExtract, true);
+
+  const extraction = combat.requestExtraction();
+  assert.equal(extraction.success, true);
+  combat.extractionTimer = 1;
+  combat.update(1);
+
+  const firstSettlement = combat.getBattleState().settlement;
+  assert.equal(firstSettlement.extracted, true);
+  assert.ok(firstSettlement.coins > 100, "成功撤离应同时带回临时背包战利品");
+  assert.deepEqual(resourceTotals, {
+    coins: firstSettlement.coins,
+    crystals: firstSettlement.crystals,
+  });
+  assert.equal(experience.total, firstSettlement.exp);
+  assert.equal(combat.meta.extractions, 1);
+
+  const secondSettlement = combat.finishExpedition(true, "duplicate-call");
+  assert.deepEqual(secondSettlement, firstSettlement);
+  assert.deepEqual(resourceTotals, {
+    coins: firstSettlement.coins,
+    crystals: firstSettlement.crystals,
+  });
+  assert.equal(experience.total, firstSettlement.exp);
+  assert.equal(combat.meta.extractions, 1);
+});
+
+test("CombatSystem 失败仅发放保底收益且重复失败不会再次发奖", () => {
+  const { combat, resourceTotals, experience } = createCombatHarness();
+  const monster = startCombatEncounter(combat);
+  combat.encounterRewards = {
+    coins: 100,
+    crystals: 5,
+    exp: 50,
+    kills: 2,
+  };
+  combat.encounterRewardsCommitted = false;
+
+  combat.damageHero(9999, monster);
+  const firstSettlement = combat.getBattleState().settlement;
+  assert.equal(firstSettlement.extracted, false);
+  assert.equal(firstSettlement.reason, "defeated");
+  assert.equal(firstSettlement.coins, 30);
+  assert.equal(firstSettlement.crystals, 0);
+  assert.equal(firstSettlement.exp, 22, "失败经验保留后应应用领地经验加成");
+  assert.deepEqual(resourceTotals, { coins: 30, crystals: 0 });
+  assert.equal(experience.total, 22);
+  assert.equal(combat.meta.losses, 1);
+
+  const secondSettlement = combat.finishExpedition(false, "duplicate-call");
+  assert.deepEqual(secondSettlement, firstSettlement);
+  assert.deepEqual(resourceTotals, { coins: 30, crystals: 0 });
+  assert.equal(experience.total, 22);
+  assert.equal(combat.meta.losses, 1);
+});

@@ -119,7 +119,7 @@ export class SettingsController {
   getSceneLabel() {
     const sceneLabels = {
       fate: "命运",
-      dungeon: "战斗",
+      dungeon: "远征",
       territory: "领地",
     };
 

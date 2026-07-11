@@ -6,10 +6,10 @@
  * coordinates primary-scene navigation.
  */
 
-import { getGameCoreInstance } from "./modules/game-core.js?v=tower-defense-20260710b";
+import { getGameCoreInstance } from "./modules/game-core.js?v=extraction-rpg-20260711a";
 import { getResourceSystemInstance } from "./modules/resource-system.js";
-import { getPlayerSystemInstance } from "./modules/player-system.js?v=tower-defense-20260710b";
-import { getCombatSystemInstance } from "./modules/combat-system.js?v=tower-defense-20260710b";
+import { getPlayerSystemInstance } from "./modules/player-system.js?v=extraction-rpg-20260711a";
+import { getCombatSystemInstance } from "./modules/combat-system.js?v=extraction-rpg-20260711a";
 import { getSaveSystemInstance } from "./modules/save-system.js?v=phase-one-20260710b";
 import { getUISystemInstance } from "./modules/ui-system.js";
 import { getPetSystemInstance } from "./modules/pet-system.js?v=tower-defense-20260710b";
@@ -20,7 +20,7 @@ import { getProgressionSystemInstance } from "./modules/progression-system.js?v=
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
 import { AchievementController } from "./controllers/achievement-controller.js?v=controllers-phase-two-20260711b";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=controllers-phase-two-20260711b";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=extraction-rpg-20260711a";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=controllers-phase-two-20260711b";
 import { PetModalController } from "./controllers/pet-modal-controller.js?v=controllers-phase-two-20260711b";
 import { PlayerModalController } from "./controllers/player-modal-controller.js?v=controllers-phase-two-20260711b";

@@ -6,11 +6,12 @@
 
 | 模块 | 责任 |
 | --- | --- |
-| `game-core.js` | Canvas 游戏循环、战斗画面、自动保存计时 |
+| `game-core.js` | Canvas 游戏循环、远征画面、自动保存计时 |
 | `fate-coin-system.js` | 命运资源、自动结算、升级成本 |
 | `player-system.js` | 主角属性、升级与战力 |
 | `pet-system.js` | 宠物模板、解锁、编队、成长 |
-| `combat-system.js` | 怪物、子弹、伤害与奖励 |
+| `expedition-run-system.js` | 路线、搜索、威胁、补给、背包与撤离规则 |
+| `combat-system.js` | 远征遭遇、怪物、主动技能与奖励结算协调 |
 | `territory-system.js` | 地块、建筑、循环进度、产出 |
 | `resource-system.js` | 金币、红宝石、水晶 |
 | `save-system.js` | 存档槽位和导入导出 |
@@ -23,7 +24,7 @@
 | 控制器 | 责任 |
 | --- | --- |
 | `achievement-controller.js` | 成就/任务模态与奖励领取 |
-| `battle-scene-controller.js` | 战斗操作、选塔、面板刷新与结算反馈 |
+| `battle-scene-controller.js` | 路线、搜索、补给、撤离、技能交互与结算反馈 |
 | `settings-controller.js` | 设置模态、显示设置与快捷存档/读档 |
 | `player-modal-controller.js` | 玩家属性展示与升级交互 |
 | `pet-modal-controller.js` | 宠物编队、背包、图鉴与解锁交互 |

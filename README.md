@@ -1,12 +1,12 @@
 # PetPlan 宠物计划
 
-PetPlan 是一款以横屏街机舞台呈现的宠物养成放置游戏。玩家在命运桌积累正反面资源、购买自动化与训练成长，在战斗中获取通用资源，并以领地建筑承接中期进度。
+PetPlan 是一款以横屏街机舞台呈现的宠物养成放置游戏。玩家在命运桌积累正反面资源、购买自动化与训练成长，在“宠物远征”中搜打撤获取资源，并以领地建筑承接中期进度。
 
 ## 核心循环
 
 1. 在命运桌点击硬币并积累正面、反面与桌面硬币。
 2. 按商店推荐购买自动结算、小助手、主角或宠物训练。
-3. 进入战斗，将主角与宠物成长转化为资源收益。
+3. 进入宠物远征，选择路线、搜索物资、击败敌人，并在合适时机撤离结算收益。
 4. 在领地消耗资源、解锁地块与建筑，获得长期属性和产出。
 
 宠物编队和成就位于 HUD 导航中，以模态页面打开。
@@ -29,7 +29,9 @@ python3 -m http.server 4174 --directory .
 | 输入 | 行为 |
 | --- | --- |
 | 点击命运硬币 | 结算正面或反面 |
-| HUD 场景按钮 | 切换命运、战斗、领地 |
+| HUD 场景按钮 | 切换命运、远征、领地 |
+| 远征终端 | 选择路线、搜索方式、补给或撤离 |
+| 点击敌人 / 宠物技能 | 锁定目标 / 释放主动技能 |
 | 宠物 / 成就 | 打开辅助管理页面 |
 | F5 / F9 | 保存 / 加载槽位 1 |
 | Escape | 关闭当前弹窗 |
@@ -43,11 +45,12 @@ PetPlan/
 ├── css/style.css                 # 横屏舞台、场景和弹窗样式
 ├── js/main.js                    # 系统装配与玩法协调
 ├── js/modules/
-│   ├── game-core.js              # Canvas 循环与战斗画面渲染
+│   ├── game-core.js              # Canvas 循环与远征画面渲染
 │   ├── fate-coin-system.js       # 命运资源与自动结算
 │   ├── player-system.js          # 主角属性与升级
 │   ├── pet-system.js             # 宠物收集、养成、编队
-│   ├── combat-system.js          # 怪物、攻击、战斗奖励
+│   ├── combat-system.js          # 远征遭遇、技能与结算协调
+│   ├── expedition-run-system.js  # 路线、搜索、威胁、背包与撤离规则
 │   ├── territory-system.js       # 地块、建筑、长期进度
 │   ├── resource-system.js        # 金币、红宝石、水晶
 │   ├── save-system.js            # LocalStorage 存档
@@ -63,6 +66,7 @@ PetPlan/
 - [快速开始](./doc/QUICKSTART.md)
 - [玩家指南](./doc/player-guide.md)
 - [产品体验设计](./doc/design/product-experience.md)
+- [宠物远征设计](./doc/design/extraction-rpg-rework.md)
 - [系统架构](./doc/design/architecture.md)
 - [系统规则](./doc/design/systems.md)
 - [开发环境](./doc/dev/setup.md)
