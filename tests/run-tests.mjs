@@ -13,8 +13,11 @@ const sourceFiles = [
   "js/main.js",
   "js/modules/combat-system.js",
   "js/modules/expedition-run-system.js",
+  "js/modules/fate-coin-system.js",
   "js/modules/fate-shop-rules.js",
+  "js/modules/game-core.js",
   "js/modules/modal-focus-manager.js",
+  "js/modules/player-system.js",
   "js/modules/scene-router.js",
   ...controllerFiles,
 ];

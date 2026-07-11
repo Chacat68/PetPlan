@@ -14,7 +14,7 @@ import { getSaveSystemInstance } from "./modules/save-system.js?v=phase-one-2026
 import { getUISystemInstance } from "./modules/ui-system.js";
 import { getPetSystemInstance } from "./modules/pet-system.js?v=tower-defense-20260710b";
 import { getTerritorySystemInstance } from "./modules/territory-system.js?v=phase-one-20260710b";
-import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=phase-one-20260710b";
+import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
 import { getProgressionSystemInstance } from "./modules/progression-system.js?v=phase-one-20260710b";
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
@@ -24,8 +24,8 @@ import { BattleSceneController } from "./controllers/battle-scene-controller.js?
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=controllers-phase-two-20260711b";
 import { PetModalController } from "./controllers/pet-modal-controller.js?v=controllers-phase-two-20260711b";
 import { PlayerModalController } from "./controllers/player-modal-controller.js?v=controllers-phase-two-20260711b";
-import { SettingsController } from "./controllers/settings-controller.js?v=controllers-phase-two-20260711b";
-import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=controllers-phase-two-20260711b";
+import { SettingsController } from "./controllers/settings-controller.js?v=fate-stability-20260711b";
+import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=fate-stability-20260711b";
 import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=controllers-phase-two-20260711b";
 
 export class Game {
@@ -111,6 +111,8 @@ export class Game {
       this.connectSystemCallbacks();
       this.bindEvents();
 
+      this.fateSceneController.resetTransientRuntime();
+      this.shopRecommendationController.resetRecommendationStability();
       const loadedSave = await this.saveSystem.loadGame(1);
       if (!loadedSave && this.territorySystem.loadFromLocalStorage()) {
         await this.saveSystem.saveGame(1);
@@ -193,6 +195,10 @@ export class Game {
       uiSystem: this.uiSystem,
       modalFocusManager: this.modalFocusManager,
       getCurrentScene: () => this.currentScene,
+      onBeforeGameLoad: () => {
+        this.fateSceneController.resetTransientRuntime();
+        this.shopRecommendationController.resetRecommendationStability();
+      },
       onGameLoaded: () => this.updateUI(),
     });
 
@@ -335,12 +341,13 @@ export class Game {
     this.currentScene = this.sceneRouter.activate(tab, {
       syncHistory: !silent,
     });
+    this.fateSceneController.setSceneActive(this.currentScene === "fate");
     const upgradePanel = document.getElementById("upgrade-panel");
 
     if (this.currentScene === "fate") {
       if (upgradePanel) upgradePanel.style.display = "none";
       if (this.combatSystem) this.combatSystem.isPaused = true;
-      this.fateSceneController.updateDisplay();
+      this.fateSceneController.updateDisplay({ commitRecommendation: true });
     } else if (this.currentScene === "territory") {
       if (upgradePanel) upgradePanel.style.display = "none";
       if (this.combatSystem) this.combatSystem.isPaused = true;
@@ -400,7 +407,7 @@ export class Game {
         : equippedPets;
     const heroTrainingLevel = Math.max(
       0,
-      Math.floor(((player.attack || 20) - 20) / 5)
+      Math.floor(this.playerSystem?.fateTrainingLevel || 0)
     );
 
     return {

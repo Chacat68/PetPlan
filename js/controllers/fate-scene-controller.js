@@ -30,6 +30,10 @@ export class FateSceneController {
     this.helperWave = 0;
     this.abortController = null;
     this.waveTimers = new Set();
+    this.resizeObserver = null;
+    this.layoutFrame = 0;
+    this.layoutSize = { width: 0, height: 0 };
+    this.isSceneActive = true;
   }
 
   bind() {
@@ -42,7 +46,6 @@ export class FateSceneController {
       "fate-buy-gold-btn": "gold",
       "fate-buy-assistant-btn": "assistant",
       "fate-upgrade-manual-btn": "manual",
-      "fate-skill-tree-btn": "manual",
       "fate-upgrade-speed-btn": "speed",
       "fate-train-hero-btn": "hero",
       "fate-train-pet-btn": "pet",
@@ -55,6 +58,11 @@ export class FateSceneController {
         { signal }
       );
     });
+    document.getElementById("fate-skill-tree-btn")?.addEventListener(
+      "click",
+      () => this.openManualUpgradeCard(),
+      { signal }
+    );
 
     document.querySelectorAll(".fate-table-coin").forEach((coin) => {
       this.bindTableCoin(coin);
@@ -62,9 +70,28 @@ export class FateSceneController {
         this.startFateTableCoinFaceLoop(coin);
       }
     });
+
+    const layer = document.getElementById("fate-coin-drop-layer");
+    if (layer && typeof ResizeObserver === "function") {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.scheduleFateLayoutRefresh();
+      });
+      this.resizeObserver.observe(layer);
+    } else {
+      window.addEventListener("resize", () => this.scheduleFateLayoutRefresh(), {
+        signal,
+      });
+    }
   }
 
   destroy() {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    if (this.layoutFrame) {
+      window.cancelAnimationFrame(this.layoutFrame);
+      this.layoutFrame = 0;
+    }
+
     this.abortController?.abort();
     this.abortController = null;
 
@@ -78,7 +105,9 @@ export class FateSceneController {
     layer?.querySelectorAll(".fate-table-coin").forEach((coin) => {
       this.clearFateTableCoinFaceLoop(coin);
       if (coin._fateSpawnEndHandler) {
-        coin.removeEventListener("animationend", coin._fateSpawnEndHandler);
+        coin
+          .querySelector(".fate-table-coin-visual")
+          ?.removeEventListener("animationend", coin._fateSpawnEndHandler);
         coin._fateSpawnEndHandler = null;
       }
       coin.classList.remove("spawned", "clicked");
@@ -92,6 +121,106 @@ export class FateSceneController {
     layer?.querySelectorAll(".fate-helper-step").forEach((step) => step.remove());
   }
 
+  resetTransientRuntime() {
+    this.waveTimers.forEach((timer) => window.clearTimeout(timer));
+    this.waveTimers.clear();
+
+    if (this.layoutFrame) {
+      window.cancelAnimationFrame(this.layoutFrame);
+      this.layoutFrame = 0;
+    }
+
+    const layer = document.getElementById("fate-coin-drop-layer");
+    layer?.querySelectorAll(".fate-helper").forEach((helper) => {
+      this.clearFateHelperTimers(helper, { reset: true });
+      helper.remove();
+    });
+    layer?.querySelectorAll(".fate-table-coin").forEach((coin) => {
+      this.clearFateTableCoinFaceLoop(coin);
+      if (coin._fateSpawnEndHandler) {
+        const visual = coin.querySelector(".fate-table-coin-visual");
+        visual?.removeEventListener("animationend", coin._fateSpawnEndHandler);
+      }
+      coin.remove();
+    });
+    layer
+      ?.querySelectorAll(".fate-ground-coin, .fate-helper-step")
+      .forEach((item) => {
+        item.remove();
+      });
+
+    document.getElementById("fate-result-feed")?.replaceChildren();
+    const status = document.getElementById("fate-result-status");
+    if (status) status.textContent = "";
+    this.dropSerial = 0;
+    this.helperWave = 0;
+    this.layoutSize = { width: 0, height: 0 };
+  }
+
+  setSceneActive(active) {
+    this.isSceneActive = Boolean(active);
+    if (!this.isSceneActive) {
+      const status = document.getElementById("fate-result-status");
+      if (status) status.textContent = "";
+    }
+    const coins = document.querySelectorAll(".fate-table-coin");
+    coins.forEach((coin) => {
+      if (this.isSceneActive) this.startFateTableCoinFaceLoop(coin);
+      else this.clearFateTableCoinFaceLoop(coin);
+    });
+  }
+
+  scheduleFateLayoutRefresh() {
+    if (this.layoutFrame) return;
+    this.layoutFrame = window.requestAnimationFrame(() => {
+      this.layoutFrame = 0;
+      this.refreshFateLayout();
+    });
+  }
+
+  refreshFateLayout() {
+    const layer = document.getElementById("fate-coin-drop-layer");
+    if (!layer || layer.clientWidth <= 0 || layer.clientHeight <= 0) return;
+
+    const width = layer.clientWidth;
+    const height = layer.clientHeight;
+    const oldWidth = this.layoutSize.width || width;
+    const oldHeight = this.layoutSize.height || height;
+
+    this.syncFateTableCoins(this.fateCoinSystem?.fateCoins || 1);
+    const coins = Array.from(layer.querySelectorAll(".fate-table-coin"));
+    coins.forEach((coin) => {
+      const ratioX =
+        Number(coin.dataset.xRatio) || Number(coin.dataset.x || 0) / oldWidth;
+      const ratioY =
+        Number(coin.dataset.yRatio) || Number(coin.dataset.y || 0) / oldHeight;
+      const x = this.clamp(ratioX * width, width * 0.35, width * 0.68);
+      const y = this.clamp(ratioY * height, height * 0.26, height * 0.72);
+      coin.dataset.x = String(x);
+      coin.dataset.y = String(y);
+      coin.dataset.xRatio = String(x / width);
+      coin.dataset.yRatio = String(y / height);
+      coin.style.left = `${x}px`;
+      coin.style.top = `${y}px`;
+    });
+
+    layer.querySelectorAll(".fate-helper").forEach((helper) => {
+      const state = helper._fateHelperState;
+      if (!state) return;
+      this.clearFateHelperTimers(helper, { reset: true });
+      const x = this.clamp((state.x / oldWidth) * width, 32, width - 32);
+      const y = this.clamp((state.y / oldHeight) * height, 34, height - 26);
+      this.setFateHelperPosition(helper, x, y);
+    });
+    layer
+      .querySelectorAll(".fate-ground-coin, .fate-helper-step")
+      .forEach((item) => {
+        item.remove();
+      });
+
+    this.layoutSize = { width, height };
+  }
+
   bindTableCoin(coin) {
     if (!coin || !this.abortController) return;
     coin.addEventListener("click", () => this.handleFateFlip(coin), {
@@ -101,8 +230,14 @@ export class FateSceneController {
 
   handleFateFlip(coin) {
     if (!this.fateCoinSystem) return;
+    if (coin?.dataset.settled === "true") return;
 
     const face = this.getFateTableCoinFace(coin);
+    if (coin) {
+      coin.dataset.settled = "true";
+      coin.setAttribute("aria-disabled", "true");
+      this.updateFateTableCoinAccessibility(coin);
+    }
     const result = this.fateCoinSystem.manualFlip(face);
     if (coin) {
       this.playFateTableCoinClickFeedback(
@@ -112,8 +247,7 @@ export class FateSceneController {
       );
     }
     this.addFateCoinDrops(result, { source: "manual" });
-    this.addFateResult(result);
-    this.updateDisplay();
+    this.addFateResult(result, { announce: true });
   }
 
   playFateTableCoinClickFeedback(coin, face, amount = 1) {
@@ -135,20 +269,15 @@ export class FateSceneController {
     return face === "tails" ? `获得反面 +${value}` : `获得正面 +${value}`;
   }
 
-  handleAutoFlip(request) {
-    if (!request || request.cycles <= 0) return;
+  handleAutoFlip(result) {
+    if (!result || result.cycles <= 0 || result.flips <= 0) return;
+    if (this.getCurrentScene() !== "fate") return;
 
-    if (!this.canAnimateFateAssistantBatch()) {
-      const result = this.fateCoinSystem.assistantBatchFlip(request.cycles);
-      if (this.getCurrentScene() === "fate") {
-        this.addFateResult(result);
-        this.addFateCoinDrops(result, { source: "auto" });
-      }
-      this.updateDisplay();
-      return;
+    this.addFateResult(result, { announce: false });
+    this.addFateCoinDrops(result, { source: "auto" });
+    if (this.canAnimateFateAssistantBatch()) {
+      this.queueFateHelperClicks(result.cycles);
     }
-
-    this.queueFateHelperClicks(request.cycles);
   }
 
   handleFateAutoFlip(request) {
@@ -180,13 +309,26 @@ export class FateSceneController {
     const handler = handlers[action];
     if (!handler) return;
 
+    this.shopController?.requestRecommendationCommit?.();
     const result = handler();
-    this.onChanged({ action, result });
+    if (!result?.success) {
+      this.shopController?.cancelRecommendationCommit?.();
+    } else if (action === "hero" || action === "pet") {
+      // Cross-system training uses a silent fate-resource debit, then refreshes
+      // every dependent display once after the player/pet mutation is complete.
+      this.onChanged({ action, result });
+    }
     this.uiSystem?.showToast?.(
       result.message,
       result.success ? "success" : "error"
     );
     return result;
+  }
+
+  openManualUpgradeCard() {
+    this.shopController?.setFateShopFilter?.("fate");
+    const card = document.getElementById("fate-upgrade-manual-btn");
+    card?.focus?.({ preventScroll: true });
   }
 
   handleFateUpgrade(action) {
@@ -216,8 +358,10 @@ export class FateSceneController {
     const animatedCoins = coins.slice(-Math.max(1, Math.floor(count)));
 
     animatedCoins.forEach((coin) => {
+      const visual = coin.querySelector(".fate-table-coin-visual");
+      if (!visual) return;
       if (coin._fateSpawnEndHandler) {
-        coin.removeEventListener("animationend", coin._fateSpawnEndHandler);
+        visual.removeEventListener("animationend", coin._fateSpawnEndHandler);
       }
 
       coin.classList.remove("spawned");
@@ -225,17 +369,17 @@ export class FateSceneController {
       coin.classList.add("spawned");
       coin._fateSpawnEndHandler = (event) => {
         if (
-          event.target !== coin ||
+          event.target !== visual ||
           event.animationName !== "fateTableCoinSpawn"
         ) {
           return;
         }
 
         coin.classList.remove("spawned");
-        coin.removeEventListener("animationend", coin._fateSpawnEndHandler);
+        visual.removeEventListener("animationend", coin._fateSpawnEndHandler);
         coin._fateSpawnEndHandler = null;
       };
-      coin.addEventListener("animationend", coin._fateSpawnEndHandler);
+      visual.addEventListener("animationend", coin._fateSpawnEndHandler);
     });
   }
 
@@ -277,7 +421,7 @@ export class FateSceneController {
     }
 
     const cost = this.getFateHeroTrainingCost();
-    if (!this.fateCoinSystem.spend(cost)) {
+    if (!this.fateCoinSystem.spend(cost, { notify: false })) {
       return { success: false, message: "正面或反面不足" };
     }
 
@@ -294,14 +438,14 @@ export class FateSceneController {
     }
 
     const cost = this.getFatePetTrainingCost();
-    if (!this.fateCoinSystem.spend(cost)) {
+    if (!this.fateCoinSystem.spend(cost, { notify: false })) {
       return { success: false, message: "正面或反面不足" };
     }
 
     return this.petSystem.trainEquippedPets(1);
   }
 
-  updateDisplay() {
+  updateDisplay({ commitRecommendation = false } = {}) {
     if (!this.fateCoinSystem) return;
 
     const data = this.fateCoinSystem.getDisplayData();
@@ -421,10 +565,7 @@ export class FateSceneController {
       "fate-upgrade-manual-btn",
       !this.fateCoinSystem.canAfford(data.costs.manual)
     );
-    setDisabled(
-      "fate-skill-tree-btn",
-      !this.fateCoinSystem.canAfford(data.costs.manual)
-    );
+    setDisabled("fate-skill-tree-btn", false);
     setDisabled(
       "fate-upgrade-speed-btn",
       data.assistants <= 0 ||
@@ -449,13 +590,14 @@ export class FateSceneController {
       data,
       territorySummary,
       progressionContext,
+      commitRecommendation,
     });
 
     return data;
   }
 
-  updateFateDisplay() {
-    return this.updateDisplay();
+  updateFateDisplay(options) {
+    return this.updateDisplay(options);
   }
 
   getFateAutoRatePreview(data, overrides = {}) {
@@ -474,12 +616,14 @@ export class FateSceneController {
     return this.shopController.getFateAssistantSpeedPreview(data);
   }
 
-  addFateResult(result) {
+  addFateResult(result, { announce = result?.source === "manual" } = {}) {
     const feed = document.getElementById("fate-result-feed");
     if (!feed || !result) return;
 
     const item = document.createElement("div");
     item.className = "fate-result";
+    item.dataset.source = result.source || "unknown";
+    item.setAttribute("aria-hidden", "true");
     if (result.face) {
       item.textContent = this.formatFateGainText(
         result.face,
@@ -492,6 +636,11 @@ export class FateSceneController {
 
     while (feed.children.length > 4) {
       feed.removeChild(feed.lastElementChild);
+    }
+
+    if (announce) {
+      const status = document.getElementById("fate-result-status");
+      if (status) status.textContent = item.textContent;
     }
   }
 
@@ -535,6 +684,7 @@ export class FateSceneController {
       coin.className = `fate-ground-coin ${face} coin-variant-${
         this.dropSerial % 4
       }`;
+      coin.setAttribute("aria-hidden", "true");
       coin.style.left = `${startX}px`;
       coin.style.top = `${startY}px`;
       coin.style.setProperty("--drift-x", `${driftX}px`);
@@ -595,14 +745,22 @@ export class FateSceneController {
     if (!layer) return;
 
     const activeCoins = Array.from(layer.querySelectorAll(".fate-table-coin"));
-    const safeTarget = Math.max(1, Math.floor(targetCount || 1));
+    const logicalTarget = Math.max(1, Math.floor(targetCount || 1));
+    const safeTarget = Math.min(
+      logicalTarget,
+      this.getFateTableCoinRenderLimit(layer)
+    );
+    layer.dataset.logicalCoinCount = String(logicalTarget);
+    layer.dataset.renderedCoinCount = String(safeTarget);
 
     while (activeCoins.length > safeTarget) {
       const coin = activeCoins.pop();
       if (coin) {
         this.clearFateTableCoinFaceLoop(coin);
         if (coin._fateSpawnEndHandler) {
-          coin.removeEventListener("animationend", coin._fateSpawnEndHandler);
+          coin
+            .querySelector(".fate-table-coin-visual")
+            ?.removeEventListener("animationend", coin._fateSpawnEndHandler);
           coin._fateSpawnEndHandler = null;
         }
         coin.remove();
@@ -614,6 +772,22 @@ export class FateSceneController {
       if (!coin) return;
       activeCoins.push(coin);
     }
+
+    activeCoins.forEach((coin, index) => {
+      coin.dataset.coinIndex = String(index + 1);
+      this.updateFateTableCoinAccessibility(coin);
+    });
+
+    this.layoutSize = {
+      width: layer.clientWidth,
+      height: layer.clientHeight,
+    };
+  }
+
+  getFateTableCoinRenderLimit(layer) {
+    if (layer.clientWidth < 520) return 8;
+    if (layer.clientWidth < 760) return 12;
+    return 18;
   }
 
   createFateTableCoin(layer, existingCoins = []) {
@@ -628,6 +802,8 @@ export class FateSceneController {
     const point = this.findFateTableCoinPosition(layer, existingCoins);
     coin.dataset.x = String(point.x);
     coin.dataset.y = String(point.y);
+    coin.dataset.xRatio = String(point.x / width);
+    coin.dataset.yRatio = String(point.y / height);
     coin.style.left = `${point.x}px`;
     coin.style.top = `${point.y}px`;
     coin.style.setProperty(
@@ -640,10 +816,12 @@ export class FateSceneController {
       Math.random() < 0.5 ? "heads" : "tails"
     );
     coin.innerHTML = `
-      <span class="fate-table-coin-shadow"></span>
-      <span class="fate-table-coin-body">
-        <span class="fate-table-coin-face fate-table-coin-front">正</span>
-        <span class="fate-table-coin-face fate-table-coin-back">反</span>
+      <span class="fate-table-coin-visual" aria-hidden="true">
+        <span class="fate-table-coin-shadow"></span>
+        <span class="fate-table-coin-body">
+          <span class="fate-table-coin-face fate-table-coin-front">正</span>
+          <span class="fate-table-coin-face fate-table-coin-back">反</span>
+        </span>
       </span>
     `;
     this.bindTableCoin(coin);
@@ -662,17 +840,28 @@ export class FateSceneController {
   setFateTableCoinFace(coin, face) {
     const normalizedFace = face === "tails" ? "tails" : "heads";
     coin.dataset.face = normalizedFace;
+    coin.dataset.settled = "false";
+    coin.setAttribute("aria-disabled", "false");
     coin.dataset.score = this.formatFateGainText(normalizedFace);
+    this.updateFateTableCoinAccessibility(coin);
+  }
+
+  updateFateTableCoinAccessibility(coin) {
+    if (!coin) return;
+    const face = this.getFateTableCoinFace(coin);
+    const faceLabel = face === "tails" ? "反面" : "正面";
+    const index = Math.max(1, Number(coin.dataset.coinIndex) || 1);
+    const amount = Math.max(1, Math.floor(this.fateCoinSystem?.manualPower || 1));
     coin.setAttribute(
       "aria-label",
-      normalizedFace === "heads"
-        ? "当前正面，点击结算正面 +1"
-        : "当前反面，点击结算反面 +1"
+      coin.dataset.settled === "true"
+        ? `硬币 ${index}，当前${faceLabel}已结算，等待翻面`
+        : `硬币 ${index}，当前${faceLabel}，点击结算${faceLabel} +${amount}`
     );
   }
 
   startFateTableCoinFaceLoop(coin) {
-    if (!coin || coin._fateFaceTimer) return;
+    if (!coin || coin._fateFaceTimer || !this.isSceneActive) return;
 
     const flip = () => {
       coin._fateFaceTimer = 0;
@@ -682,13 +871,22 @@ export class FateSceneController {
         coin,
         this.getFateTableCoinFace(coin) === "heads" ? "tails" : "heads"
       );
-      coin._fateFaceTimer = window.setTimeout(flip, 525);
+      coin._fateFaceTimer = window.setTimeout(
+        flip,
+        this.getFateTableCoinFaceDelay()
+      );
     };
 
     coin._fateFaceTimer = window.setTimeout(
       flip,
-      180 + Math.random() * 360
+      Math.min(600, this.getFateTableCoinFaceDelay() * 0.7) + Math.random() * 180
     );
+  }
+
+  getFateTableCoinFaceDelay() {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+      ? 1500
+      : 525;
   }
 
   clearFateTableCoinFaceLoop(coin) {
@@ -951,15 +1149,12 @@ export class FateSceneController {
 
     if (canClick) {
       const face = this.getFateTableCoinFace(coin);
-      const result = this.fateCoinSystem.assistantFlip(face);
       helper.dataset.state = "tap";
       this.playFateTableCoinClickFeedback(
         coin,
         face,
-        this.getFateResultFaceAmount(result, face)
+        this.fateCoinSystem?.assistantPower || 1
       );
-      this.addFateCoinDrops(result, { source: "auto", maxCoins: 4 });
-      this.addFateResult(result);
     } else {
       helper.dataset.state = "miss";
     }

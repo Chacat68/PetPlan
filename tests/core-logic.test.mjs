@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AchievementController } from "../js/controllers/achievement-controller.js";
+import { FateSceneController } from "../js/controllers/fate-scene-controller.js";
+import { SettingsController } from "../js/controllers/settings-controller.js";
 import { ShopRecommendationController } from "../js/controllers/shop-recommendation-controller.js";
 import { FateCoinSystem } from "../js/modules/fate-coin-system.js";
 import {
@@ -179,17 +181,27 @@ test("助手购买、速度和自动结算保持独立且可预测", () => {
   assert.equal(fate.tails, 0);
   assert.equal(fate.getAutoFlipsPerSecond(), 1 / 3);
   assert.equal(fate.update(2999), null);
-  assert.deepEqual(fate.update(1), {
-    source: "assistant",
-    cycles: 1,
-    assistants: 1,
-  });
-  assert.equal(fate.totalFlips, 0, "调度本身不能提前结算收益");
-  assert.equal(requests.length, 1);
-
   const originalRandom = Math.random;
   Math.random = () => 0;
   try {
+    assert.deepEqual(fate.update(1), {
+      flips: 1,
+      heads: 1,
+      tails: 0,
+      source: "assistant",
+      cycles: 1,
+      assistants: 1,
+    });
+    assert.equal(fate.totalFlips, 1, "自动收益必须在系统层立即结算");
+    assert.deepEqual(requests[0], {
+      flips: 1,
+      heads: 1,
+      tails: 0,
+      source: "assistant",
+      cycles: 1,
+      assistants: 1,
+    });
+
     assert.deepEqual(fate.assistantBatchFlip(2), {
       flips: 2,
       heads: 2,
@@ -198,10 +210,21 @@ test("助手购买、速度和自动结算保持独立且可预测", () => {
       cycles: 2,
       assistants: 1,
     });
+
+    fate.autoInterval = 750;
+    assert.deepEqual(fate.update(2250), {
+      flips: 3,
+      heads: 3,
+      tails: 0,
+      source: "assistant",
+      cycles: 3,
+      assistants: 1,
+    });
   } finally {
     Math.random = originalRandom;
   }
 
+  fate.autoInterval = 3000;
   fate.tails = 40;
   assert.deepEqual(fate.getUpgradeAssistantSpeedCost(), {
     heads: 0,
@@ -215,6 +238,155 @@ test("助手购买、速度和自动结算保持独立且可预测", () => {
   fate.tails = 1_000_000;
   assert.equal(fate.upgradeAssistantSpeed().success, false);
   assert.equal(fate.autoInterval, 750);
+});
+
+test("命运购买与跨系统训练都只刷新一次最终状态", () => {
+  const fate = new FateCoinSystem();
+  const notifications = [];
+  fate.heads = 100;
+  fate.tails = 100;
+  fate.setOnChange((data) => notifications.push(data));
+
+  assert.equal(fate.spend({ heads: 3, tails: 2 }, { notify: false }), true);
+  assert.equal(notifications.length, 0);
+  assert.deepEqual(
+    { heads: fate.heads, tails: fate.tails },
+    { heads: 97, tails: 98 }
+  );
+
+  assert.equal(fate.spend({ heads: 2 }), true);
+  assert.equal(notifications.length, 1);
+
+  const shopCalls = { request: 0, cancel: 0 };
+  const changed = [];
+  const controller = new FateSceneController({
+    fateCoinSystem: fate,
+    playerSystem: {
+      applyFateTraining: () => ({ success: true, message: "主角训练" }),
+    },
+    shopController: {
+      requestRecommendationCommit: () => (shopCalls.request += 1),
+      cancelRecommendationCommit: () => (shopCalls.cancel += 1),
+      getFateHeroTrainingCost: () => ({ heads: 5, tails: 5 }),
+    },
+    onChanged: (event) => changed.push(event),
+  });
+  const refreshes = [];
+  controller.updateDisplay = () => refreshes.push("refresh");
+  fate.setOnChange(() => controller.updateDisplay());
+
+  assert.equal(controller.handleUpgrade("manual").success, true);
+  assert.deepEqual(shopCalls, { request: 1, cancel: 0 });
+  assert.equal(refreshes.length, 1, "纯命运购买应只响应一次系统通知");
+  assert.equal(changed.length, 0, "纯命运购买由系统通知完成唯一一次刷新");
+
+  controller.onChanged = (event) => {
+    changed.push(event);
+    controller.updateDisplay();
+  };
+  assert.equal(controller.handleUpgrade("hero").success, true);
+  assert.equal(refreshes.length, 2, "跨系统训练应只刷新一次最终状态");
+  assert.equal(changed.length, 1);
+
+  fate.heads = 0;
+  assert.equal(controller.handleUpgrade("manual").success, false);
+  assert.deepEqual(shopCalls, { request: 3, cancel: 1 });
+  assert.equal(refreshes.length, 2, "失败购买不应触发无意义刷新");
+});
+
+test("命运存档字段会规范化，异常间隔不会制造 Infinity 或海量状态", () => {
+  const fate = new FateCoinSystem();
+  fate.loadSaveData({
+    fateCoins: 10000,
+    pendingGoldCoins: 10000,
+    heads: -5,
+    tails: "17.9",
+    assistants: "bad",
+    manualPower: 0,
+    assistantPower: Infinity,
+    autoInterval: 0,
+    totalFlips: NaN,
+  });
+
+  assert.deepEqual(
+    {
+      fateCoins: fate.fateCoins,
+      heads: fate.heads,
+      tails: fate.tails,
+      assistants: fate.assistants,
+      manualPower: fate.manualPower,
+      assistantPower: fate.assistantPower,
+      autoInterval: fate.autoInterval,
+      totalFlips: fate.totalFlips,
+    },
+    {
+      fateCoins: 256,
+      heads: 0,
+      tails: 17,
+      assistants: 0,
+      manualPower: 1,
+      assistantPower: 1,
+      autoInterval: 750,
+      totalFlips: 0,
+    }
+  );
+  assert.equal(fate.update(1000), null);
+});
+
+test("每枚桌面硬币每个面值周期只能手动结算一次", () => {
+  const fate = new FateCoinSystem();
+  const controller = new FateSceneController({ fateCoinSystem: fate });
+  controller.addFateCoinDrops = () => {};
+  controller.addFateResult = () => {};
+  controller.playFateTableCoinClickFeedback = () => {};
+  const attributes = new Map();
+  const coin = {
+    dataset: { face: "heads", settled: "false", coinIndex: "1" },
+    classList: { add() {}, remove() {} },
+    setAttribute(name, value) {
+      attributes.set(name, value);
+    },
+  };
+
+  controller.handleFateFlip(coin);
+  controller.handleFateFlip(coin);
+  assert.equal(fate.heads, 1);
+  assert.equal(fate.totalFlips, 1);
+  assert.equal(coin.dataset.settled, "true");
+
+  controller.setFateTableCoinFace(coin, "tails");
+  assert.equal(coin.dataset.settled, "false");
+  controller.handleFateFlip(coin);
+  assert.equal(fate.tails, 1);
+  assert.equal(fate.totalFlips, 2);
+  assert.match(attributes.get("aria-label"), /硬币 1/);
+  assert.equal(controller.getFateTableCoinRenderLimit({ clientWidth: 400 }), 8);
+  assert.equal(controller.getFateTableCoinRenderLimit({ clientWidth: 600 }), 12);
+  assert.equal(controller.getFateTableCoinRenderLimit({ clientWidth: 900 }), 18);
+});
+
+test("快速读档会先清理临时运行态，再应用存档并刷新界面", async () => {
+  const order = [];
+  const controller = new SettingsController({
+    saveSystem: {
+      async loadGame(slot) {
+        assert.equal(slot, 1);
+        order.push("load");
+        return true;
+      },
+      getSaveInfo: () => null,
+    },
+    onBeforeGameLoad() {
+      order.push("reset");
+    },
+    onGameLoaded() {
+      order.push("refresh");
+    },
+  });
+  controller.updateStatus = () => {};
+
+  assert.equal(await controller.quickLoad(), true);
+  assert.deepEqual(order, ["reset", "load", "refresh"]);
 });
 
 test("首局目标严格按顺序推进并能识别成长倾向", () => {
@@ -358,6 +530,38 @@ test("命运商店评分、主次推荐和分类顺序可独立回归", () => {
   );
   assert.equal(initialRecommendation.primary?.action, "assistant");
   assert.equal(initialRecommendation.secondary?.action, "gold");
+
+  const flipGuide = progressionSystem.getFirstSessionGuide({});
+  const flipGoal = shop.getFirstSessionGoal(
+    flipGuide,
+    fateCoinSystem.getDisplayData(),
+    initialRecommendation
+  );
+  assert.equal(flipGoal.title, "熟悉命运翻转");
+  assert.match(flipGoal.detail, /每个面值周期可结算一次/);
+
+  const tableGuide = progressionSystem.getFirstSessionGuide({ totalFlips: 8 });
+  const guidedRecommendation = shop.applyFirstSessionRecommendation(
+    initialRecommendation,
+    tableGuide
+  );
+  assert.equal(guidedRecommendation.primary?.action, "gold");
+
+  shop.commitRecommendation(guidedRecommendation);
+  const changedScores = {
+    ...guidedRecommendation,
+    primary: guidedRecommendation.secondary,
+    secondary: guidedRecommendation.primary,
+  };
+  const stableRecommendation = shop.getCommittedRecommendation(changedScores);
+  assert.equal(stableRecommendation.primary?.action, "gold");
+  assert.equal(stableRecommendation.secondary?.action, "assistant");
+
+  shop.playerSystem.player.attack = 999;
+  assert.deepEqual(shop.getFateHeroTrainingCost(), { heads: 14, tails: 6 });
+  shop.playerSystem.fateTrainingLevel = 5;
+  assert.deepEqual(shop.getFateHeroTrainingCost(), { heads: 56, tails: 17 });
+
 });
 
 test("领地脉冲、建筑门槛和地块门槛覆盖完整配置", () => {

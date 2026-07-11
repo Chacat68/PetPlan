@@ -38,6 +38,11 @@ export class ShopRecommendationController {
     this.getProgressionContext = getProgressionContext;
     this.filter = "recommended";
     this.listeners = [];
+    this.latestRecommendation = null;
+    this.committedPrimaryAction = "";
+    this.committedSecondaryAction = "";
+    this.committedGuideId = "";
+    this.pendingRecommendationCommit = false;
   }
 
   /** Bind fate-shop filter tabs once. */
@@ -71,34 +76,113 @@ export class ShopRecommendationController {
     territorySummary = null,
     progressionContext = null,
     pathSummary = null,
+    commitRecommendation = false,
   } = {}) {
     const context = progressionContext || this.getProgressionContext(data) || {};
     const activePathSummary =
       pathSummary || this.progressionSystem?.getPathSummary?.(context) || null;
-    const recommendation = this.getFateUpgradeRecommendation(
-      data,
-      territorySummary,
-      activePathSummary
+    const guide = this.progressionSystem?.getFirstSessionGuide?.(context) || null;
+    const recommendation = this.applyFirstSessionRecommendation(
+      this.getFateUpgradeRecommendation(data, territorySummary, activePathSummary),
+      guide
     );
+    this.latestRecommendation = recommendation;
+    const guideId = guide?.complete ? "complete" : guide?.id || "";
+    const shouldCommitRecommendation =
+      commitRecommendation ||
+      this.pendingRecommendationCommit ||
+      !this.committedPrimaryAction ||
+      guideId !== this.committedGuideId;
+    this.pendingRecommendationCommit = false;
+    if (shouldCommitRecommendation) {
+      this.commitRecommendation(recommendation);
+      this.committedGuideId = guideId;
+    }
+    const activeRecommendation = this.getCommittedRecommendation(recommendation);
 
-    this.updateFateShopRecommendation(recommendation);
-    this.updateFateNextGoal(data, territorySummary, recommendation);
-    this.updateFateProgressionGuide(context, activePathSummary);
+    this.updateFateShopRecommendation(activeRecommendation);
+    this.updateFateNextGoal(data, territorySummary, activeRecommendation, guide);
+    this.updateFateProgressionGuide(context, activePathSummary, guide);
 
-    return recommendation;
+    return activeRecommendation;
   }
 
-  updateFateProgressionGuide(context, pathSummary) {
+  resetRecommendationStability() {
+    this.latestRecommendation = null;
+    this.committedPrimaryAction = "";
+    this.committedSecondaryAction = "";
+    this.committedGuideId = "";
+    this.pendingRecommendationCommit = false;
+  }
+
+  requestRecommendationCommit() {
+    this.pendingRecommendationCommit = true;
+  }
+
+  cancelRecommendationCommit() {
+    this.pendingRecommendationCommit = false;
+  }
+
+  applyFirstSessionRecommendation(recommendation, guide) {
+    if (!recommendation || !guide || guide.complete) return recommendation;
+    const actionByStep = {
+      table: "gold",
+      assistant: "assistant",
+    };
+    const action = actionByStep[guide.id];
+    if (!action) return recommendation;
+
+    const guidedCandidate = recommendation.candidates?.find(
+      (candidate) => candidate.action === action
+    );
+    if (!guidedCandidate) return recommendation;
+
+    const secondary = recommendation.candidates.find(
+      (candidate) => candidate.action !== action
+    );
+    return {
+      ...recommendation,
+      primary: guidedCandidate,
+      secondary: secondary || null,
+    };
+  }
+
+  commitRecommendation(recommendation) {
+    this.committedPrimaryAction = recommendation?.primary?.action || "";
+    this.committedSecondaryAction = recommendation?.secondary?.action || "";
+  }
+
+  getCommittedRecommendation(recommendation) {
+    if (!recommendation) return recommendation;
+    const candidates = recommendation.candidates || [];
+    const primary =
+      candidates.find(
+        (candidate) => candidate.action === this.committedPrimaryAction
+      ) || recommendation.primary;
+    const secondary =
+      candidates.find(
+        (candidate) =>
+          candidate.action === this.committedSecondaryAction &&
+          candidate.action !== primary?.action
+      ) ||
+      candidates.find((candidate) => candidate.action !== primary?.action) ||
+      null;
+    return { ...recommendation, primary, secondary };
+  }
+
+  updateFateProgressionGuide(context, pathSummary, guideOverride = null) {
     const guideEl = document.getElementById("fate-first-session-guide");
     const pathEl = document.getElementById("fate-path-summary");
-    const guide = this.progressionSystem?.getFirstSessionGuide?.(context);
+    const guide =
+      guideOverride || this.progressionSystem?.getFirstSessionGuide?.(context);
 
     if (guideEl && guide) {
-      guideEl.textContent = guide.complete
-        ? guide.title
-        : `首局 ${guide.current}/${guide.total} · ${guide.title} ${this.formatNumber(
+      guideEl.hidden = guide.complete;
+      if (!guide.complete) {
+        guideEl.textContent = `首局 ${guide.current}/${guide.total} · ${guide.title} ${this.formatNumber(
             guide.value
           )}/${this.formatNumber(guide.target)}`;
+      }
       guideEl.dataset.route = guide.routeType || "mixed";
       guideEl.title = guide.detail || guide.title;
     }
@@ -147,8 +231,10 @@ export class ShopRecommendationController {
   }
 
   getFateHeroTrainingCost() {
-    const attack = this.playerSystem?.player?.attack || 20;
-    const trainingLevel = Math.max(0, Math.round((attack - 20) / 5));
+    const trainingLevel = Math.max(
+      0,
+      Math.floor(this.playerSystem?.fateTrainingLevel || 0)
+    );
 
     return {
       heads: Math.floor(14 * Math.pow(1.32, trainingLevel)),
@@ -465,6 +551,13 @@ export class ShopRecommendationController {
 
   setFateShopFilter(filter) {
     this.filter = FATE_SHOP_FILTERS.has(filter) ? filter : "recommended";
+    if (this.filter === "recommended" && this.latestRecommendation) {
+      this.commitRecommendation(this.latestRecommendation);
+      this.updateFateShopRecommendation(
+        this.getCommittedRecommendation(this.latestRecommendation)
+      );
+      return;
+    }
     this.updateFateShopFilter();
   }
 
@@ -474,7 +567,7 @@ export class ShopRecommendationController {
     document.querySelectorAll("[data-fate-shop-filter]").forEach((button) => {
       const active = button.dataset.fateShopFilter === filter;
       button.classList.toggle("active", active);
-      button.setAttribute("aria-selected", active ? "true" : "false");
+      button.setAttribute("aria-pressed", active ? "true" : "false");
     });
 
     const cards = Array.from(
@@ -520,7 +613,12 @@ export class ShopRecommendationController {
     return button.dataset.fateShopCategory === filter;
   }
 
-  updateFateNextGoal(data, territorySummary, recommendation = null) {
+  updateFateNextGoal(
+    data,
+    territorySummary,
+    recommendation = null,
+    guide = null
+  ) {
     const goalEl = document.getElementById("fate-next-goal-text");
     const goalTitleEl = document.getElementById("fate-next-goal-title");
     const goalDetailEl = document.getElementById("fate-next-goal-detail");
@@ -528,7 +626,12 @@ export class ShopRecommendationController {
     const altEl = document.getElementById("fate-next-goal-alt");
     if (!goalEl) return;
 
-    const goal = this.getFateNextGoal(data, territorySummary, recommendation);
+    const goal = this.getFateNextGoal(
+      data,
+      territorySummary,
+      recommendation,
+      guide
+    );
     if (goalTitleEl && goalDetailEl) {
       goalTitleEl.textContent = goal.title;
       goalDetailEl.textContent = goal.detail || "";
@@ -549,13 +652,25 @@ export class ShopRecommendationController {
     }
   }
 
-  getFateNextGoal(data, territorySummary, recommendation = null) {
+  getFateNextGoal(
+    data,
+    territorySummary,
+    recommendation = null,
+    guide = null
+  ) {
     const activeRecommendation =
       recommendation ||
       this.getFateUpgradeRecommendation(data, territorySummary);
     const primary = activeRecommendation?.primary;
     const secondary = activeRecommendation?.secondary;
     const nextBuilding = territorySummary?.nextBuilding;
+
+    const firstSessionGoal = this.getFirstSessionGoal(
+      guide,
+      data,
+      activeRecommendation
+    );
+    if (firstSessionGoal) return firstSessionGoal;
 
     if (nextBuilding?.state && !nextBuilding.state.unlocked) {
       const missingPulse = Math.max(
@@ -600,6 +715,63 @@ export class ShopRecommendationController {
       routeType: "neutral",
       alt: "",
     };
+  }
+
+  getFirstSessionGoal(guide, data, recommendation) {
+    if (!guide || guide.complete) return null;
+    const candidates = recommendation?.candidates || [];
+    const getCandidate = (action) =>
+      candidates.find((candidate) => candidate.action === action);
+
+    if (guide.id === "flip") {
+      return {
+        title: "熟悉命运翻转",
+        detail: `翻转 ${this.formatFateNumber(guide.value)}/${this.formatFateNumber(
+          guide.target
+        )} · 每个面值周期可结算一次`,
+        route: "首局教学",
+        routeType: "mixed",
+        alt: "扩充桌面硬币",
+      };
+    }
+
+    if (guide.id === "table") {
+      const candidate = getCandidate("gold");
+      return {
+        title: "扩充桌面硬币",
+        detail: candidate
+          ? `${this.formatFateGoalCost(candidate.cost, data)} · ${candidate.preview}`
+          : guide.detail,
+        route: "首局教学",
+        routeType: "heads",
+        alt: recommendation?.secondary?.title || "购买第 1 个助手",
+      };
+    }
+
+    if (guide.id === "assistant") {
+      const candidate = getCandidate("assistant");
+      return {
+        title: "购买第 1 个助手",
+        detail: candidate
+          ? `${this.formatFateGoalCost(candidate.cost, data)} · ${candidate.preview}`
+          : guide.detail,
+        route: "首局教学",
+        routeType: "tails",
+        alt: recommendation?.secondary?.title || "继续扩充桌面",
+      };
+    }
+
+    if (guide.id === "territory") {
+      return {
+        title: "建立第 1 座领地建筑",
+        detail: "前往领地，选择已开放地块完成建造",
+        route: "首局教学",
+        routeType: "territory",
+        alt: "继续积累正面与反面",
+      };
+    }
+
+    return null;
   }
 
   formatFateGoalCost(cost = {}, data = {}) {

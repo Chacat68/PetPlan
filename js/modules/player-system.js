@@ -34,6 +34,7 @@ export class PlayerSystem {
             crit: 5,
             multiShot: 1
         };
+        this.fateTrainingLevel = 0;
         
         // 升级成本
         this.upgradeCosts = {
@@ -189,6 +190,7 @@ export class PlayerSystem {
         this.player.attack += attackGain;
         this.player.maxHp += maxHpGain;
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + maxHpGain);
+        this.fateTrainingLevel += 1;
 
         this.updateDisplay();
 
@@ -537,7 +539,8 @@ export class PlayerSystem {
     getSaveData() {
         return {
             player: { ...this.player },
-            upgradeCosts: { ...this.upgradeCosts }
+            upgradeCosts: { ...this.upgradeCosts },
+            fateTrainingLevel: this.fateTrainingLevel
         };
     }
     
@@ -553,6 +556,13 @@ export class PlayerSystem {
         if (data.upgradeCosts) {
             Object.assign(this.upgradeCosts, data.upgradeCosts);
         }
+        const migratedFateTrainingLevel = Math.max(
+            0,
+            Math.min(256, Math.floor(((Number(this.player.attack) || 20) - 20) / 5))
+        );
+        this.fateTrainingLevel = Number.isFinite(Number(data.fateTrainingLevel))
+            ? Math.max(0, Math.min(256, Math.floor(Number(data.fateTrainingLevel))))
+            : migratedFateTrainingLevel;
         
         this.updateDisplay();
     }

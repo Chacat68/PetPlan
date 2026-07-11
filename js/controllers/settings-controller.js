@@ -14,6 +14,7 @@ export class SettingsController {
     uiSystem,
     modalFocusManager,
     getCurrentScene,
+    onBeforeGameLoad,
     onGameLoaded,
   } = {}) {
     this.canvas = canvas;
@@ -24,6 +25,8 @@ export class SettingsController {
       typeof getCurrentScene === "function" ? getCurrentScene : () => "fate";
     this.onGameLoaded =
       typeof onGameLoaded === "function" ? onGameLoaded : () => {};
+    this.onBeforeGameLoad =
+      typeof onBeforeGameLoad === "function" ? onBeforeGameLoad : () => {};
     this.getGameCore =
       typeof getGameCore === "function" ? getGameCore : () => gameCore;
 
@@ -230,11 +233,14 @@ export class SettingsController {
   }
 
   async quickLoad() {
+    await this.onBeforeGameLoad();
     const result = await this.saveSystem.loadGame(SAVE_SLOT);
     if (result) {
       await this.onGameLoaded(result);
       this.updateStatus();
       this.uiSystem?.showToast?.("已加载", "success");
+    } else {
+      await this.onGameLoaded(null);
     }
     return result;
   }

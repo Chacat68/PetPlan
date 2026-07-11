@@ -147,8 +147,10 @@ export class GameCore {
     this.deltaTime = Math.min(elapsed, 100);
     this.lastTime = currentTime;
 
-    // 更新逻辑
-    this.update(this.deltaTime);
+    // Combat/rendering keeps the defensive frame clamp, while fate automation
+    // receives real elapsed time so its advertised per-second rate does not
+    // collapse when the tab is throttled or briefly suspended.
+    this.update(this.deltaTime, Math.max(0, elapsed));
 
     // 渲染画面
     this.render();
@@ -160,14 +162,14 @@ export class GameCore {
   /**
    * 更新游戏逻辑
    */
-  update(deltaTime) {
+  update(deltaTime, fateDeltaTime = deltaTime) {
     // 更新各系统
     if (this.systems.player) {
       this.systems.player.update(deltaTime);
     }
 
     if (this.systems.fate) {
-      this.systems.fate.update(deltaTime);
+      this.systems.fate.update(fateDeltaTime);
     }
 
     if (this.systems.combat && !this.systems.combat.isPaused) {

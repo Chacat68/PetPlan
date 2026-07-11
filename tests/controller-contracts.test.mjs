@@ -24,7 +24,16 @@ const controllerContracts = [
   [
     "FateSceneController",
     FateSceneController,
-    ["bind", "destroy", "handleFateFlip", "handleAutoFlip", "handleUpgrade", "updateDisplay"],
+    [
+      "bind",
+      "destroy",
+      "resetTransientRuntime",
+      "setSceneActive",
+      "handleFateFlip",
+      "handleAutoFlip",
+      "handleUpgrade",
+      "updateDisplay",
+    ],
   ],
   [
     "PetModalController",
@@ -44,7 +53,15 @@ const controllerContracts = [
   [
     "ShopRecommendationController",
     ShopRecommendationController,
-    ["bind", "destroy", "update", "getFateUpgradeRecommendation", "setFateShopFilter"],
+    [
+      "bind",
+      "destroy",
+      "update",
+      "requestRecommendationCommit",
+      "cancelRecommendationCommit",
+      "getFateUpgradeRecommendation",
+      "setFateShopFilter",
+    ],
   ],
   [
     "TerritorySceneController",

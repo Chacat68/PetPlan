@@ -7,6 +7,14 @@ import { FATE_COST_CONFIG } from "./progression-config.js?v=phase-one-20260710b"
 
 let instance = null;
 
+const FATE_SAVE_LIMITS = Object.freeze({
+  fateCoins: 256,
+  assistants: 256,
+  power: 256,
+  resource: Number.MAX_SAFE_INTEGER,
+  totalFlips: Number.MAX_SAFE_INTEGER,
+});
+
 export class FateCoinSystem {
   constructor() {
     this.fateCoins = 1;
@@ -42,17 +50,19 @@ export class FateCoinSystem {
   update(deltaTime) {
     if (this.assistants <= 0) return null;
 
-    this.autoTimer += deltaTime;
+    const safeDelta = Number.isFinite(Number(deltaTime))
+      ? Math.max(0, Number(deltaTime))
+      : 0;
+    this.autoTimer += safeDelta;
     if (this.autoTimer < this.autoInterval) return null;
 
     const cycles = Math.floor(this.autoTimer / this.autoInterval);
     this.autoTimer %= this.autoInterval;
 
-    const result = {
-      source: "assistant",
-      cycles,
-      assistants: this.assistants,
-    };
+    // Economy settlement must never depend on whether helper animations are
+    // currently busy or even visible. The controller only visualizes this
+    // already-settled result.
+    const result = this.assistantBatchFlip(cycles);
 
     if (this.onAutoFlip) {
       this.onAutoFlip(result);
@@ -80,8 +90,14 @@ export class FateCoinSystem {
   }
 
   assistantBatchFlip(cycles = 1) {
-    const safeCycles = Math.max(0, Math.floor(cycles));
-    const flips = safeCycles * this.assistants * this.assistantPower;
+    const numericCycles = Number(cycles);
+    const safeCycles = Number.isFinite(numericCycles)
+      ? Math.max(0, Math.min(1_000_000, Math.floor(numericCycles)))
+      : 0;
+    const flips = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      safeCycles * this.assistants * this.assistantPower
+    );
     const result = this.flipMany(flips);
     result.source = "assistant";
     result.cycles = safeCycles;
@@ -109,7 +125,10 @@ export class FateCoinSystem {
   }
 
   flipMany(count) {
-    const safeCount = Math.max(0, Math.floor(count));
+    const numericCount = Number(count);
+    const safeCount = Number.isFinite(numericCount)
+      ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(numericCount)))
+      : 0;
     if (safeCount <= 0) {
       return { flips: 0, heads: 0, tails: 0 };
     }
@@ -282,13 +301,15 @@ export class FateCoinSystem {
     this.tails -= cost.tails || 0;
   }
 
-  spend(cost) {
+  spend(cost, { notify = true } = {}) {
     if (!this.canAfford(cost)) {
       return false;
     }
 
     this.pay(cost);
-    this.notifyChange();
+    if (notify) {
+      this.notifyChange();
+    }
     return true;
   }
 
@@ -362,21 +383,84 @@ export class FateCoinSystem {
   loadSaveData(data) {
     if (!data) return;
 
-    this.fateCoins = Math.max(
-      1,
-      (data.fateCoins ?? 1) + (data.pendingGoldCoins ?? 0)
+    const legacyPendingCoins = this.normalizeSaveInteger(
+      data.pendingGoldCoins,
+      0,
+      0,
+      FATE_SAVE_LIMITS.fateCoins
     );
-    this.heads = data.heads ?? 0;
-    this.tails = data.tails ?? 0;
-    this.assistants = data.assistants ?? 0;
-    this.manualPower = data.manualPower ?? 1;
-    this.assistantPower = data.assistantPower ?? 1;
-    this.autoInterval = data.autoInterval ?? 3000;
-    this.goldCoins = data.goldCoins ?? 0;
-    this.totalFlips = data.totalFlips ?? data.goldCoins ?? 0;
+    const savedFateCoins = this.normalizeSaveInteger(
+      data.fateCoins,
+      1,
+      1,
+      FATE_SAVE_LIMITS.fateCoins
+    );
+    this.fateCoins = Math.min(
+      FATE_SAVE_LIMITS.fateCoins,
+      savedFateCoins + legacyPendingCoins
+    );
+    this.heads = this.normalizeSaveInteger(
+      data.heads,
+      0,
+      0,
+      FATE_SAVE_LIMITS.resource
+    );
+    this.tails = this.normalizeSaveInteger(
+      data.tails,
+      0,
+      0,
+      FATE_SAVE_LIMITS.resource
+    );
+    this.assistants = this.normalizeSaveInteger(
+      data.assistants,
+      0,
+      0,
+      FATE_SAVE_LIMITS.assistants
+    );
+    this.manualPower = this.normalizeSaveInteger(
+      data.manualPower,
+      1,
+      1,
+      FATE_SAVE_LIMITS.power
+    );
+    this.assistantPower = this.normalizeSaveInteger(
+      data.assistantPower,
+      1,
+      1,
+      FATE_SAVE_LIMITS.power
+    );
+    const loadedInterval = this.normalizeSaveInteger(
+      data.autoInterval,
+      3000,
+      750,
+      3000
+    );
+    this.autoInterval = Math.max(
+      750,
+      Math.min(3000, Math.round(loadedInterval / 250) * 250)
+    );
+    this.goldCoins = this.normalizeSaveInteger(
+      data.goldCoins,
+      0,
+      0,
+      FATE_SAVE_LIMITS.resource
+    );
+    this.totalFlips = this.normalizeSaveInteger(
+      data.totalFlips ?? data.goldCoins,
+      0,
+      0,
+      FATE_SAVE_LIMITS.totalFlips
+    );
     this.autoTimer = 0;
 
     this.notifyChange();
+  }
+
+  normalizeSaveInteger(value, fallback, min, max) {
+    if (value === null || value === "") return fallback;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.max(min, Math.min(max, Math.floor(numeric)));
   }
 }
 

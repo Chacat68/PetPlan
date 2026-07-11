@@ -73,6 +73,18 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 body {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   background: var(--bg-dark);
@@ -3732,7 +3744,7 @@ body {
   --coin-rotate: 0deg;
   --bounce-delay: 0s;
   position: absolute;
-  width: clamp(32px, 3.1vw, 54px);
+  width: clamp(44px, 3.4vw, 58px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -3744,22 +3756,37 @@ body {
   cursor: pointer;
   pointer-events: auto;
   perspective: 180px;
-  transform: translate(-50%, -50%) rotate(var(--coin-rotate));
-  animation: fateTableCoinBounce 1.05s steps(6, end) var(--bounce-delay) infinite;
+  transform: translate(-50%, -50%);
+  touch-action: manipulation;
   z-index: 6;
 }
 
-.fate-table-coin:hover {
+.fate-table-coin-visual {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%) rotate(var(--coin-rotate));
+  animation: fateTableCoinBounce 1.05s steps(6, end) var(--bounce-delay) infinite;
+}
+
+.fate-table-coin:hover .fate-table-coin-visual {
   filter: brightness(1.1);
 }
 
-.fate-table-coin:active {
+.fate-table-coin:active .fate-table-coin-visual {
   filter: brightness(0.98);
 }
 
-.fate-table-coin.spawned {
+.fate-table-coin.spawned .fate-table-coin-visual {
   animation: fateTableCoinSpawn 0.58s cubic-bezier(0.16, 0.9, 0.22, 1)
     forwards;
+}
+
+.fate-table-coin[data-settled="true"] .fate-table-coin-visual {
+  opacity: 0.68;
+  filter: saturate(0.72);
 }
 
 .fate-table-coin.clicked::after {
@@ -4497,10 +4524,32 @@ body {
   cursor: pointer;
 }
 
+.fate-shop-tabs .shop-tab {
+  flex: 1 1 0;
+  width: auto;
+  height: auto;
+  min-width: 44px;
+  max-width: 64px;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-size: clamp(14px, 1.2vw, 22px);
+  line-height: 1;
+}
+
 .shop-tab.active,
-.shop-tab[aria-selected="true"] {
+.fate-shop-tabs .shop-tab[aria-pressed="true"] {
   background: #fff2c7;
   color: #17191e;
+}
+
+.shop-tab-label {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .fate-shop-panel h2 {
@@ -4539,10 +4588,25 @@ body {
   display: none;
 }
 
-.fate-upgrade:hover {
+.fate-upgrade:hover:not(:disabled) {
   transform: translateX(2px);
   background: #272935;
   box-shadow: 2px 2px 0 #000;
+}
+
+.fate-upgrade:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+  transform: none;
+}
+
+.fate-table-coin:focus-visible,
+.shop-tab:focus-visible,
+.fate-upgrade:focus-visible,
+.skill-tree-btn:focus-visible {
+  outline: 3px solid #fff2a8;
+  outline-offset: 3px;
 }
 
 .fate-upgrade.is-recommended {
@@ -4652,6 +4716,126 @@ body {
   font-size: clamp(10px, 0.8vw, 15px);
   text-align: right;
   white-space: nowrap;
+}
+
+@media (orientation: landscape) and (max-width: 720px),
+  (orientation: landscape) and (max-height: 420px) {
+  #fate-scene {
+    gap: 4px;
+    padding: 4px;
+    border-width: 4px;
+  }
+
+  .fate-shop-panel {
+    flex-basis: clamp(196px, 36%, 220px);
+    padding: 5px;
+    border-width: 4px;
+  }
+
+  .fate-shop-tabs {
+    flex-basis: 48px;
+    gap: 2px;
+  }
+
+  .fate-shop-tabs .shop-tab {
+    min-width: 44px;
+    min-height: 44px;
+    border-width: 2px;
+  }
+
+  .fate-shop-panel h2 {
+    flex-basis: 22px;
+    font-size: 13px;
+  }
+
+  .fate-shop-list {
+    padding: 3px 2px 3px 0;
+  }
+
+  .fate-upgrade {
+    min-height: 58px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 5px;
+    padding: 6px;
+    margin-bottom: 5px;
+  }
+
+  .fate-upgrade.is-recommended,
+  .fate-upgrade.is-secondary-recommendation {
+    padding-bottom: 22px;
+  }
+
+  .shop-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .upgrade-effect {
+    grid-column: 2;
+    justify-self: end;
+    font-size: 10px;
+  }
+
+  .fate-resource-strip {
+    left: 58px;
+    right: 76px;
+    top: 6px;
+    gap: 4px;
+  }
+
+  .fate-scorebar {
+    left: auto;
+    right: 8px;
+    top: 8px;
+    transform: none;
+    font-size: 18px;
+  }
+
+  .fate-resource {
+    padding: 3px 5px;
+  }
+
+  .fate-resource .resource-label {
+    font-size: 10px;
+  }
+
+  .fate-resource .resource-value {
+    font-size: 12px;
+  }
+
+  .fate-next-goal {
+    left: 58px;
+    top: 55px;
+    width: min(185px, calc(100% - 64px));
+  }
+
+  .fate-next-goal .goal-path {
+    display: none;
+  }
+
+  .fate-result-feed {
+    left: 58px;
+    bottom: 7px;
+    width: min(170px, calc(100% - 70px));
+  }
+
+  .fate-result-feed .fate-result:not(:first-child) {
+    display: none;
+  }
+
+  .fate-bottom-dock {
+    padding-left: 112px;
+    padding-right: 8px;
+  }
+
+  .skill-tree-btn {
+    width: 100%;
+    height: 36px;
+    padding: 0 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
 }
 
 @media (max-aspect-ratio: 16 / 9) {
