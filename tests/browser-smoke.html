@@ -563,7 +563,7 @@
 
               recommended.click();
               await waitFor(
-                () => recommended.getAttribute("aria-selected") === "true",
+                () => recommended.getAttribute("aria-pressed") === "true",
                 "推荐分类激活",
               );
               const recommendedCards = Array.from(
@@ -581,7 +581,7 @@
 
               fateFilter.click();
               await waitFor(
-                () => fateFilter.getAttribute("aria-selected") === "true",
+                () => fateFilter.getAttribute("aria-pressed") === "true",
                 "命运分类激活",
               );
               const fateCards = Array.from(
@@ -601,7 +601,7 @@
 
               autoFilter.click();
               await waitFor(
-                () => autoFilter.getAttribute("aria-selected") === "true",
+                () => autoFilter.getAttribute("aria-pressed") === "true",
                 "自动分类激活",
               );
               const autoCards = Array.from(
@@ -622,7 +622,7 @@
               recommended.click();
               await waitFor(
                 () =>
-                  recommended.getAttribute("aria-selected") === "true" &&
+                  recommended.getAttribute("aria-pressed") === "true" &&
                   doc.getElementById("fate-shop-title")?.textContent === "推荐",
                 "返回推荐分类",
               );
@@ -711,7 +711,7 @@
               return url.search;
             });
 
-            await step("开始远征并完成首个搜索区域", async () => {
+            await step("大地图移动、追踪并交互首个搜索地点", async () => {
               const game = frame.contentWindow.game;
               const button = frame.contentDocument.getElementById(
                 "battle-start-expedition-btn",
@@ -728,6 +728,31 @@
                 return state.phase === "route" ? state : null;
               }, "远征路线生成");
               assert(routeState.routeChoices.length === 2, "首层没有生成两条路线");
+              assert(
+                routeState.world.width > game.gameCore.config.width,
+                "远征世界宽度没有与 Canvas 视口解耦",
+              );
+              assert(
+                frame.contentDocument.getElementById("battle-world-controls"),
+                "未渲染屏幕移动控件",
+              );
+
+              const playerXBefore = routeState.world.player.x;
+              frame.contentDocument.dispatchEvent(new frame.contentWindow.KeyboardEvent("keydown", {
+                key: "d",
+                code: "KeyD",
+                bubbles: true,
+                cancelable: true,
+              }));
+              await new Promise((resolve) => window.setTimeout(resolve, 260));
+              frame.contentDocument.dispatchEvent(new frame.contentWindow.KeyboardEvent("keyup", {
+                key: "d",
+                code: "KeyD",
+                bubbles: true,
+                cancelable: true,
+              }));
+              const movedState = game.combatSystem.getBattleState();
+              assert(movedState.world.player.x > playerXBefore, "按下 D 后角色没有向右行进");
 
               const firstRoute = frame.contentDocument.querySelector(
                 "#battle-route-list [data-route-id]",
@@ -735,8 +760,28 @@
               assert(firstRoute, "未渲染首个路线按钮");
               firstRoute.click();
               await waitFor(
+                () => game.combatSystem.getBattleState().world.navigationTarget?.nodeId === routeState.routeChoices[0].id,
+                "地图目标追踪",
+              );
+
+              const trackedState = game.combatSystem.getBattleState();
+              assert(trackedState.phase === "route", "追踪地点不应直接触发事件");
+              const targetLocation = trackedState.world.locations.find(
+                (location) => location.nodeId === routeState.routeChoices[0].id,
+              );
+              assert(targetLocation, "未找到首个路线对应的大地图地点");
+              const actor = game.playerSystem.player;
+              actor.x = targetLocation.x - actor.width / 2;
+              actor.y = targetLocation.y - actor.height / 2;
+              game.combatSystem.updateWorldAwareness();
+              game.battleSceneController.updateBattleDisplay();
+
+              const interactButton = frame.contentDocument.getElementById("battle-interact-btn");
+              assert(interactButton && !interactButton.disabled, "靠近地点后交互按钮不可用");
+              interactButton.click();
+              await waitFor(
                 () => game.combatSystem.getBattleState().phase === "search",
-                "进入搜索区域",
+                "进入搜索地点",
               );
 
               game.combatSystem.runSystem.random = () => 0.5;
@@ -758,7 +803,7 @@
                 frame.contentDocument.getElementById("battle-bag-display")?.textContent === "1/8",
                 "背包 HUD 未更新",
               );
-              return `phase ${before.phase} → ${after.phase} · depth=${after.depth} · bag=${after.backpackCount}`;
+              return `world=${routeState.world.width}x${routeState.world.height} · moved=${Math.round(movedState.world.player.x - playerXBefore)} · depth=${after.depth} · bag=${after.backpackCount}`;
             });
 
             await step("点击领地导航", async () => {

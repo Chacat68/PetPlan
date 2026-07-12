@@ -6,13 +6,13 @@
  * coordinates primary-scene navigation.
  */
 
-import { getGameCoreInstance } from "./modules/game-core.js?v=extraction-rpg-20260711a";
+import { getGameCoreInstance } from "./modules/game-core.js?v=world-exploration-20260712b";
 import { getResourceSystemInstance } from "./modules/resource-system.js";
-import { getPlayerSystemInstance } from "./modules/player-system.js?v=extraction-rpg-20260711a";
-import { getCombatSystemInstance } from "./modules/combat-system.js?v=extraction-rpg-20260711a";
+import { getPlayerSystemInstance } from "./modules/player-system.js?v=world-exploration-20260712b";
+import { getCombatSystemInstance } from "./modules/combat-system.js?v=world-exploration-20260712b";
 import { getSaveSystemInstance } from "./modules/save-system.js?v=phase-one-20260710b";
 import { getUISystemInstance } from "./modules/ui-system.js";
-import { getPetSystemInstance } from "./modules/pet-system.js?v=tower-defense-20260710b";
+import { getPetSystemInstance } from "./modules/pet-system.js?v=world-exploration-20260712b";
 import { getTerritorySystemInstance } from "./modules/territory-system.js?v=phase-one-20260710b";
 import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
@@ -20,7 +20,7 @@ import { getProgressionSystemInstance } from "./modules/progression-system.js?v=
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
 import { AchievementController } from "./controllers/achievement-controller.js?v=controllers-phase-two-20260711b";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=extraction-rpg-20260711a";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=world-exploration-20260712b";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=controllers-phase-two-20260711b";
 import { PetModalController } from "./controllers/pet-modal-controller.js?v=controllers-phase-two-20260711b";
 import { PlayerModalController } from "./controllers/player-modal-controller.js?v=controllers-phase-two-20260711b";
@@ -342,6 +342,7 @@ export class Game {
       syncHistory: !silent,
     });
     this.fateSceneController.setSceneActive(this.currentScene === "fate");
+    this.battleSceneController?.setSceneActive(this.currentScene === "dungeon");
     const upgradePanel = document.getElementById("upgrade-panel");
 
     if (this.currentScene === "fate") {

@@ -5,6 +5,8 @@
  */
 
 import { ExpeditionRunSystem } from './expedition-run-system.js?v=extraction-rpg-20260711a';
+import { ExpeditionWorldSystem } from './expedition-world-system.js?v=world-exploration-20260712b';
+import { CameraSystem } from './camera-system.js?v=world-exploration-20260712b';
 import { TargetingSystem } from './targeting-system.js?v=tower-defense-20260710b';
 
 let instance = null;
@@ -23,12 +25,23 @@ const PET_ROLE_COLORS = Object.freeze({
 });
 
 export class CombatSystem {
-    constructor({ random = Math.random, runOptions = {} } = {}) {
+    constructor({ random = Math.random, runOptions = {}, worldOptions = {} } = {}) {
         this.mode = 'extractionRpg';
         this.isPaused = true;
         this.random = typeof random === 'function' ? random : Math.random;
         this.targetingSystem = new TargetingSystem();
         this.runSystem = new ExpeditionRunSystem({ random: this.random, ...runOptions });
+        this.worldSystem = new ExpeditionWorldSystem(worldOptions);
+        this.cameraSystem = new CameraSystem({
+            worldWidth: this.worldSystem.width,
+            worldHeight: this.worldSystem.height,
+            viewportWidth: 750,
+            viewportHeight: 900
+        });
+        this.movementInput = { x: 0, y: 0 };
+        this.nearbyLocation = null;
+        this.lastNearbyLocationId = null;
+        this.worldRevision = 0;
 
         this.monsters = [];
         this.bullets = [];
@@ -91,7 +104,10 @@ export class CombatSystem {
             maxMonsters: 32,
             spawnInterval: 460,
             heroEngageRange: 64,
-            skillGuardReduction: 0.42
+            skillGuardReduction: 0.42,
+            heroMoveSpeed: 235,
+            heroAttackRange: 520,
+            petAcquireRange: 430
         };
 
         this.mapWidth = 750;
@@ -171,10 +187,163 @@ export class CombatSystem {
         this.onStateChange = typeof callback === 'function' ? callback : null;
     }
 
+    setViewportSize(width, height) {
+        this.mapWidth = Math.max(1, Math.floor(Number(width) || 1));
+        this.mapHeight = Math.max(1, Math.floor(Number(height) || 1));
+        this.cameraSystem.setViewportSize(this.mapWidth, this.mapHeight);
+        if (this.playerSystem?.player && this.worldSystem.initialized) {
+            const center = this.getHeroCenter();
+            this.cameraSystem.snapTo(center.x, center.y);
+        }
+    }
+
+    getWorldBounds() {
+        return {
+            minX: 18,
+            minY: 18,
+            maxX: this.worldSystem.width - 18,
+            maxY: this.worldSystem.height - 18,
+            width: this.worldSystem.width,
+            height: this.worldSystem.height
+        };
+    }
+
+    canMoveHero() {
+        return Boolean(
+            this.runSystem.active &&
+            ['route', 'combat', 'extraction-ready', 'extracting'].includes(this.runSystem.phase)
+        );
+    }
+
+    setMovementInput(x = 0, y = 0) {
+        const safeX = Number.isFinite(Number(x)) ? Number(x) : 0;
+        const safeY = Number.isFinite(Number(y)) ? Number(y) : 0;
+        const length = Math.hypot(safeX, safeY);
+        this.movementInput = length > 1
+            ? { x: safeX / length, y: safeY / length }
+            : { x: safeX, y: safeY };
+        return { ...this.movementInput };
+    }
+
+    clearMovementInput() {
+        this.movementInput = { x: 0, y: 0 };
+        return { ...this.movementInput };
+    }
+
+    updateHeroMovement(player, deltaTime) {
+        if (!player || this.isPaused || !this.canMoveHero()) {
+            return { moved: false, blockedX: false, blockedY: false };
+        }
+        const length = Math.hypot(this.movementInput.x, this.movementInput.y);
+        if (length <= 0.001) {
+            this.updateWorldAwareness();
+            return { moved: false, blockedX: false, blockedY: false };
+        }
+
+        const safeDelta = Math.max(0, Math.min(Number(deltaTime) || 0, 100));
+        const speed = this.config.heroMoveSpeed + (player.attackSpeed || 1) * 12;
+        const scale = (speed * safeDelta) / 1000;
+        const result = this.worldSystem.moveEntity(
+            player,
+            this.movementInput.x * scale,
+            this.movementInput.y * scale
+        );
+        this.updateWorldAwareness();
+        return result;
+    }
+
+    updateWorldAwareness() {
+        if (!this.playerSystem?.player || !this.worldSystem.initialized) return null;
+        const center = this.getHeroCenter();
+        const nearby = this.worldSystem.updatePlayerPosition(center.x, center.y);
+        const nearbyId = nearby?.id || null;
+        this.nearbyLocation = nearby;
+        if (nearbyId !== this.lastNearbyLocationId) {
+            this.lastNearbyLocationId = nearbyId;
+            this.worldRevision += 1;
+            if (nearby) this.addStatusText(center.x, center.y - 54, `发现：${nearby.name}`, nearby.color || '#ffd167');
+        }
+        return nearby;
+    }
+
+    syncWorldWithRunState() {
+        const run = this.runSystem.getState();
+        this.worldSystem.syncRouteChoices(run.routeChoices);
+        this.worldSystem.setExtractionUnlocked(run.depth >= run.minExtractionDepth);
+        if (run.phase === 'extraction-ready') {
+            this.worldSystem.trackLocation('extraction-beacon');
+        }
+        this.worldRevision += 1;
+        this.updateWorldAwareness();
+        return this.worldSystem.getState(this.getHeroCenter());
+    }
+
+    trackLocation(nodeId) {
+        const result = this.worldSystem.trackLocation(nodeId);
+        if (result.success) {
+            const center = this.getHeroCenter();
+            const distance = this.worldSystem.getDistanceToLocation(result.location.id, center.x, center.y);
+            result.message = `已追踪 ${result.location.name}，距离 ${Math.round(distance)} 米`;
+            this.worldRevision += 1;
+            this.notifyStateChange();
+        }
+        return result;
+    }
+
+    interactWithNearbyLocation() {
+        if (!this.runSystem.active) return { success: false, message: '请先开始远征' };
+        const nearby = this.updateWorldAwareness();
+        if (!nearby) return { success: false, message: '附近没有可交互地点' };
+        if (nearby.kind === 'extraction') {
+            if (!this.runSystem.canExtract()) {
+                return { success: false, message: `至少清理 ${this.runSystem.minExtractionDepth} 个区域后才能撤离` };
+            }
+            return this.requestExtraction();
+        }
+        if (this.runSystem.phase !== 'route') {
+            return { success: false, message: '请先完成当前地点事件' };
+        }
+        return this.chooseRoute(nearby.nodeId, { requireProximity: true });
+    }
+
+    screenToWorld(x, y) {
+        return this.cameraSystem.screenToWorld(x, y);
+    }
+
+    getInteractionState() {
+        const center = this.getHeroCenter();
+        const nearby = this.nearbyLocation;
+        if (!nearby) {
+            const target = this.worldSystem.getState(center).navigationTarget;
+            return {
+                available: false,
+                label: '靠近地点后交互',
+                detail: target ? `追踪 ${target.name} · ${target.distance}m` : 'WASD / 方向键移动',
+                location: null
+            };
+        }
+        const extractionBlocked = nearby.kind === 'extraction' && !this.runSystem.canExtract();
+        const validPhase = nearby.kind === 'extraction'
+            ? ['route', 'extraction-ready'].includes(this.runSystem.phase)
+            : this.runSystem.phase === 'route';
+        return {
+            available: !extractionBlocked && validPhase,
+            label: extractionBlocked
+                ? '撤离信标尚未解锁'
+                : nearby.kind === 'extraction'
+                    ? '启动撤离信标'
+                    : `进入 ${nearby.name}`,
+            detail: extractionBlocked
+                ? `还需清理 ${Math.max(0, this.runSystem.minExtractionDepth - this.runSystem.depth)} 个区域`
+                : '按 E 或点击交互',
+            location: { ...nearby }
+        };
+    }
+
     prepareBattle() {
         if (!this.battleInitialized) this.resetBattle();
         else {
-            if (!this.isCombatActive()) this.placeHeroAtCamp();
+            this.updateWorldAwareness();
             this.notifyStateChange();
         }
         return this.getBattleState();
@@ -182,7 +351,12 @@ export class CombatSystem {
 
     resetBattle() {
         this.clearEncounter();
+        this.petSystem?.resetBattleStates?.();
         this.runSystem.reset();
+        this.worldSystem.reset();
+        this.clearMovementInput();
+        this.nearbyLocation = null;
+        this.lastNearbyLocationId = null;
         this.runMaxHp = this.calculateRunMaxHp();
         this.runHp = this.runMaxHp;
         this.skillCooldowns.clear();
@@ -190,7 +364,7 @@ export class CombatSystem {
         this.lastSettlement = null;
         this.settled = false;
         this.battleInitialized = true;
-        this.placeHeroAtCamp();
+        this.placeHeroAtCamp({ force: true });
         this.notifyStateChange();
         return { success: true, message: '远征终端已就绪' };
     }
@@ -204,12 +378,15 @@ export class CombatSystem {
         if (!result.success) return result;
 
         this.clearEncounter();
+        this.petSystem?.resetBattleStates?.();
         this.runMaxHp = this.calculateRunMaxHp();
         this.runHp = this.runMaxHp;
         this.skillCooldowns.clear();
         this.lastSettlement = null;
         this.settled = false;
-        this.placeHeroAtCamp();
+        this.worldSystem.startRun(this.runSystem.getState().routeChoices);
+        this.placeHeroAtCamp({ force: true });
+        this.syncWorldWithRunState();
         this.addBannerText('远征开始', '#ffd167');
         this.notifyStateChange();
         return result;
@@ -219,10 +396,16 @@ export class CombatSystem {
         return this.startRun();
     }
 
-    chooseRoute(nodeId) {
+    chooseRoute(nodeId, { requireProximity = false } = {}) {
+        if (requireProximity && this.nearbyLocation?.nodeId !== nodeId) {
+            return { success: false, message: '请先走到目标地点附近' };
+        }
         const result = this.runSystem.chooseNode(nodeId);
-        if (result.success && result.encounter) this.beginEncounter(result.encounter);
-        else if (result.success) this.placeHeroAtCamp();
+        if (result.success) {
+            this.worldSystem.engageLocation(nodeId);
+            this.worldRevision += 1;
+            if (result.encounter) this.beginEncounter(result.encounter);
+        }
         this.notifyStateChange();
         return result;
     }
@@ -232,6 +415,10 @@ export class CombatSystem {
             hasPet: Boolean(this.petSystem?.equippedPets?.length)
         });
         if (result.success && result.encounter) this.beginEncounter(result.encounter);
+        else if (result.success) {
+            this.worldSystem.completeActiveLocation();
+            this.syncWorldWithRunState();
+        }
         this.notifyStateChange();
         return result;
     }
@@ -245,7 +432,8 @@ export class CombatSystem {
         if (result.success) {
             const heal = Math.max(1, Math.ceil(this.runMaxHp * result.healRatio));
             this.healHero(heal);
-            this.placeHeroAtCamp();
+            this.worldSystem.completeActiveLocation();
+            this.syncWorldWithRunState();
         }
         this.notifyStateChange();
         return result;
@@ -253,14 +441,22 @@ export class CombatSystem {
 
     leaveCamp() {
         const result = this.runSystem.leaveCamp();
-        if (result.success) this.placeHeroAtCamp();
+        if (result.success) {
+            this.worldSystem.completeActiveLocation();
+            this.syncWorldWithRunState();
+        }
         this.notifyStateChange();
         return result;
     }
 
     requestExtraction() {
+        const nearby = this.updateWorldAwareness();
+        if (this.worldSystem.initialized && nearby?.kind !== 'extraction') {
+            return { success: false, message: '请返回入口撤离信标附近' };
+        }
         const result = this.runSystem.startExtraction();
         if (result.success) {
+            this.worldSystem.activateExtraction();
             this.extractionTimer = result.durationMs;
             this.beginEncounter({ ...result.encounter, durationMs: result.durationMs });
             this.addBannerText('撤离信标启动', '#72d7ff');
@@ -297,7 +493,11 @@ export class CombatSystem {
             return { success: false, message: `${template.skill.name}还需 ${(remaining / 1000).toFixed(1)} 秒` };
         }
 
-        const targets = this.getTargets(this.getHeroCenter(), { strategy: 'nearest', limit: 4 });
+        const targets = this.getTargets(this.getHeroCenter(), {
+            strategy: 'nearest',
+            limit: 4,
+            maxRange: this.config.petAcquireRange
+        });
         const type = template.type || 'default';
         const levelScale = 1 + Math.max(0, (pet.level || 1) - 1) * 0.1;
         const baseDamage = Math.max(
@@ -384,14 +584,15 @@ export class CombatSystem {
         return this.selectTargetAt(x, y);
     }
 
-    selectTargetAt(x, y) {
+    selectTargetAt(x, y, { screenSpace = true } = {}) {
         if (!this.isCombatActive()) return { success: false, message: '' };
+        const point = screenSpace ? this.screenToWorld(x, y) : { x, y };
         const target = this.monsters
             .map(monster => ({
                 monster,
                 distance: Math.hypot(
-                    x - (monster.x + monster.width / 2),
-                    y - (monster.y + monster.height / 2)
+                    point.x - (monster.x + monster.width / 2),
+                    point.y - (monster.y + monster.height / 2)
                 )
             }))
             .filter(item => item.distance <= Math.max(34, item.monster.width))
@@ -402,12 +603,17 @@ export class CombatSystem {
         return { success: true, message: `已锁定 ${target.name}` };
     }
 
+    selectTargetAtWorld(x, y) {
+        return this.selectTargetAt(x, y, { screenSpace: false });
+    }
+
     update(deltaTime) {
         if (!this.battleInitialized) this.resetBattle();
         const safeDelta = Math.max(0, Math.min(deltaTime, 100));
         this.updateSkillCooldowns(safeDelta);
         this.guardTimer = Math.max(0, this.guardTimer - safeDelta);
         this.uiNotifyTimer += safeDelta;
+        this.updateWorldAwareness();
 
         if (this.isCombatActive()) {
             this.updateEncounterSpawns(safeDelta);
@@ -416,7 +622,9 @@ export class CombatSystem {
             this.updateBullets(safeDelta);
 
             if (this.runSystem.phase === 'extracting') {
-                this.extractionTimer = Math.max(0, this.extractionTimer - safeDelta);
+                if (this.isHeroInExtractionZone()) {
+                    this.extractionTimer = Math.max(0, this.extractionTimer - safeDelta);
+                }
                 if (this.extractionTimer <= 0 && !this.settled) this.finishExpedition(true, 'extracted');
             } else if (
                 this.runSystem.phase === 'combat' &&
@@ -430,10 +638,22 @@ export class CombatSystem {
 
         this.updateExplosions(safeDelta);
         this.updateCombatTexts(safeDelta);
+        if (this.playerSystem?.player && this.worldSystem.initialized) {
+            const center = this.getHeroCenter();
+            this.cameraSystem.follow(center.x, center.y, safeDelta);
+        }
         if (this.uiNotifyTimer >= 250) {
             this.uiNotifyTimer %= 250;
             this.notifyStateChange();
         }
+    }
+
+    isHeroInExtractionZone() {
+        const location = this.worldSystem.getLocation('extraction-beacon');
+        if (!location) return false;
+        const hero = this.getHeroCenter();
+        return Math.hypot(hero.x - location.x, hero.y - location.y)
+            <= location.radius + this.worldSystem.interactionRadius;
     }
 
     beginEncounter(spec = {}) {
@@ -448,7 +668,6 @@ export class CombatSystem {
         this.encounterSpawnTimer = 0;
         this.attackTimer = 0;
         this.uiNotifyTimer = 0;
-        this.placeHeroAtCamp();
         this.addBannerText(this.getEncounterTitle(spec.type), spec.boss ? '#ff7043' : '#ffd167');
     }
 
@@ -498,15 +717,24 @@ export class CombatSystem {
         const bossScale = template.isBoss ? 1 + Math.max(0, depth - 5) * 0.08 : 1;
         const size = template.size * (normalizedSpec.elite && !template.isBoss ? 1.14 : 1);
         const maxHp = Math.max(1, Math.floor(template.baseHp * depthScale * threatScale * levelScale * eliteScale * bossScale));
-        const startX = this.mapWidth * (0.82 + this.random() * 0.1);
-        const startY = this.mapHeight * (0.18 + this.random() * 0.64);
+        const activeLocation = this.worldSystem.getLocation(this.worldSystem.activeLocationId);
+        const hero = this.getHeroCenter();
+        const spawnOrigin = activeLocation
+            ? { x: activeLocation.x, y: activeLocation.y }
+            : hero;
+        const spawnPosition = this.worldSystem.findOpenPositionNear(
+            spawnOrigin,
+            260 + this.random() * 170,
+            this.random() * Math.PI * 2,
+            size
+        );
 
         const monster = {
             id: this.nextMonsterId++,
             templateId: template.id,
             name: template.name,
-            x: startX - size / 2,
-            y: startY - size / 2,
+            x: spawnPosition.x,
+            y: spawnPosition.y,
             width: size,
             height: size,
             hp: maxHp,
@@ -549,9 +777,17 @@ export class CombatSystem {
         const origin = this.getEntityCenter(player);
         const limit = Math.max(1, player.multiShot || 1);
         const targets = [];
-        const focus = this.monsters.find(monster => monster.id === this.focusTargetId && monster.hp > 0);
+        const focus = this.monsters.find(monster => {
+            if (monster.id !== this.focusTargetId || monster.hp <= 0) return false;
+            const point = this.getEntityCenter(monster);
+            return Math.hypot(point.x - origin.x, point.y - origin.y) <= this.config.heroAttackRange;
+        });
         if (focus) targets.push(focus);
-        this.getTargets(origin, { strategy: 'nearest', limit: limit + 1 }).forEach(target => {
+        this.getTargets(origin, {
+            strategy: 'nearest',
+            limit: limit + 1,
+            maxRange: this.config.heroAttackRange
+        }).forEach(target => {
             if (!targets.includes(target) && targets.length < limit) targets.push(target);
         });
         targets.forEach(target => this.fireBullet(target));
@@ -612,12 +848,16 @@ export class CombatSystem {
             const dx = hero.x - center.x;
             const dy = hero.y - center.y;
             const distance = Math.hypot(dx, dy);
-            monster.progress = Math.max(0, Math.min(1, 1 - distance / Math.max(1, this.mapWidth)));
+            monster.progress = Math.max(0, Math.min(1, 1 - distance / Math.max(1, this.worldSystem.width)));
             if (distance > monster.engageRange) {
                 const safeDistance = distance || 1;
                 const travel = Math.min(distance - monster.engageRange, monster.speed * (monster.slowFactor || 1) * dt);
-                monster.x += (dx / safeDistance) * travel;
-                monster.y += (dy / safeDistance) * travel;
+                this.worldSystem.moveEntity(
+                    monster,
+                    (dx / safeDistance) * travel,
+                    (dy / safeDistance) * travel,
+                    { padding: 10 }
+                );
                 monster.combatState = 'move';
                 return;
             }
@@ -756,7 +996,8 @@ export class CombatSystem {
         this.encounterQueue = [];
         this.bullets = [];
         this.addBannerText(type === 'boss' ? '核心守卫已击败' : '区域清理完成', '#8dffb5');
-        this.placeHeroAtCamp();
+        this.worldSystem.completeActiveLocation();
+        this.syncWorldWithRunState();
         this.notifyStateChange();
         return result;
     }
@@ -790,6 +1031,8 @@ export class CombatSystem {
         this.encounterQueue = [];
         this.currentEncounter = null;
         this.extractionTimer = 0;
+        this.clearMovementInput();
+        this.worldSystem.completeActiveLocation();
         this.addBannerText(settlement.extracted ? '撤离成功！' : '远征失败', settlement.extracted ? '#72d7ff' : '#ff667d');
         this.notifyStateChange();
         return settlement;
@@ -866,6 +1109,11 @@ export class CombatSystem {
 
     getBattleState() {
         const run = this.runSystem.getState();
+        const heroCenter = this.getHeroCenter();
+        const world = this.worldSystem.getState(heroCenter);
+        const camera = this.cameraSystem.getState();
+        const interaction = this.getInteractionState();
+        const nearExtraction = interaction.location?.kind === 'extraction';
         const pendingRewards = {
             coins: run.pendingRewards.coins + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.coins),
             crystals: run.pendingRewards.crystals + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.crystals),
@@ -900,19 +1148,35 @@ export class CombatSystem {
             currentNode: run.currentNode,
             routeChoices: run.routeChoices,
             lastAction: run.lastAction,
+            world: {
+                ...world,
+                revision: this.worldRevision,
+                player: {
+                    x: heroCenter.x,
+                    y: heroCenter.y,
+                    moving: Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01
+                },
+                camera,
+                canMove: this.canMoveHero()
+            },
+            interaction,
             petSkills: this.getPetSkillsState(),
             extraction: {
                 unlocked: run.depth >= run.minExtractionDepth,
-                canExtract: run.canExtract,
+                canExtract: run.canExtract && nearExtraction,
+                inZone: this.isHeroInExtractionZone(),
                 remainingMs: this.extractionTimer,
                 remainingSeconds: Math.ceil(this.extractionTimer / 1000)
             },
             actions: {
                 canStart: phase === 'briefing' || phase === 'extracted' || phase === 'defeat',
                 canChooseRoute: phase === 'route',
+                canTrackMap: phase === 'route' || phase === 'extraction-ready',
                 canSearch: phase === 'search',
                 canRest: phase === 'camp',
-                canExtract: run.canExtract,
+                canExtract: run.canExtract && nearExtraction,
+                canInteract: interaction.available,
+                canMove: this.canMoveHero(),
                 canHeal: run.active && run.supplies > 0 && this.runHp < this.runMaxHp,
                 canAbandon: run.active,
                 canRestart: !run.active
@@ -927,7 +1191,7 @@ export class CombatSystem {
     getPhaseLabel(phase = this.runSystem.phase) {
         const labels = {
             briefing: '远征整备',
-            route: '选择路线',
+            route: '大地图探索',
             search: '搜索区域',
             camp: '安全休整',
             combat: '遭遇战斗',
@@ -990,8 +1254,8 @@ export class CombatSystem {
         const width = this.playerSystem?.player?.width || 40;
         const height = this.playerSystem?.player?.height || 40;
         return {
-            x: this.mapWidth * 0.18 - width / 2,
-            y: this.mapHeight * 0.58 - height / 2,
+            x: this.worldSystem.spawnPoint.x - width / 2,
+            y: this.worldSystem.spawnPoint.y - height / 2,
             width,
             height
         };
@@ -1002,11 +1266,22 @@ export class CombatSystem {
         return { x: hero.x + hero.width / 2, y: hero.y + hero.height / 2 };
     }
 
-    placeHeroAtCamp() {
+    placeHeroAtCamp({ force = false } = {}) {
         if (!this.playerSystem?.player) return;
+        if (!force && this.runSystem.active && this.worldSystem.initialized) return;
         const position = this.getHeroPosition();
         this.playerSystem.player.x = position.x;
         this.playerSystem.player.y = position.y;
+        if (this.worldSystem.initialized) {
+            this.worldSystem.updatePlayerPosition(
+                position.x + position.width / 2,
+                position.y + position.height / 2
+            );
+        }
+        this.cameraSystem.snapTo(
+            position.x + position.width / 2,
+            position.y + position.height / 2
+        );
     }
 
     placeHeroAtBase() {
@@ -1087,8 +1362,29 @@ export class CombatSystem {
     }
 
     render(ctx) {
+        this.renderExplorationFrame(ctx);
+    }
+
+    renderExplorationFrame(ctx) {
+        this.renderBattlefieldBackground(ctx);
+        const camera = this.cameraSystem.getState();
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+        this.renderWorldTerrain(ctx);
+        this.renderWorldLocations(ctx);
+        this.playerSystem?.render?.(ctx);
         this.renderWorld(ctx);
-        this.renderFloatingTexts(ctx);
+        if (this.petSystem && this.playerSystem?.player) {
+            const player = this.playerSystem.player;
+            this.petSystem.render(
+                ctx,
+                player.x + player.width / 2,
+                player.y + player.height / 2
+            );
+        }
+        this.renderFloatingTexts(ctx, { screenSpace: false });
+        ctx.restore();
+        this.renderScreenOverlay(ctx);
     }
 
     renderBattlefieldBackground(ctx) {
@@ -1101,9 +1397,16 @@ export class CombatSystem {
         gradient.addColorStop(1, threatRatio > 0.6 ? '#3a1d25' : '#211b24');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
+    }
 
-        const tile = Math.max(38, Math.floor(Math.min(width, height) / 10));
-        ctx.strokeStyle = `rgba(123, 215, 255, ${0.06 + (1 - threatRatio) * 0.03})`;
+    renderWorldTerrain(ctx) {
+        const width = this.worldSystem.width;
+        const height = this.worldSystem.height;
+        ctx.fillStyle = '#172522';
+        ctx.fillRect(0, 0, width, height);
+
+        const tile = 96;
+        ctx.strokeStyle = 'rgba(123, 215, 255, 0.045)';
         ctx.lineWidth = 1;
         for (let x = 0; x <= width; x += tile) {
             ctx.beginPath();
@@ -1118,22 +1421,8 @@ export class CombatSystem {
             ctx.stroke();
         }
 
-        ctx.save();
-        ctx.fillStyle = 'rgba(5, 7, 12, 0.42)';
-        ctx.strokeStyle = 'rgba(255, 209, 103, 0.14)';
-        ctx.lineWidth = 3;
-        const roomMargin = Math.min(width, height) * 0.08;
-        ctx.fillRect(roomMargin, height * 0.14, width - roomMargin * 2, height * 0.72);
-        ctx.strokeRect(roomMargin, height * 0.14, width - roomMargin * 2, height * 0.72);
-        ctx.restore();
-
-        if (threatRatio > 0.35) {
-            const danger = ctx.createRadialGradient(width * 0.82, height * 0.46, 0, width * 0.82, height * 0.46, width * 0.5);
-            danger.addColorStop(0, `rgba(255, 71, 87, ${threatRatio * 0.15})`);
-            danger.addColorStop(1, 'rgba(255, 71, 87, 0)');
-            ctx.fillStyle = danger;
-            ctx.fillRect(0, 0, width, height);
-        }
+        this.renderWorldPaths(ctx);
+        this.renderWorldObstacles(ctx);
     }
 
     renderWorld(ctx) {
@@ -1141,12 +1430,273 @@ export class CombatSystem {
         this.monsters.forEach(monster => this.renderMonster(ctx, monster));
         this.bullets.forEach(bullet => this.renderBullet(ctx, bullet));
         this.explosions.forEach(explosion => this.renderExplosion(ctx, explosion));
-        this.renderExtractionProgress(ctx);
-        this.renderPhasePrompt(ctx);
     }
 
-    renderFloatingTexts(ctx) {
-        this.combatTexts.forEach(text => this.renderCombatText(ctx, text));
+    renderFloatingTexts(ctx, { screenSpace = false } = {}) {
+        this.combatTexts
+            .filter(text => Boolean(text.banner) === Boolean(screenSpace))
+            .forEach(text => {
+                if (screenSpace) {
+                    this.renderCombatText(ctx, {
+                        ...text,
+                        x: this.mapWidth / 2,
+                        y: this.mapHeight * 0.25
+                    });
+                } else {
+                    this.renderCombatText(ctx, text);
+                }
+            });
+    }
+
+    renderWorldPaths(ctx) {
+        const locations = Array.from(this.worldSystem.locations.values())
+            .filter(location => location.kind === 'route' && location.state !== 'missed')
+            .sort((a, b) => (a.depth || 0) - (b.depth || 0) || (a.branch || 0) - (b.branch || 0));
+        const depthCenters = new Map();
+        locations.forEach(location => {
+            const depth = location.depth || 0;
+            if (!depthCenters.has(depth)) depthCenters.set(depth, []);
+            depthCenters.get(depth).push(location);
+        });
+        const points = [{ ...this.worldSystem.spawnPoint }];
+        for (const [, group] of Array.from(depthCenters.entries()).sort((a, b) => a[0] - b[0])) {
+            points.push({
+                x: group.reduce((sum, location) => sum + location.x, 0) / group.length,
+                y: group.reduce((sum, location) => sum + location.y, 0) / group.length
+            });
+        }
+        if (points.length < 2) return;
+
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        points.forEach((point, index) => {
+            if (index === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+        });
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.lineWidth = 58;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(92, 72, 55, 0.8)';
+        ctx.lineWidth = 48;
+        ctx.stroke();
+        ctx.setLineDash([12, 18]);
+        ctx.strokeStyle = 'rgba(255, 209, 103, 0.18)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    renderWorldObstacles(ctx) {
+        this.worldSystem.obstacles.forEach(obstacle => {
+            ctx.save();
+            if (obstacle.type === 'water') {
+                ctx.fillStyle = '#183844';
+                ctx.strokeStyle = '#2e6570';
+            } else if (obstacle.type === 'rocks') {
+                ctx.fillStyle = '#343a3d';
+                ctx.strokeStyle = '#5b6265';
+            } else {
+                ctx.fillStyle = '#302725';
+                ctx.strokeStyle = '#705044';
+            }
+            ctx.lineWidth = 4;
+            ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+            for (let x = obstacle.x + 14; x < obstacle.x + obstacle.width; x += 34) {
+                ctx.fillRect(x, obstacle.y + 12, 8, Math.max(8, obstacle.height - 24));
+            }
+            ctx.restore();
+        });
+    }
+
+    renderWorldLocations(ctx) {
+        const pulse = 1 + Math.sin(Date.now() / 260) * 0.08;
+        for (const location of this.worldSystem.locations.values()) {
+            if (location.state === 'missed') continue;
+            const isTarget = location.id === this.worldSystem.navigationTargetId;
+            if (!location.discovered && !isTarget && location.kind !== 'extraction') continue;
+            const isLocked = location.state === 'locked';
+            const isCleared = location.state === 'cleared';
+            const radius = location.radius * (isTarget ? pulse : 1);
+
+            ctx.save();
+            ctx.globalAlpha = isLocked ? 0.38 : isCleared ? 0.45 : 1;
+            if (isTarget && !isLocked) {
+                ctx.strokeStyle = location.color || '#ffd167';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([9, 7]);
+                ctx.beginPath();
+                ctx.arc(location.x, location.y, radius + 22, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            ctx.fillStyle = 'rgba(7, 10, 14, 0.9)';
+            ctx.strokeStyle = isCleared ? '#59616a' : (location.color || '#ffd167');
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(location.x, location.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = isCleared ? '#7f8790' : (location.color || '#ffd167');
+            ctx.font = `bold ${Math.max(22, radius * 0.62)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(isCleared ? '✓' : isLocked ? '×' : (location.icon || '◇'), location.x, location.y);
+
+            if (location.discovered || isTarget || location.kind === 'extraction') {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 14px Arial';
+                ctx.shadowColor = '#000000';
+                ctx.shadowBlur = 4;
+                ctx.fillText(location.name, location.x, location.y + radius + 22);
+            }
+            ctx.restore();
+        }
+    }
+
+    renderScreenOverlay(ctx) {
+        this.renderFogOfWar(ctx);
+        this.renderNavigationGuide(ctx);
+        this.renderMinimap(ctx);
+        this.renderExtractionProgress(ctx);
+        this.renderPhasePrompt(ctx);
+        this.renderFloatingTexts(ctx, { screenSpace: true });
+    }
+
+    renderFogOfWar(ctx) {
+        if (!this.runSystem.active) return;
+        const hero = this.getHeroCenter();
+        const screen = this.cameraSystem.worldToScreen(hero.x, hero.y);
+        const outerRadius = Math.max(this.mapWidth, this.mapHeight) * 0.78;
+        const gradient = ctx.createRadialGradient(
+            screen.x,
+            screen.y,
+            95,
+            screen.x,
+            screen.y,
+            outerRadius
+        );
+        gradient.addColorStop(0, 'rgba(4, 8, 12, 0)');
+        gradient.addColorStop(0.42, 'rgba(4, 8, 12, 0.04)');
+        gradient.addColorStop(0.74, 'rgba(4, 8, 12, 0.24)');
+        gradient.addColorStop(1, 'rgba(4, 8, 12, 0.58)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
+    }
+
+    renderNavigationGuide(ctx) {
+        if (!this.runSystem.active) return;
+        const state = this.worldSystem.getState(this.getHeroCenter());
+        const target = state.navigationTarget;
+        if (!target) return;
+        const screen = this.cameraSystem.worldToScreen(target.x, target.y);
+        const margin = 54;
+        const visible = (
+            screen.x >= margin && screen.x <= this.mapWidth - margin &&
+            screen.y >= margin && screen.y <= this.mapHeight - margin
+        );
+        if (visible) return;
+
+        const centerX = this.mapWidth / 2;
+        const centerY = this.mapHeight / 2;
+        const angle = Math.atan2(screen.y - centerY, screen.x - centerX);
+        const radiusX = Math.max(20, this.mapWidth / 2 - margin);
+        const radiusY = Math.max(20, this.mapHeight / 2 - margin);
+        const scale = Math.min(
+            Math.abs(radiusX / (Math.cos(angle) || 0.0001)),
+            Math.abs(radiusY / (Math.sin(angle) || 0.0001))
+        );
+        const x = centerX + Math.cos(angle) * scale;
+        const y = centerY + Math.sin(angle) * scale;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.fillStyle = target.color || '#ffd167';
+        ctx.beginPath();
+        ctx.moveTo(18, 0);
+        ctx.lineTo(-12, -11);
+        ctx.lineTo(-7, 0);
+        ctx.lineTo(-12, 11);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    renderMinimap(ctx) {
+        if (!this.worldSystem.initialized) return;
+        const width = Math.min(190, Math.max(126, this.mapWidth * 0.19));
+        const height = width * 0.62;
+        const x = this.mapWidth - width - 14;
+        const y = 112;
+        const scaleX = width / this.worldSystem.width;
+        const scaleY = height / this.worldSystem.height;
+        ctx.save();
+        ctx.fillStyle = 'rgba(5, 7, 12, 0.86)';
+        ctx.strokeStyle = '#72d7ff';
+        ctx.lineWidth = 2;
+        ctx.fillRect(x - 6, y - 22, width + 12, height + 30);
+        ctx.strokeRect(x - 6, y - 22, width + 12, height + 30);
+        ctx.fillStyle = '#dff7ff';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`探索 ${this.worldSystem.getExplorationPercent().toFixed(0)}%`, x, y - 7);
+        ctx.fillStyle = '#0b1517';
+        ctx.fillRect(x, y, width, height);
+
+        ctx.fillStyle = '#17302d';
+        this.worldSystem.revealedCells.forEach(cell => {
+            const [column, row] = cell.split(',').map(Number);
+            const cellX = column * this.worldSystem.cellSize;
+            const cellY = row * this.worldSystem.cellSize;
+            ctx.fillRect(
+                x + cellX * scaleX,
+                y + cellY * scaleY,
+                Math.min(width - cellX * scaleX, this.worldSystem.cellSize * scaleX + 0.7),
+                Math.min(height - cellY * scaleY, this.worldSystem.cellSize * scaleY + 0.7)
+            );
+        });
+
+        this.worldSystem.obstacles.forEach(obstacle => {
+            if (!this.worldSystem.isAreaRevealed(obstacle)) return;
+            ctx.fillStyle = obstacle.type === 'water' ? '#285a68' : '#4b4542';
+            ctx.fillRect(
+                x + obstacle.x * scaleX,
+                y + obstacle.y * scaleY,
+                Math.max(2, obstacle.width * scaleX),
+                Math.max(2, obstacle.height * scaleY)
+            );
+        });
+        for (const location of this.worldSystem.locations.values()) {
+            if (location.state === 'missed') continue;
+            const isTarget = location.id === this.worldSystem.navigationTargetId;
+            if (!location.discovered && !isTarget && location.kind !== 'extraction') continue;
+            ctx.fillStyle = location.state === 'locked'
+                ? '#5b6268'
+                : location.state === 'cleared'
+                    ? '#748078'
+                    : (location.color || '#ffd167');
+            ctx.beginPath();
+            ctx.arc(x + location.x * scaleX, y + location.y * scaleY, location.kind === 'extraction' ? 4 : 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        const hero = this.getHeroCenter();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(x + hero.x * scaleX, y + hero.y * scaleY, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        const camera = this.cameraSystem.getState();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(
+            x + camera.x * scaleX,
+            y + camera.y * scaleY,
+            Math.min(width, camera.width * scaleX),
+            Math.min(height, camera.height * scaleY)
+        );
+        ctx.restore();
     }
 
     renderFocusTarget(ctx) {
@@ -1279,18 +1829,23 @@ export class CombatSystem {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(`撤离倒计时 ${state.extraction.remainingSeconds} 秒`, this.mapWidth / 2, y - 7);
+        ctx.fillText(
+            state.extraction.inZone
+                ? `撤离倒计时 ${state.extraction.remainingSeconds} 秒`
+                : `离开信标范围 · 倒计时暂停 (${state.extraction.remainingSeconds} 秒)`,
+            this.mapWidth / 2,
+            y - 7
+        );
         ctx.restore();
     }
 
     renderPhasePrompt(ctx) {
-        if (this.isCombatActive()) return;
+        if (this.isCombatActive() || this.runSystem.phase === 'route') return;
         const messages = {
-            briefing: '开始远征：搜索物资，击败敌人，并选择合适时机撤离',
-            route: this.runSystem.canExtract() ? '继续深入，或现在撤离带走战利品' : '在右侧终端选择下一处区域',
+            briefing: '开始远征：用 WASD / 方向键探索大地图，靠近地点后按 E 交互',
             search: '选择搜索方式：收益越高，伏击与威胁也越高',
             camp: '安全屋可以恢复生命并降低威胁',
-            'extraction-ready': '已锁定撤离点，启动信标并守住倒计时',
+            'extraction-ready': '核心区域已清理，返回地图西侧入口启动撤离信标',
             extracted: '撤离成功，奖励已经结算',
             defeat: '远征失败，点击“再次远征”重新整备'
         };

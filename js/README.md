@@ -6,12 +6,14 @@
 
 | 模块 | 责任 |
 | --- | --- |
-| `game-core.js` | Canvas 游戏循环、远征画面、自动保存计时 |
+| `game-core.js` | Canvas 游戏循环、远征世界画面、自动保存计时 |
 | `fate-coin-system.js` | 命运资源、自动结算、升级成本 |
 | `player-system.js` | 主角属性、升级与战力 |
 | `pet-system.js` | 宠物模板、解锁、编队、成长 |
-| `expedition-run-system.js` | 路线、搜索、威胁、补给、背包与撤离规则 |
-| `combat-system.js` | 远征遭遇、怪物、主动技能与奖励结算协调 |
+| `expedition-world-system.js` | 单局大地图、地点布置、障碍碰撞、迷雾发现、追踪与交互距离 |
+| `camera-system.js` | 大地图跟随相机，以及屏幕坐标与世界坐标转换 |
+| `expedition-run-system.js` | 地点事件、搜索、威胁、补给、背包与撤离结算规则 |
+| `combat-system.js` | 玩家移动、世界状态、自动近距战斗、主动技能与奖励结算协调 |
 | `territory-system.js` | 地块、建筑、循环进度、产出 |
 | `resource-system.js` | 金币、红宝石、水晶 |
 | `save-system.js` | 存档槽位和导入导出 |
@@ -24,7 +26,7 @@
 | 控制器 | 责任 |
 | --- | --- |
 | `achievement-controller.js` | 成就/任务模态与奖励领取 |
-| `battle-scene-controller.js` | 路线、搜索、补给、撤离、技能交互与结算反馈 |
+| `battle-scene-controller.js` | 键盘与屏幕方向输入、地点追踪、就近交互、补给、技能、撤离与结算反馈 |
 | `settings-controller.js` | 设置模态、显示设置与快捷存档/读档 |
 | `player-modal-controller.js` | 玩家属性展示与升级交互 |
 | `pet-modal-controller.js` | 宠物编队、背包、图鉴与解锁交互 |
@@ -45,6 +47,8 @@ main.js 获取唯一系统实例
 ```
 
 控制器不自行创建玩法系统，因此各系统实例和槽位存档仍全局唯一。长驻监听只绑定一次，并在重绑或销毁前通过 `destroy()` 移除；命运场景的助手波次、硬币翻面等计时器也在 `destroy()` 中清理。动态模态在 `close()` 时移除节点及其监听。
+
+远征移动采用持续输入：控制器把 WASD、方向键或屏幕方向键归一为移动向量，`CombatSystem` 驱动角色并更新世界感知，`ExpeditionWorldSystem` 负责边界、障碍、地点发现和交互半径，`CameraSystem` 只负责视口跟随与坐标转换。点击地图地点只更新追踪目标，不提供自动寻路；真正进入地点必须靠近后按 `E` 或点击“交互”。撤离必须回到入口信标附近启动，撤离计时仅在角色位于信标范围内时递减。
 
 ## 扩展规则
 

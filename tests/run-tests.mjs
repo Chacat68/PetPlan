@@ -12,7 +12,9 @@ const controllerFiles = readdirSync(
 const sourceFiles = [
   "js/main.js",
   "js/modules/combat-system.js",
+  "js/modules/camera-system.js",
   "js/modules/expedition-run-system.js",
+  "js/modules/expedition-world-system.js",
   "js/modules/fate-coin-system.js",
   "js/modules/fate-shop-rules.js",
   "js/modules/game-core.js",
@@ -26,6 +28,7 @@ const testFiles = [
   "tests/core-logic.test.mjs",
   "tests/phase-one-smoke.mjs",
   "tests/extraction-rpg-smoke.mjs",
+  "tests/world-exploration-smoke.mjs",
 ];
 
 for (const sourceFile of sourceFiles) {

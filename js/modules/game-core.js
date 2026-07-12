@@ -72,8 +72,12 @@ export class GameCore {
 
     // 更新战斗系统的地图尺寸
     if (this.systems.combat) {
-      this.systems.combat.mapWidth = containerWidth;
-      this.systems.combat.mapHeight = containerHeight;
+      if (typeof this.systems.combat.setViewportSize === "function") {
+        this.systems.combat.setViewportSize(containerWidth, containerHeight);
+      } else {
+        this.systems.combat.mapWidth = containerWidth;
+        this.systems.combat.mapHeight = containerHeight;
+      }
     }
 
     console.log(
@@ -87,8 +91,12 @@ export class GameCore {
   setSystems(systems) {
     this.systems = systems;
     if (this.systems.combat) {
-      this.systems.combat.mapWidth = this.config.width;
-      this.systems.combat.mapHeight = this.config.height;
+      if (typeof this.systems.combat.setViewportSize === "function") {
+        this.systems.combat.setViewportSize(this.config.width, this.config.height);
+      } else {
+        this.systems.combat.mapWidth = this.config.width;
+        this.systems.combat.mapHeight = this.config.height;
+      }
     }
   }
 
@@ -225,6 +233,14 @@ export class GameCore {
 
     // 清空画布
     ctx.clearRect(0, 0, this.config.width, this.config.height);
+
+    if (
+      this.systems.combat?.mode === "extractionRpg" &&
+      typeof this.systems.combat.renderExplorationFrame === "function"
+    ) {
+      this.systems.combat.renderExplorationFrame(ctx);
+      return;
+    }
 
     // 绘制背景
     this.renderBackground(ctx);
@@ -446,12 +462,16 @@ export class GameCore {
 
         // 更新战斗系统的地图尺寸
         if (this.systems.combat) {
-          this.systems.combat.mapWidth = width;
-          this.systems.combat.mapHeight = height;
+          if (typeof this.systems.combat.setViewportSize === "function") {
+            this.systems.combat.setViewportSize(width, height);
+          } else {
+            this.systems.combat.mapWidth = width;
+            this.systems.combat.mapHeight = height;
+          }
         }
 
         // 更新玩家位置以适应新分辨率
-        if (this.systems.player) {
+        if (this.systems.player && this.systems.combat?.mode !== "extractionRpg") {
           const player = this.systems.player.player;
           // 玩家位置保持在合理范围内
           const minPlayerX = Math.min(Math.max(width * 0.13, 140), width * 0.24);

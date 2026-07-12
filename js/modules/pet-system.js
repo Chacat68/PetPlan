@@ -423,6 +423,10 @@ export class PetSystem {
         return this.petBattleStates.get(instanceId);
     }
 
+    resetBattleStates() {
+        this.petBattleStates.clear();
+    }
+
     getIdlePosition(playerX, playerY, index) {
         const angle = (index * 120 + this.elapsedTime * 0.02) * Math.PI / 180;
         const radius = 58;
@@ -444,7 +448,13 @@ export class PetSystem {
 
         if (state.cooldown <= 0) {
             const target = typeof this.combatSystem.acquireTarget === 'function'
-                ? this.combatSystem.acquireTarget({ x: state.x, y: state.y }, { strategy: 'nearest' })
+                ? this.combatSystem.acquireTarget(
+                    { x: state.x, y: state.y },
+                    {
+                        strategy: 'nearest',
+                        maxRange: this.combatSystem.config?.petAcquireRange || 430
+                    }
+                )
                 : this.combatSystem.getNearestMonster(state.x, state.y);
             if (target) {
                 this.startPetCharge(state, target);

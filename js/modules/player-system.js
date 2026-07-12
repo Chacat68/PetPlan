@@ -289,6 +289,15 @@ export class PlayerSystem {
             return;
         }
 
+        if (
+            this.combatSystem.mode === 'extractionRpg' &&
+            typeof this.combatSystem.updateHeroMovement === 'function'
+        ) {
+            const movement = this.combatSystem.updateHeroMovement(this.player, deltaTime);
+            this.setCombatState(movement.moved ? 'move' : 'idle');
+            return;
+        }
+
         if (this.combatSystem.mode === 'towerDefense') {
             const position = this.combatSystem.getHeroPosition?.();
             if (position) {

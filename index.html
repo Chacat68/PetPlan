@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=extraction-rpg-20260711a" />
+    <link rel="stylesheet" href="css/style.css?v=world-exploration-20260712b" />
   </head>
   <body>
     <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
@@ -46,7 +46,7 @@
               </div>
 
               <div class="extraction-run-status" aria-live="polite">
-                <span>区域 <b id="battle-depth-display">0/8</b></span>
+                <span>探索 <b id="battle-depth-display">0%</b></span>
                 <span>生命 <b id="battle-hp-display">--/--</b></span>
                 <span>威胁 <b id="battle-threat-display">0%</b></span>
                 <span>背包 <b id="battle-bag-display">0/8</b></span>
@@ -60,7 +60,22 @@
               <div class="battle-event-feed" id="battle-event-feed" aria-live="polite">
                 准备好后开始远征。撤离前获得的战利品都只是暂存。
               </div>
+              <div class="battle-map-location" id="battle-location-display">自由探索</div>
+              <output class="battle-nearby-prompt" id="battle-nearby-prompt" aria-live="polite" hidden></output>
               <div class="battle-skill-dock" id="battle-skill-dock" aria-label="宠物主动技能"></div>
+              <div class="battle-world-controls" id="battle-world-controls" hidden>
+                <div class="battle-move-pad" aria-label="角色移动方向">
+                  <button type="button" class="battle-move-btn move-up" data-move-direction="up" aria-label="向上移动" aria-pressed="false">▲</button>
+                  <button type="button" class="battle-move-btn move-left" data-move-direction="left" aria-label="向左移动" aria-pressed="false">◀</button>
+                  <span class="battle-move-center" aria-hidden="true">＋</span>
+                  <button type="button" class="battle-move-btn move-right" data-move-direction="right" aria-label="向右移动" aria-pressed="false">▶</button>
+                  <button type="button" class="battle-move-btn move-down" data-move-direction="down" aria-label="向下移动" aria-pressed="false">▼</button>
+                </div>
+                <button type="button" class="battle-interact-btn" id="battle-interact-btn" disabled>
+                  <strong id="battle-interact-label">靠近地点后交互</strong>
+                  <span id="battle-interact-detail">WASD / 方向键移动</span>
+                </button>
+              </div>
             </div>
           </section>
 
@@ -88,7 +103,7 @@
             </section>
 
             <section class="expedition-route-panel" id="battle-route-panel" hidden>
-              <span class="expedition-section-title">选择下一处区域</span>
+              <span class="expedition-section-title">地图目标 · 点击追踪</span>
               <div class="expedition-route-list" id="battle-route-list"></div>
             </section>
 
@@ -624,7 +639,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=extraction-rpg-20260711a";
+        var moduleSrc = "js/main.js?v=world-exploration-20260712b";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

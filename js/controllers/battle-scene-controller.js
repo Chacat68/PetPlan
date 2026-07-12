@@ -20,6 +20,9 @@ export class BattleSceneController {
     this.getCurrentScene = getCurrentScene;
     this.lastSettlementKey = null;
     this.abandonArmedUntil = 0;
+    this.pressedMovementKeys = new Set();
+    this.pointerDirections = new Map();
+    this.lastWorldRevision = -1;
     this.abortController = null;
   }
 
@@ -34,6 +37,7 @@ export class BattleSceneController {
       ["battle-leave-camp-btn", () => this.combatSystem.leaveCamp()],
       ["battle-use-supply-btn", () => this.combatSystem.useSupply()],
       ["battle-extract-btn", () => this.combatSystem.requestExtraction()],
+      ["battle-interact-btn", () => this.combatSystem.interactWithNearbyLocation()],
       ["battle-restart-btn", () => this.combatSystem.startRun()],
       ["battle-abandon-btn", () => this.handleAbandon()],
     ];
@@ -56,7 +60,7 @@ export class BattleSceneController {
     document.getElementById("battle-route-list")?.addEventListener("click", (event) => {
       const button = event.target.closest("[data-route-id]");
       if (!button) return;
-      this.handleBattleActionResult(this.combatSystem.chooseRoute(button.dataset.routeId));
+      this.handleBattleActionResult(this.combatSystem.trackLocation(button.dataset.routeId));
     }, { signal });
 
     document.getElementById("battle-skill-dock")?.addEventListener("click", (event) => {
@@ -74,9 +78,113 @@ export class BattleSceneController {
       const result = this.combatSystem.selectTargetAt(x, y);
       this.handleBattleActionResult(result, { quietFailure: true });
     }, { signal });
+
+    this.bindMovementControls(signal);
+  }
+
+  bindMovementControls(signal) {
+    const movementCodes = new Set([
+      "KeyW", "ArrowUp", "KeyS", "ArrowDown",
+      "KeyA", "ArrowLeft", "KeyD", "ArrowRight",
+    ]);
+
+    window.addEventListener("keydown", (event) => {
+      if (this.getCurrentScene() !== "dungeon") return;
+      if (this.hasOpenModal()) {
+        this.clearMovementInput();
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable
+      ) return;
+
+      if (movementCodes.has(event.code)) {
+        event.preventDefault();
+        this.pressedMovementKeys.add(event.code);
+        this.applyMovementInput();
+        return;
+      }
+      if (event.code === "KeyE" && !event.repeat) {
+        event.preventDefault();
+        this.handleBattleActionResult(this.combatSystem.interactWithNearbyLocation());
+      }
+    }, { signal });
+
+    window.addEventListener("keyup", (event) => {
+      if (!movementCodes.has(event.code)) return;
+      this.pressedMovementKeys.delete(event.code);
+      this.applyMovementInput();
+    }, { signal });
+
+    window.addEventListener("blur", () => this.clearMovementInput(), { signal });
+    document.addEventListener("focusin", (event) => {
+      if (event.target?.closest?.('[role="dialog"][aria-modal="true"]')) {
+        this.clearMovementInput();
+      }
+    }, { signal });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) this.clearMovementInput();
+    }, { signal });
+
+    document.querySelectorAll("[data-move-direction]").forEach((button) => {
+      const release = (event) => {
+        this.pointerDirections.delete(event.pointerId);
+        this.applyMovementInput();
+      };
+      button.addEventListener("pointerdown", (event) => {
+        if (this.getCurrentScene() !== "dungeon") return;
+        event.preventDefault();
+        try { button.setPointerCapture(event.pointerId); } catch (_) {}
+        this.pointerDirections.set(event.pointerId, button.dataset.moveDirection);
+        button.setAttribute("aria-pressed", "true");
+        this.applyMovementInput();
+      }, { signal });
+      ["pointerup", "pointercancel", "lostpointercapture"].forEach((type) => {
+        button.addEventListener(type, (event) => {
+          release(event);
+          if (![...this.pointerDirections.values()].includes(button.dataset.moveDirection)) {
+            button.setAttribute("aria-pressed", "false");
+          }
+        }, { signal });
+      });
+    });
+  }
+
+  applyMovementInput() {
+    let x = 0;
+    let y = 0;
+    const directions = new Set(this.pointerDirections.values());
+    if (this.pressedMovementKeys.has("KeyA") || this.pressedMovementKeys.has("ArrowLeft") || directions.has("left")) x -= 1;
+    if (this.pressedMovementKeys.has("KeyD") || this.pressedMovementKeys.has("ArrowRight") || directions.has("right")) x += 1;
+    if (this.pressedMovementKeys.has("KeyW") || this.pressedMovementKeys.has("ArrowUp") || directions.has("up")) y -= 1;
+    if (this.pressedMovementKeys.has("KeyS") || this.pressedMovementKeys.has("ArrowDown") || directions.has("down")) y += 1;
+    this.combatSystem.setMovementInput(x, y);
+  }
+
+  hasOpenModal() {
+    return Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]'))
+      .some((dialog) => dialog.getClientRects().length > 0);
+  }
+
+  clearMovementInput() {
+    this.pressedMovementKeys.clear();
+    this.pointerDirections.clear();
+    document.querySelectorAll("[data-move-direction]").forEach((button) => {
+      button.setAttribute("aria-pressed", "false");
+    });
+    this.combatSystem?.clearMovementInput?.();
+  }
+
+  setSceneActive(active) {
+    if (!active) this.clearMovementInput();
   }
 
   destroy() {
+    this.clearMovementInput();
     this.abortController?.abort();
     this.abortController = null;
   }
@@ -120,7 +228,7 @@ export class BattleSceneController {
     );
 
     setText("battle-phase-badge", state.phaseLabel);
-    setText("battle-depth-display", `${state.depth}/${state.maxDepth}`);
+    setText("battle-depth-display", `${state.world.explorationPercent}%`);
     setText("battle-hp-display", `${state.hp}/${state.maxHp}`);
     setText("battle-threat-display", `${state.threat}%`);
     setText("battle-bag-display", `${state.backpackCount}/${state.backpackCapacity}`);
@@ -131,16 +239,34 @@ export class BattleSceneController {
     setText("battle-reward-coins", formatNumber(state.pendingValue));
     setText("battle-supplies-display", `补给 ${state.supplies}`);
     setText("battle-event-feed", state.lastAction);
+    setText(
+      "battle-location-display",
+      state.world.navigationTarget
+        ? `${state.world.navigationTarget.name} · ${state.world.navigationTarget.distance}m`
+        : "自由探索"
+    );
+    setText("battle-interact-label", state.interaction.label);
+    setText("battle-interact-detail", state.interaction.detail);
+    setText(
+      "battle-nearby-prompt",
+      state.interaction.location ? `${state.interaction.label} · E 交互` : ""
+    );
+
+    const battleScene = document.getElementById("battle-scene");
+    if (battleScene) {
+      battleScene.dataset.phase = state.phase;
+      battleScene.dataset.moving = state.world.player.moving ? "true" : "false";
+    }
 
     const status = document.querySelector(".extraction-run-status");
     if (status) status.dataset.threat = state.threat >= 70 ? "high" : state.threat >= 40 ? "medium" : "low";
 
     this.renderCurrentRoom(state);
-    this.renderRouteChoices(state.routeChoices);
+    this.renderRouteChoices(state.routeChoices, state.world, state);
     this.renderLoot(state.backpack);
     this.renderPetSkills(state.petSkills, state.isWaveActive);
 
-    setHidden("battle-route-panel", !state.actions.canChooseRoute);
+    setHidden("battle-route-panel", !state.actions.canTrackMap);
     setHidden("battle-search-actions", !state.actions.canSearch);
     setHidden("battle-camp-actions", !state.actions.canRest);
     setHidden("battle-use-supply-btn", !state.actions.canHeal);
@@ -148,6 +274,8 @@ export class BattleSceneController {
     setHidden("battle-abandon-btn", !state.actions.canAbandon);
     setHidden("battle-restart-btn", !(state.phase === "extracted" || state.phase === "defeat"));
     setHidden("battle-start-expedition-btn", state.phase !== "briefing");
+    setHidden("battle-world-controls", !state.actions.canAbandon);
+    setHidden("battle-nearby-prompt", !state.interaction.location);
 
     const startButton = document.getElementById("battle-start-expedition-btn");
     if (startButton) startButton.disabled = !state.actions.canStart;
@@ -155,6 +283,11 @@ export class BattleSceneController {
     if (healButton) healButton.disabled = !state.actions.canHeal;
     const extractButton = document.getElementById("battle-extract-btn");
     if (extractButton) extractButton.disabled = !state.actions.canExtract;
+    const interactButton = document.getElementById("battle-interact-btn");
+    if (interactButton) interactButton.disabled = !state.actions.canInteract;
+    document.querySelectorAll("[data-move-direction]").forEach((button) => {
+      button.disabled = !state.actions.canMove;
+    });
     setText(
       "battle-extract-label",
       state.threat >= 70 ? "高危守点" : state.depth >= state.maxDepth ? "最终撤离" : "带走战利品"
@@ -181,8 +314,15 @@ export class BattleSceneController {
 
     const summaries = {
       briefing: ["行动简报", "未知禁区", "撤离后才会结算全部收益", "选择路线，搜索物资，击败阻拦者，并判断何时收手。"],
-      route: ["路线规划", "下一处区域", state.extraction.unlocked ? "撤离点已解锁" : "继续深入以定位撤离点", "不同区域的风险与收益不同；当前阶段不会遭到攻击。"],
-      "extraction-ready": ["最终目标", "撤离信标", "可以启动撤离", "启动后需要守住倒计时。高威胁会带来更多追兵。"],
+      route: [
+        "大地图探索",
+        state.interaction.location?.name || state.world.navigationTarget?.name || "荒野行进",
+        state.interaction.location ? "已进入交互范围" : state.extraction.unlocked ? "入口撤离点已解锁" : "继续探索以定位撤离点",
+        state.interaction.location
+          ? state.interaction.location.description
+          : "使用 WASD、方向键或屏幕方向键移动；右侧地点卡用于切换追踪目标。"
+      ],
+      "extraction-ready": ["最终目标", "返回入口撤离信标", "向地图西侧返程", "回到出生点附近按 E 启动信标；撤离时离开信标范围会暂停倒计时。"],
       extracted: ["远征结算", "撤离成功", "战利品已入库", "本局携带的金币、水晶和经验已经发放。"],
       defeat: ["远征结算", "撤离失败", "背包战利品已遗失", "保留少量战斗收益，整备后可以再次尝试。"],
     };
@@ -193,14 +333,17 @@ export class BattleSceneController {
     setText("battle-room-desc", summary[3]);
   }
 
-  renderRouteChoices(choices = []) {
+  renderRouteChoices(choices = [], world = {}, state = {}) {
     const list = document.getElementById("battle-route-list");
     if (!list) return;
     const buttons = choices.map((node) => {
+      const location = world.locations?.find((item) => item.nodeId === node.id);
+      const isTracking = world.navigationTarget?.nodeId === node.id;
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `expedition-route-choice route-${node.type}`;
+      button.className = `expedition-route-choice route-${node.type}${isTracking ? " tracking" : ""}`;
       button.dataset.routeId = node.id;
+      button.setAttribute("aria-pressed", isTracking ? "true" : "false");
 
       const icon = document.createElement("span");
       icon.className = "route-choice-icon";
@@ -210,11 +353,40 @@ export class BattleSceneController {
       const name = document.createElement("strong");
       name.textContent = node.name;
       const danger = document.createElement("small");
-      danger.textContent = node.danger;
+      const distance = location
+        ? Math.round(Math.hypot(location.x - world.player.x, location.y - world.player.y))
+        : null;
+      danger.textContent = `${node.danger}${distance === null ? "" : ` · ${distance}m`} · ${isTracking ? "追踪中" : "点击追踪"}`;
       copy.append(name, danger);
       button.append(icon, copy);
       return button;
     });
+    const extraction = world.locations?.find((location) => location.kind === "extraction");
+    if (state.extraction?.unlocked && extraction) {
+      const isTracking = world.navigationTarget?.id === extraction.id;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `expedition-route-choice route-extraction${isTracking ? " tracking" : ""}`;
+      button.dataset.routeId = extraction.id;
+      button.setAttribute("aria-pressed", isTracking ? "true" : "false");
+
+      const icon = document.createElement("span");
+      icon.className = "route-choice-icon";
+      icon.textContent = extraction.icon || "⇥";
+      const copy = document.createElement("span");
+      copy.className = "route-choice-copy";
+      const name = document.createElement("strong");
+      name.textContent = extraction.name;
+      const detail = document.createElement("small");
+      const distance = Math.round(Math.hypot(
+        extraction.x - world.player.x,
+        extraction.y - world.player.y
+      ));
+      detail.textContent = `撤离 · ${distance}m · ${isTracking ? "追踪中" : "点击追踪"}`;
+      copy.append(name, detail);
+      button.append(icon, copy);
+      buttons.push(button);
+    }
     list.replaceChildren(...buttons);
   }
 
@@ -279,15 +451,19 @@ export class BattleSceneController {
         : `本局结束：保留 ${state.settlement.coins} 金币和 ${state.settlement.exp} 经验，遗失 ${state.settlement.lootLost} 件战利品。`;
     }
     const tips = {
-      briefing: "每局从满生命和 2 份补给开始。撤离前，背包内收益都可能遗失。",
-      route: state.extraction.canExtract
-        ? "撤离点已解锁：可以继续深入博取高价值战利品，也可以现在收手。"
-        : `再清理 ${Math.max(0, 3 - state.depth)} 个区域即可定位撤离点。`,
+      briefing: "开始后用 WASD、方向键或屏幕方向键探索 3000×1900 的远征地图。",
+      route: state.interaction.location
+        ? `${state.interaction.label}：按 E 或点击右下角交互键。`
+        : state.extraction.unlocked
+          ? "入口撤离信标已解锁；可继续深入，也可沿地图返回西侧入口。"
+          : `探索地图并清理地点；再完成 ${Math.max(0, 3 - state.depth)} 个区域即可解锁撤离信标。`,
       search: "快速搜索风险最低；仔细搜刮收益更高；宠物侦察需要上阵宠物。",
       camp: "安全屋会恢复 34% 生命、降低威胁并补充 1 份补给。",
-      combat: "主角与宠物会自动攻击。点击敌人可锁定目标，底部按钮释放宠物技能。",
-      extracting: `守住信标 ${state.extraction.remainingSeconds} 秒。倒计时结束即成功撤离。`,
-      "extraction-ready": "最终区域已经清理，启动信标完成本局撤离。",
+      combat: "自由移动躲避敌人；主角和宠物会自动攻击附近目标，点击敌人可优先锁定。",
+      extracting: state.extraction.inZone
+        ? `留在信标范围内守住 ${state.extraction.remainingSeconds} 秒。`
+        : `已离开信标范围，倒计时暂停在 ${state.extraction.remainingSeconds} 秒。`,
+      "extraction-ready": "最终区域已经清理，返回地图西侧入口启动撤离信标。",
     };
     return tips[state.phase] || state.lastAction;
   }

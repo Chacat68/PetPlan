@@ -2853,7 +2853,7 @@ body {
   position: absolute;
   left: clamp(88px, 7vw, 132px);
   right: clamp(10px, 1vw, 18px);
-  bottom: clamp(72px, 6.2vw, 112px);
+  bottom: clamp(150px, 11vw, 190px);
   z-index: 5;
   padding: clamp(6px, 0.55vw, 10px) clamp(8px, 0.75vw, 14px);
   border-left: 3px solid #72d7ff;
@@ -3023,6 +3023,10 @@ body {
   border-color: #4f9b72;
 }
 
+.expedition-route-choice.route-extraction {
+  border-color: #3f94aa;
+}
+
 .route-choice-icon {
   display: grid;
   place-items: center;
@@ -3144,6 +3148,210 @@ body {
   cursor: not-allowed;
   transform: none;
   filter: grayscale(0.4);
+}
+
+/* 大地图探索操控层 */
+.battle-arena-surface,
+#battle-scene #gameCanvas {
+  touch-action: none;
+  user-select: none;
+}
+
+.battle-map-location {
+  position: absolute;
+  top: clamp(230px, 19vw, 280px);
+  right: clamp(10px, 1vw, 18px);
+  z-index: 6;
+  max-width: clamp(130px, 18vw, 220px);
+  padding: 5px 9px;
+  overflow: hidden;
+  border: 1px solid rgba(114, 215, 255, 0.42);
+  border-radius: 4px;
+  background: rgba(5, 7, 12, 0.76);
+  color: #dff7ff;
+  font-size: clamp(8px, 0.65vw, 12px);
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.battle-nearby-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(142px, 10.5vw, 184px);
+  z-index: 8;
+  max-width: min(58%, 440px);
+  transform: translateX(-50%);
+  padding: clamp(7px, 0.65vw, 11px) clamp(12px, 1.1vw, 20px);
+  overflow: hidden;
+  border: 2px solid #ffd167;
+  border-radius: 6px;
+  background: rgba(9, 11, 17, 0.9);
+  color: #fff1a7;
+  font-size: clamp(10px, 0.82vw, 15px);
+  font-weight: 900;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: 2px 2px 0 #000;
+  pointer-events: none;
+}
+
+.battle-nearby-prompt[hidden],
+.battle-world-controls[hidden] {
+  display: none !important;
+}
+
+.battle-world-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+}
+
+.battle-move-pad {
+  position: absolute;
+  left: clamp(88px, 7vw, 132px);
+  bottom: clamp(10px, 0.9vw, 18px);
+  display: grid;
+  grid-template-columns: repeat(3, clamp(36px, 3.5vw, 54px));
+  grid-template-rows: repeat(3, clamp(36px, 3.5vw, 54px));
+  gap: 3px;
+  pointer-events: none;
+}
+
+.battle-move-btn,
+.battle-move-center {
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+}
+
+.battle-move-btn {
+  border: 2px solid #f4a545;
+  background: rgba(17, 18, 25, 0.9);
+  color: #fff1a7;
+  font-size: clamp(14px, 1.25vw, 22px);
+  font-weight: 900;
+  box-shadow: inset 0 0 0 2px rgba(255, 209, 103, 0.12), 2px 2px 0 #000;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.battle-move-btn:hover:not(:disabled),
+.battle-move-btn[aria-pressed="true"] {
+  transform: translateY(-1px);
+  background: #ffd167;
+  color: #24120a;
+  box-shadow: inset 0 0 0 2px #fff1a7, 2px 2px 0 #000;
+}
+
+.battle-move-btn:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.battle-move-center {
+  grid-column: 2;
+  grid-row: 2;
+  border: 2px solid #353945;
+  background: rgba(5, 7, 12, 0.72);
+  color: #59616c;
+  font-size: clamp(15px, 1.35vw, 24px);
+}
+
+.battle-move-btn.move-up { grid-column: 2; grid-row: 1; }
+.battle-move-btn.move-left { grid-column: 1; grid-row: 2; }
+.battle-move-btn.move-right { grid-column: 3; grid-row: 2; }
+.battle-move-btn.move-down { grid-column: 2; grid-row: 3; }
+
+.battle-interact-btn {
+  position: absolute;
+  right: clamp(10px, 1vw, 18px);
+  bottom: clamp(14px, 1.2vw, 22px);
+  width: clamp(128px, 13vw, 205px);
+  min-height: clamp(58px, 5.2vw, 82px);
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  padding: clamp(7px, 0.65vw, 12px);
+  border: 3px solid #72d7ff;
+  border-radius: 9px;
+  background: rgba(11, 30, 39, 0.92);
+  color: #dff7ff;
+  box-shadow: inset 0 0 0 2px rgba(223, 247, 255, 0.16), 3px 3px 0 #000;
+  pointer-events: auto;
+}
+
+.battle-interact-btn strong {
+  font-size: clamp(11px, 0.9vw, 17px);
+}
+
+.battle-interact-btn span {
+  color: #8fc6d8;
+  font-size: clamp(8px, 0.64vw, 12px);
+}
+
+.battle-interact-btn:hover:not(:disabled),
+.battle-interact-btn:active:not(:disabled) {
+  transform: translateY(-2px);
+  background: #72d7ff;
+  color: #10232c;
+}
+
+.battle-interact-btn:hover:not(:disabled) span,
+.battle-interact-btn:active:not(:disabled) span {
+  color: #244b58;
+}
+
+.battle-interact-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.expedition-route-choice.tracking {
+  border-color: #72d7ff;
+  background: #20313b;
+  box-shadow: inset 0 0 0 2px rgba(114, 215, 255, 0.12), 2px 2px 0 #000;
+}
+
+@media (orientation: landscape) and (max-width: 900px),
+       (orientation: landscape) and (max-height: 520px) {
+  .battle-upgrade-panel.upgrade-panel {
+    flex-basis: clamp(196px, 25%, 230px);
+    padding: 6px;
+  }
+
+  .battle-upgrade-panel .battle-shop-tabs,
+  .battle-upgrade-panel .battle-command-summary {
+    display: none;
+  }
+
+  .expedition-room-card p,
+  .battle-map-location,
+  .battle-event-feed {
+    display: none;
+  }
+
+  .battle-move-pad {
+    grid-template-columns: repeat(3, 36px);
+    grid-template-rows: repeat(3, 36px);
+  }
+
+  .battle-interact-btn {
+    width: 118px;
+    min-height: 52px;
+  }
+
+  .battle-skill-dock {
+    left: 208px;
+    right: 136px;
+  }
+
+  .skill-name {
+    display: none;
+  }
 }
 
 #territory-scene {
