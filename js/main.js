@@ -9,11 +9,11 @@
 import { getGameCoreInstance } from "./modules/game-core.js?v=world-exploration-20260712b";
 import { getResourceSystemInstance } from "./modules/resource-system.js";
 import { getPlayerSystemInstance } from "./modules/player-system.js?v=world-exploration-20260712b";
-import { getCombatSystemInstance } from "./modules/combat-system.js?v=world-exploration-20260712b";
+import { getCombatSystemInstance } from "./modules/combat-system.js?v=territory-world-20260712b";
 import { getSaveSystemInstance } from "./modules/save-system.js?v=phase-one-20260710b";
 import { getUISystemInstance } from "./modules/ui-system.js";
 import { getPetSystemInstance } from "./modules/pet-system.js?v=world-exploration-20260712b";
-import { getTerritorySystemInstance } from "./modules/territory-system.js?v=phase-one-20260710b";
+import { getTerritorySystemInstance } from "./modules/territory-system.js?v=territory-world-20260712a";
 import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
 import { getProgressionSystemInstance } from "./modules/progression-system.js?v=phase-one-20260710b";
@@ -26,7 +26,7 @@ import { PetModalController } from "./controllers/pet-modal-controller.js?v=cont
 import { PlayerModalController } from "./controllers/player-modal-controller.js?v=controllers-phase-two-20260711b";
 import { SettingsController } from "./controllers/settings-controller.js?v=fate-stability-20260711b";
 import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=fate-stability-20260711b";
-import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=controllers-phase-two-20260711b";
+import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=territory-ground-unified-20260713a";
 
 export class Game {
   constructor() {
@@ -140,12 +140,18 @@ export class Game {
       this.getProgressionContext(fateData);
 
     this.territorySceneController = new TerritorySceneController({
+      canvas: document.getElementById("territoryCanvas"),
       territorySystem: this.territorySystem,
       resourceSystem: this.resourceSystem,
+      playerSystem: this.playerSystem,
+      petSystem: this.petSystem,
+      combatSystem: this.combatSystem,
+      saveSystem: this.saveSystem,
       uiSystem: this.uiSystem,
-      escapeHTML,
       formatNumber,
       getProgressionContext,
+      getCurrentScene: () => this.currentScene,
+      onNavigate: (scene) => this.handleNavigation(scene),
     });
 
     this.shopRecommendationController = new ShopRecommendationController({
@@ -343,6 +349,7 @@ export class Game {
     });
     this.fateSceneController.setSceneActive(this.currentScene === "fate");
     this.battleSceneController?.setSceneActive(this.currentScene === "dungeon");
+    this.territorySceneController?.setSceneActive(this.currentScene === "territory");
     const upgradePanel = document.getElementById("upgrade-panel");
 
     if (this.currentScene === "fate") {
@@ -428,6 +435,9 @@ export class Game {
       petTrainingLevels: Math.max(0, petLevelTotal - equippedPets),
       buildings: this.territorySystem?.buildings?.length || 0,
       expansionCount: this.territorySystem?.expansionCount || 0,
+      bestDepth: this.combatSystem?.meta?.bestDepth || 0,
+      extractions: this.combatSystem?.meta?.extractions || 0,
+      losses: this.combatSystem?.meta?.losses || 0,
     };
   }
 

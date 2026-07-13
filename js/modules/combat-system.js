@@ -42,6 +42,7 @@ export class CombatSystem {
         this.nearbyLocation = null;
         this.lastNearbyLocationId = null;
         this.worldRevision = 0;
+        this.runPreparation = { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
 
         this.monsters = [];
         this.bullets = [];
@@ -374,8 +375,16 @@ export class CombatSystem {
         const phase = this.runSystem.phase;
         if (phase === 'extracted' || phase === 'defeat') this.resetBattle();
 
-        const result = this.runSystem.startRun({ supplies: 2, backpackCapacity: 8 });
+        const permanentBonuses = this.territorySystem?.calculateBonuses?.() || {};
+        const preparedBonuses = this.territorySystem?.getPreparedBonuses?.()
+            || { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
+        const result = this.runSystem.startRun({
+            supplies: 2 + (permanentBonuses.supplyBonus || 0) + (preparedBonuses.supplies || 0),
+            backpackCapacity: 8
+        });
         if (!result.success) return result;
+        this.runPreparation = this.territorySystem?.consumePreparedBonuses?.()
+            || { ...preparedBonuses };
 
         this.clearEncounter();
         this.petSystem?.resetBattleStates?.();
@@ -541,7 +550,14 @@ export class CombatSystem {
             affected = 1;
         }
 
-        const cooldown = Math.max(3000, Math.floor(template.skill?.cooldown || 6000));
+        const cooldownReduction = Math.min(
+            0.2,
+            Math.max(0, (this.territorySystem?.calculateBonuses?.().petCooldownReduction || 0) / 100)
+        );
+        const cooldown = Math.max(
+            3000,
+            Math.floor((template.skill?.cooldown || 6000) * (1 - cooldownReduction))
+        );
         this.skillCooldowns.set(pet.instanceId, cooldown);
         const color = PET_ROLE_COLORS[type] || PET_ROLE_COLORS.default;
         this.addBannerText(`${template.name} · ${template.skill?.name || '伙伴技能'}`, color);
@@ -613,7 +629,7 @@ export class CombatSystem {
         this.updateSkillCooldowns(safeDelta);
         this.guardTimer = Math.max(0, this.guardTimer - safeDelta);
         this.uiNotifyTimer += safeDelta;
-        this.updateWorldAwareness();
+        this.updateHeroMovement(this.playerSystem?.player, safeDelta);
 
         if (this.isCombatActive()) {
             this.updateEncounterSpawns(safeDelta);
@@ -829,7 +845,7 @@ export class CombatSystem {
     getPlayerAttackDamage() {
         const baseAttack = this.playerSystem?.player?.attack || 1;
         const territoryBonuses = this.territorySystem?.calculateBonuses?.() || {};
-        return baseAttack + (territoryBonuses.attack || 0);
+        return baseAttack + (territoryBonuses.attack || 0) + (this.runPreparation.attack || 0);
     }
 
     updateMonsters(deltaTime) {
@@ -875,7 +891,10 @@ export class CombatSystem {
         if (this.settled || this.runHp <= 0) return 0;
         const playerDefense = this.playerSystem?.player?.defense || 0;
         const territoryDefense = this.territorySystem?.calculateBonuses?.().defense || 0;
-        let damage = Math.max(1, Math.floor(rawDamage - (playerDefense + territoryDefense) * 0.32));
+        let damage = Math.max(
+            1,
+            Math.floor(rawDamage - (playerDefense + territoryDefense + (this.runPreparation.defense || 0)) * 0.32)
+        );
         if (this.guardTimer > 0) damage = Math.max(1, Math.floor(damage * (1 - this.config.skillGuardReduction)));
         this.runHp = Math.max(0, this.runHp - damage);
         const hero = this.getHeroCenter();
@@ -1013,9 +1032,12 @@ export class CombatSystem {
         this.commitEncounterRewards();
         this.settled = true;
         const baseSettlement = this.runSystem.finishRun({ extracted, reason });
-        const territoryExpBonus = this.territorySystem?.calculateBonuses?.().expBonus || 0;
+        const territoryBonuses = this.territorySystem?.calculateBonuses?.() || {};
+        const territoryExpBonus = (territoryBonuses.expBonus || 0) + (this.runPreparation.expBonus || 0);
         const settlement = {
             ...baseSettlement,
+            coins: Math.floor(baseSettlement.coins * (1 + (territoryBonuses.coinBonus || 0) / 100)),
+            crystals: Math.floor(baseSettlement.crystals * (1 + (territoryBonuses.crystalBonus || 0) / 100)),
             exp: Math.floor(baseSettlement.exp * (1 + territoryExpBonus / 100))
         };
 
@@ -1031,6 +1053,7 @@ export class CombatSystem {
         this.encounterQueue = [];
         this.currentEncounter = null;
         this.extractionTimer = 0;
+        this.runPreparation = { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
         this.clearMovementInput();
         this.worldSystem.completeActiveLocation();
         this.addBannerText(settlement.extracted ? '撤离成功！' : '远征失败', settlement.extracted ? '#72d7ff' : '#ff667d');
@@ -1062,7 +1085,10 @@ export class CombatSystem {
     calculateRunMaxHp() {
         const player = this.playerSystem?.player || {};
         const bonuses = this.territorySystem?.calculateBonuses?.() || {};
-        return Math.max(80, Math.floor((player.maxHp || 100) + (bonuses.defense || 0) * 3));
+        return Math.max(
+            80,
+            Math.floor((player.maxHp || 100) + ((bonuses.defense || 0) + (this.runPreparation.defense || 0)) * 3)
+        );
     }
 
     getRunHeroState() {

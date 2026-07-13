@@ -21,6 +21,9 @@ const sourceFiles = [
   "js/modules/modal-focus-manager.js",
   "js/modules/player-system.js",
   "js/modules/scene-router.js",
+  "js/modules/territory-art-config.js",
+  "js/modules/territory-system.js",
+  "js/modules/territory-world-system.js",
   ...controllerFiles,
 ];
 const testFiles = [
@@ -29,6 +32,7 @@ const testFiles = [
   "tests/phase-one-smoke.mjs",
   "tests/extraction-rpg-smoke.mjs",
   "tests/world-exploration-smoke.mjs",
+  "tests/territory-world-smoke.mjs",
 ];
 
 for (const sourceFile of sourceFiles) {

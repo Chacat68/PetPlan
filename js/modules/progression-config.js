@@ -35,6 +35,76 @@ export const TERRITORY_PROGRESSION_CONFIG = Object.freeze({
   ]),
 });
 
+// Territory v2 promotes the base through permanent milestones. The old pulse
+// configuration remains available for growth-direction hints and old-save
+// migration, but no longer controls whether a built district can disappear.
+export const TERRITORY_RANK_CONFIG = Object.freeze([
+  Object.freeze({
+    rank: 0,
+    name: "未建营地",
+    slots: 1,
+    worldWidth: 1680,
+    storageHours: 4,
+    cost: Object.freeze({ coins: 0, crystals: 0 }),
+    requirements: Object.freeze({}),
+  }),
+  Object.freeze({
+    rank: 1,
+    name: "营地",
+    slots: 4,
+    worldWidth: 2180,
+    storageHours: 8,
+    cost: Object.freeze({ coins: 0, crystals: 0 }),
+    requirements: Object.freeze({ mainBase: 1 }),
+  }),
+  Object.freeze({
+    rank: 2,
+    name: "远征前哨",
+    slots: 6,
+    worldWidth: 2660,
+    storageHours: 12,
+    cost: Object.freeze({ coins: 1200, crystals: 120 }),
+    requirements: Object.freeze({ extractions: 1, constructionScore: 2 }),
+  }),
+  Object.freeze({
+    rank: 3,
+    name: "协同聚落",
+    slots: 7,
+    worldWidth: 3040,
+    storageHours: 18,
+    cost: Object.freeze({ coins: 3000, crystals: 280 }),
+    requirements: Object.freeze({ bestDepth: 5, extractions: 1, constructionScore: 6 }),
+  }),
+  Object.freeze({
+    rank: 4,
+    name: "边境要塞",
+    slots: 9,
+    worldWidth: 3340,
+    storageHours: 24,
+    cost: Object.freeze({ coins: 6500, crystals: 600 }),
+    requirements: Object.freeze({ bestDepth: 6, extractions: 3, constructionScore: 12 }),
+  }),
+  Object.freeze({
+    rank: 5,
+    name: "核心领地",
+    slots: 12,
+    worldWidth: 3660,
+    storageHours: 24,
+    cost: Object.freeze({ coins: 12000, crystals: 1000 }),
+    requirements: Object.freeze({ bestDepth: 8, extractions: 5, constructionScore: 20 }),
+  }),
+]);
+
+export const TERRITORY_BUILDING_SITES = Object.freeze({
+  main_base: Object.freeze({ slotIndex: 0, x: 1080, requiredRank: 0, path: "core" }),
+  training_ground: Object.freeze({ slotIndex: 1, x: 520, requiredRank: 1, path: "hero" }),
+  temple: Object.freeze({ slotIndex: 2, x: 1450, requiredRank: 1, path: "companion" }),
+  workshop: Object.freeze({ slotIndex: 3, x: 1900, requiredRank: 1, path: "territory" }),
+  barracks: Object.freeze({ slotIndex: 4, x: 760, requiredRank: 2, path: "hero" }),
+  library: Object.freeze({ slotIndex: 5, x: 2390, requiredRank: 2, path: "companion" }),
+  crystal_mine: Object.freeze({ slotIndex: 6, x: 2820, requiredRank: 3, path: "territory" }),
+});
+
 export const FIRST_SESSION_STEPS = Object.freeze([
   {
     id: "flip",
@@ -64,8 +134,8 @@ export const FIRST_SESSION_STEPS = Object.freeze([
     id: "territory",
     metric: "buildings",
     target: 1,
-    title: "建立领地",
-    detail: "建造第 1 座领地建筑",
+    title: "修复主基地",
+    detail: "前往领地，在实际基地世界中修复主基地",
     routeType: "territory",
   },
 ]);

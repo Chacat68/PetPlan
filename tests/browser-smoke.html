@@ -744,7 +744,13 @@
                 bubbles: true,
                 cancelable: true,
               }));
-              await new Promise((resolve) => window.setTimeout(resolve, 260));
+              assert(
+                game.combatSystem.movementInput.x > 0,
+                "D 键输入未传递到远征移动系统",
+              );
+              // 后台 iframe 的 requestAnimationFrame 可能被浏览器节流；显式推进
+              // 一帧可稳定验证输入到世界坐标的完整链路。
+              game.combatSystem.update(100);
               frame.contentDocument.dispatchEvent(new frame.contentWindow.KeyboardEvent("keyup", {
                 key: "d",
                 code: "KeyD",
@@ -825,7 +831,7 @@
               return url.search;
             });
 
-            await step("通过空地块弹窗建造免费主基地", async () => {
+            await step("在实际基地世界中靠近遗迹并修复主基地", async () => {
               const game = frame.contentWindow.game;
               const doc = frame.contentDocument;
               const territory = game.territorySystem;
@@ -834,30 +840,40 @@
                 `新存档已有 ${territory.buildings.length} 座建筑`,
               );
 
-              const emptySlot = doc.querySelector(
-                '.territory-slot[data-slot="0"]',
+              const canvas = doc.getElementById("territoryCanvas");
+              assert(canvas instanceof frame.contentWindow.HTMLCanvasElement, "未找到领地 Canvas");
+              assert(canvas.width > 0 && canvas.height > 0, "领地 Canvas 尚未完成适配");
+              await waitFor(
+                () => game.territorySceneController.world.getNearbySite()?.type === "main_base",
+                "角色抵达主基地遗迹",
+              );
+              const nearbyPrompt = doc.getElementById("territory-nearby-prompt");
+              assert(nearbyPrompt && !nearbyPrompt.hidden, "主基地附近没有显示交互提示");
+              const canvasRect = canvas.getBoundingClientRect();
+              const promptRect = nearbyPrompt.getBoundingClientRect();
+              const eventRect = doc
+                .getElementById("territory-event-feed")
+                .getBoundingClientRect();
+              assert(
+                promptRect.top < canvasRect.top + canvasRect.height * 0.25,
+                "交互提示未固定在场景顶部安全区",
               );
               assert(
-                emptySlot instanceof frame.contentWindow.HTMLButtonElement,
-                "未找到首个可点击空地块",
+                promptRect.bottom + 20 < eventRect.top,
+                "交互提示与底部建筑铭牌/操作说明区域过近",
               );
-              assert(!emptySlot.classList.contains("built"), "首个地块不是空地块");
-              emptySlot.click();
+              const interact = doc.getElementById("territory-interact-btn");
+              assert(interact && !interact.disabled, "主基地遗迹附近没有可用交互");
+              interact.click();
 
-              const modal = await waitFor(() => {
-                const candidate = doc.getElementById("build-modal");
-                return candidate?.classList.contains("show") ? candidate : null;
-              }, "建造弹窗打开");
-              const mainBaseOption = Array.from(
-                doc.querySelectorAll("#building-options .building-option"),
-              ).find(
-                (option) =>
-                  option.querySelector(".building-option-name")?.textContent ===
-                  "主基地",
-              );
-              assert(mainBaseOption, "建造弹窗未显示主基地");
-              assert(!mainBaseOption.disabled, "免费主基地不可建造");
-              mainBaseOption.click();
+              const panel = await waitFor(() => {
+                const candidate = doc.getElementById("territory-context-panel");
+                return candidate && !candidate.hidden ? candidate : null;
+              }, "基地操作面板打开");
+              const buildButton = panel.querySelector('[data-territory-action="build"]');
+              assert(buildButton && !buildButton.hidden, "基地操作面板未显示修复动作");
+              assert(!buildButton.disabled, "免费主基地不可修复");
+              buildButton.click();
 
               const building = await waitFor(
                 () =>
@@ -868,11 +884,16 @@
               );
               await waitFor(
                 () =>
-                  !modal.classList.contains("show") &&
-                  doc
-                    .querySelector('.territory-slot[data-slot="0"]')
-                    ?.classList.contains("built"),
-                "主基地渲染",
+                  territory.rank === 1 &&
+                  doc.getElementById("territory-rank-badge")?.textContent?.startsWith("R1"),
+                "主基地世界状态与 HUD 渲染",
+              );
+              await waitFor(
+                () => {
+                  const image = game.territorySceneController.buildingImages.main_base;
+                  return image?.complete && image.naturalWidth > 0;
+                },
+                "主基地图片资产加载",
               );
               assert(building.type === "main_base", `建筑类型异常：${building.type}`);
               assert(building.slotIndex === 0, `建筑地块异常：${building.slotIndex}`);
@@ -881,7 +902,7 @@
                 type: building.type,
                 slotIndex: building.slotIndex,
               };
-              return `${building.type} · slot=${building.slotIndex} · buildings=${savedBuilding.count}`;
+              return `${building.type} · slot=${building.slotIndex} · rank=${territory.rank} · world=${game.territorySceneController.world.width}`;
             });
 
             await step("通过 F5 快捷键保存槽位 1", async () => {
@@ -966,13 +987,14 @@
                   restoredBuildings[0]?.slotIndex === savedBuilding.slotIndex,
                 "重载后主基地类型或地块不一致",
               );
+              assert(game.territorySystem.rank === 1, "重载后领地等级未恢复");
               assert(
-                frame.contentDocument
-                  .querySelector(
-                    `.territory-slot[data-slot="${savedBuilding.slotIndex}"]`,
-                  )
-                  ?.classList.contains("built"),
-                "重载后主基地未在领地网格中渲染",
+                frame.contentDocument.getElementById("territory-rank-badge")?.textContent?.startsWith("R1"),
+                "重载后主基地状态未同步到实际基地 HUD",
+              );
+              assert(
+                frame.contentDocument.getElementById("territoryCanvas") instanceof frame.contentWindow.HTMLCanvasElement,
+                "重载后实际基地 Canvas 未恢复",
               );
               return `硬币 ${restored.fateCoins} · 助手 ${restored.assistants} · 翻转 ${restored.totalFlips} · 建筑 ${restoredBuildings.length} · scene=${game.currentScene}`;
             });

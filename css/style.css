@@ -64,6 +64,393 @@
   --shadow-gold: 0 0 15px rgba(255, 215, 0, 0.4);
 }
 
+/* ==================== Territory World v2 ==================== */
+.territory-world-scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: #080b0f;
+}
+
+.territory-world-panel {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  border: 6px solid #10151d;
+  box-shadow: inset 0 0 0 3px #d9913f, inset 0 0 0 7px #3a271d;
+  background: #111821;
+}
+
+.territory-world-panel .territory-scorebar {
+  position: relative;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 5px 22px;
+  color: #fff7dd;
+  font-size: clamp(14px, 2vw, 24px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-shadow: 2px 2px 0 #000;
+  background: linear-gradient(180deg, #26303b, #121820);
+  border-bottom: 3px solid #d9913f;
+}
+
+.territory-world-panel .territory-scorebar .score-dollar {
+  color: #ffd167;
+  font-size: 0.72em;
+}
+
+.territory-world-surface {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #18252b;
+}
+
+.territory-canvas-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #18252b;
+}
+
+#territoryCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+
+.territory-resource-strip {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  left: 50%;
+  display: flex;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.territory-resource-strip span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 2px solid rgba(255, 209, 103, 0.68);
+  border-radius: 4px;
+  color: #dfe9ef;
+  font-size: clamp(10px, 1.2vw, 14px);
+  background: rgba(7, 10, 14, 0.86);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.territory-resource-strip b {
+  color: #ffd167;
+}
+
+.territory-objective-hud {
+  position: absolute;
+  z-index: 6;
+  top: 54px;
+  left: 18px;
+  display: grid;
+  gap: 2px;
+  width: min(330px, 36vw);
+  padding: 10px 14px;
+  border: 2px solid #72d7ff;
+  color: #f8fbff;
+  background: rgba(5, 9, 14, 0.86);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.38);
+  pointer-events: none;
+}
+
+.territory-objective-label,
+.territory-context-kicker {
+  color: #72d7ff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.territory-objective-hud strong {
+  color: #ffd167;
+  font-size: clamp(13px, 1.8vw, 18px);
+}
+
+.territory-objective-hud > span:last-child {
+  overflow: hidden;
+  color: #b9c7d1;
+  font-size: clamp(10px, 1.25vw, 13px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.territory-event-feed {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 82px;
+  width: min(660px, 68vw);
+  min-height: 34px;
+  padding: 7px 15px;
+  transform: translateX(-50%);
+  border: 2px solid rgba(255, 209, 103, 0.62);
+  color: #edf5f8;
+  font-size: clamp(10px, 1.25vw, 14px);
+  text-align: center;
+  background: rgba(7, 10, 14, 0.84);
+  pointer-events: none;
+}
+
+.territory-nearby-prompt {
+  position: absolute;
+  z-index: 7;
+  top: 58px;
+  left: 50%;
+  bottom: auto;
+  min-width: 132px;
+  padding: 7px 14px;
+  transform: translateX(-50%);
+  border: 2px solid #ffd167;
+  color: #fff7dd;
+  font-weight: 800;
+  background: rgba(16, 12, 7, 0.9);
+  pointer-events: none;
+}
+
+.territory-world-controls {
+  position: absolute;
+  z-index: 8;
+  right: 16px;
+  bottom: 14px;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.territory-move-btn,
+.territory-interact-btn,
+.territory-context-actions button,
+.territory-context-close {
+  border: 2px solid #d9913f;
+  border-radius: 4px;
+  color: #fff7dd;
+  font: inherit;
+  font-weight: 900;
+  background: linear-gradient(180deg, #27313d, #151b23);
+  box-shadow: 0 4px 0 #0a0d12;
+  cursor: pointer;
+}
+
+.territory-move-btn {
+  width: 52px;
+  min-height: 52px;
+  font-size: 20px;
+}
+
+.territory-move-btn[aria-pressed="true"] {
+  transform: translateY(2px);
+  color: #101820;
+  background: #ffd167;
+  box-shadow: 0 2px 0 #0a0d12;
+}
+
+.territory-interact-btn {
+  display: grid;
+  gap: 2px;
+  min-width: min(260px, 29vw);
+  padding: 7px 12px;
+  text-align: left;
+}
+
+.territory-interact-btn span {
+  color: #aebdc7;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.territory-interact-btn:disabled,
+.territory-context-actions button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.territory-context-panel {
+  position: absolute;
+  z-index: 12;
+  right: 18px;
+  bottom: 86px;
+  display: grid;
+  gap: 8px;
+  width: min(390px, 38vw);
+  max-height: calc(100% - 150px);
+  padding: 16px;
+  overflow: auto;
+  border: 3px solid #ffd167;
+  color: #edf5f8;
+  background: rgba(8, 12, 18, 0.96);
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.52);
+}
+
+.territory-context-panel[hidden] {
+  display: none;
+}
+
+.territory-context-panel h2,
+.territory-context-panel p {
+  margin: 0;
+}
+
+.territory-context-panel h2 {
+  color: #ffd167;
+  font-size: clamp(17px, 2vw, 24px);
+}
+
+.territory-context-panel p {
+  color: #b8c6d0;
+  font-size: clamp(11px, 1.3vw, 14px);
+  line-height: 1.45;
+}
+
+.territory-context-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+}
+
+.territory-context-stats {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border: 1px solid rgba(114, 215, 255, 0.3);
+  background: rgba(114, 215, 255, 0.06);
+}
+
+.territory-context-stat {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  color: #c8d5dd;
+  font-size: 12px;
+}
+
+.territory-context-stat b {
+  color: #ffffff;
+  text-align: right;
+}
+
+.territory-context-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.territory-context-actions button {
+  min-height: 42px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.territory-context-actions button[hidden] {
+  display: none;
+}
+
+.territory-context-actions button:hover:not(:disabled),
+.territory-interact-btn:hover:not(:disabled),
+.territory-move-btn:hover {
+  border-color: #72d7ff;
+  color: #72d7ff;
+}
+
+@media (max-width: 820px) and (orientation: landscape) {
+  .territory-world-panel {
+    border-width: 3px;
+  }
+
+  .territory-world-panel .territory-scorebar {
+    min-height: 30px;
+    padding: 3px 12px;
+  }
+
+  .territory-resource-strip {
+    top: 7px;
+    gap: 4px;
+  }
+
+  .territory-resource-strip span {
+    min-height: 24px;
+    padding: 2px 6px;
+  }
+
+  .territory-objective-hud {
+    top: 38px;
+    left: 8px;
+    padding: 6px 9px;
+  }
+
+  .territory-nearby-prompt {
+    top: 42px;
+    min-width: 116px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .territory-event-feed {
+    bottom: 57px;
+  }
+
+  .territory-world-controls {
+    right: 7px;
+    bottom: 7px;
+  }
+
+  .territory-move-btn {
+    width: 42px;
+    min-height: 42px;
+  }
+
+  .territory-interact-btn {
+    min-width: 180px;
+    padding: 4px 8px;
+  }
+
+  .territory-context-panel {
+    right: 8px;
+    bottom: 58px;
+    width: min(340px, 45vw);
+    padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #territoryCanvas {
+    scroll-behavior: auto;
+  }
+
+  .territory-move-btn,
+  .territory-interact-btn,
+  .territory-context-actions button {
+    transition: none;
+  }
+}
+
 /* 重置样式 */
 *,
 *::before,

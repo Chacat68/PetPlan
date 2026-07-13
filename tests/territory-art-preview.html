@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PetPlan 领地美术全地图预览</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: #070b0e; overflow: hidden; }
+      iframe { width: 100vw; height: 100vh; border: 0; display: block; }
+      .preview-controls {
+        position: fixed;
+        z-index: 20;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 6px;
+        padding: 6px;
+        border: 1px solid #8c7446;
+        background: rgba(5, 9, 12, 0.92);
+      }
+      button {
+        border: 1px solid #80693e;
+        border-radius: 3px;
+        padding: 5px 9px;
+        color: #e9edf0;
+        background: #182127;
+        cursor: pointer;
+      }
+      button:hover { border-color: #f0b45f; }
+      #preview-status { color: #f0b45f; padding: 5px 8px; white-space: nowrap; }
+    </style>
+  </head>
+  <body>
+    <nav class="preview-controls" aria-label="领地美术预览分区">
+      <span id="preview-status">正在构造 R5 领地…</span>
+      <button type="button" data-preview-rank="5" data-preview-x="170">远征门</button>
+      <button type="button" data-preview-rank="5" data-preview-x="650">先攻区</button>
+      <button type="button" data-preview-rank="5" data-preview-x="1080">核心区</button>
+      <button type="button" data-preview-rank="5" data-preview-x="1600">协同区</button>
+      <button type="button" data-preview-rank="5" data-preview-x="2200">工坊/图书馆</button>
+      <button type="button" data-preview-rank="5" data-preview-x="2850">矿区</button>
+      <button type="button" data-preview-rank="4" data-preview-x="3290">边界</button>
+    </nav>
+    <iframe id="game-frame" title="R5 领地完整美术预览"></iframe>
+    <script>
+      const prefix = "petplan_";
+      const snapshot = new Map();
+      let restored = false;
+
+      function snapshotStorage() {
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (key?.startsWith(prefix)) snapshot.set(key, localStorage.getItem(key));
+        }
+      }
+
+      function clearPetPlanStorage() {
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith(prefix))
+          .forEach((key) => localStorage.removeItem(key));
+      }
+
+      function restoreStorage() {
+        if (restored) return;
+        clearPetPlanStorage();
+        snapshot.forEach((value, key) => localStorage.setItem(key, value));
+        restored = true;
+      }
+
+      function waitFor(check, timeout = 8000) {
+        const started = performance.now();
+        return new Promise((resolve, reject) => {
+          const poll = () => {
+            const value = check();
+            if (value) return resolve(value);
+            if (performance.now() - started > timeout) return reject(new Error("预览初始化超时"));
+            requestAnimationFrame(poll);
+          };
+          poll();
+        });
+      }
+
+      function jumpTo(worldX, rank = 5) {
+        const game = document.getElementById("game-frame").contentWindow?.game;
+        const controller = game?.territorySceneController;
+        if (!controller) return;
+        game.territorySystem.rank = rank;
+        controller.world.setRank(rank);
+        controller.camera.setWorldSize(controller.world.width, controller.world.height);
+        controller.world.player.x = Math.max(24, Math.min(controller.world.width - 72, worldX - 24));
+        controller.world.player.facing = 1;
+        controller.world.updateNearbySite();
+        controller.camera.snapTo(worldX, controller.world.groundY - 170);
+        controller.updateInteractionPrompt();
+        controller.render();
+      }
+
+      async function initializePreview() {
+        snapshotStorage();
+        clearPetPlanStorage();
+        const frame = document.getElementById("game-frame");
+        frame.src = "../index.html?scene=territory&art-preview=1";
+        const game = await waitFor(() => frame.contentWindow?.game?.territorySceneController && frame.contentWindow.game);
+        game.gameCore?.stop?.();
+        game.territorySystem.setOnPersist(() => {});
+        ["main_base", "training_ground", "temple", "workshop", "barracks", "library", "crystal_mine"]
+          .forEach((type) => game.territorySystem.debugBuildBuilding(type));
+        game.territorySystem.rank = 5;
+        game.territorySystem.unlockedSlots = 12;
+        game.territorySystem.setProgressContext({ bestDepth: 8, extractions: 5, equippedPets: 3 });
+        const controller = game.territorySceneController;
+        controller.setSceneActive(false);
+        controller.setSceneActive(true);
+        controller.updateDisplay();
+        await waitFor(() => Object.values(controller.sceneImages).every((image) => image?.complete && image.naturalWidth > 0));
+        jumpTo(1080);
+        restoreStorage();
+        document.getElementById("preview-status").textContent = "R5 全资源已加载";
+        document.body.dataset.ready = "true";
+      }
+
+      document.querySelectorAll("[data-preview-x]").forEach((button) => {
+        button.addEventListener("click", () => jumpTo(
+          Number(button.dataset.previewX),
+          Number(button.dataset.previewRank || 5)
+        ));
+      });
+      window.addEventListener("beforeunload", restoreStorage);
+      initializePreview().catch((error) => {
+        restoreStorage();
+        document.getElementById("preview-status").textContent = error.message;
+      });
+    </script>
+  </body>
+</html>

@@ -111,13 +111,14 @@ function testTerritoryPacingAndPersistence() {
   territory.setProgressContext({ equippedPets: 1 });
   let summary = territory.getProgressSummary();
   assert.equal(summary.pulse, 0);
-  assert.equal(summary.stage, 1);
+  assert.equal(summary.stage, 0);
   assert.equal(summary.unlockedSlots, 1);
 
   territory.setProgressContext({ totalFlips: 8, equippedPets: 1 });
   summary = territory.getProgressSummary();
   assert.equal(summary.pulse, 8);
-  assert.equal(summary.stage, 2);
+  assert.equal(summary.stage, 0);
+  assert.equal(summary.unlockedSlots, 1);
 
   territory.setProgressContext({
     totalFlips: 50,
@@ -127,8 +128,8 @@ function testTerritoryPacingAndPersistence() {
   });
   summary = territory.getProgressSummary();
   assert.equal(summary.pulse, 66);
-  assert.equal(summary.stage, 5);
-  assert.ok(summary.stage < Object.keys(territory.buildingData).length);
+  assert.equal(summary.stage, 0);
+  assert.equal(summary.unlockedSlots, 1);
 
   let persistCalls = 0;
   territory.setOnPersist(() => {
@@ -136,6 +137,8 @@ function testTerritoryPacingAndPersistence() {
   });
   const buildResult = territory.buildBuilding("main_base", 0);
   assert.equal(buildResult.success, true);
+  assert.equal(territory.getProgressSummary().rank, 1);
+  assert.equal(territory.getProgressSummary().unlockedSlots, 4);
   assert.equal(persistCalls, 1);
 }
 
@@ -182,7 +185,7 @@ async function testSaveMigration() {
   assert.deepEqual(progression.loaded, {});
 
   const migrated = JSON.parse(localStorage.getItem("petplan_save_1"));
-  assert.equal(migrated.version, "1.1.0");
+  assert.equal(migrated.version, "1.2.0");
   assert.equal(migrated.data.resource.coins, 321);
   assert.ok(localStorage.getItem("petplan_save_slot1"));
 

@@ -1,963 +1,869 @@
 /**
- * TerritorySystem - 领地系统
- * 管理领地建设、建筑升级和资源产出
+ * TerritorySystem - persistent territory progression and economy.
+ *
+ * Territory v2 separates permanent base rank from the legacy growth pulse.
+ * Pulse is still exposed as an explanatory signal for recommendations, while
+ * rank, building sites, production and preparation buffs are authoritative.
  */
 
-import { TERRITORY_PROGRESSION_CONFIG } from "./progression-config.js?v=phase-one-20260710b";
+import {
+  TERRITORY_BUILDING_SITES,
+  TERRITORY_PROGRESSION_CONFIG,
+  TERRITORY_RANK_CONFIG,
+} from "./progression-config.js?v=territory-world-20260712a";
 
 let instance = null;
 
+const TERRITORY_VERSION = 2;
+const PRODUCTION_EFFICIENCY = 0.5;
+const ACTIVITY_COOLDOWN_MS = 5 * 60 * 1000;
+
+const clampInt = (value, min, max) => Math.max(
+  min,
+  Math.min(max, Math.floor(Number(value) || 0))
+);
+
 export class TerritorySystem {
-    constructor(resourceSystem = null, playerSystem = null) {
-        // 系统引用
-        this.resourceSystem = resourceSystem;
-        this.playerSystem = playerSystem;
-        
-        // ==================== 建筑配置 ====================
-        this.buildingData = {
-            main_base: {
-                name: '主基地',
-                icon: '🏰',
-                description: '领地核心，提供扩张与循环节奏锚点',
-                baseCost: { coins: 0, crystals: 0 },
-                costMultiplier: 2.0,
-                maxLevel: 5,
-                effects: {
-                    type: 'slotUnlock',
-                    value: 2  // 每级解锁2个额外地块
-                },
-                productionInterval: 0,  // 不产出资源
-                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.main_base
-            },
-            training_ground: {
-                name: '训练场',
-                icon: '🏋️',
-                description: '把命运循环转化为主角攻击训练',
-                baseCost: { coins: 500, crystals: 50 },
-                costMultiplier: 1.5,
-                maxLevel: 20,
-                effects: {
-                    type: 'attackBonus',
-                    value: 5  // 每级+5攻击
-                },
-                productionInterval: 0,
-                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.training_ground
-            },
-            temple: {
-                name: '神庙',
-                icon: '🏛️',
-                description: '稳定循环收益，提升防御加成',
-                baseCost: { coins: 500, crystals: 50 },
-                costMultiplier: 1.5,
-                maxLevel: 20,
-                effects: {
-                    type: 'defenseBonus',
-                    value: 5  // 每级+5防御
-                },
-                productionInterval: 0,
-                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.temple
-            },
-            barracks: {
-                name: '兵营',
-                icon: '⚔️',
-                description: '战斗循环成型后开放，提升攻防',
-                baseCost: { coins: 800, crystals: 80 },
-                costMultiplier: 1.5,
-                maxLevel: 15,
-                effects: {
-                    type: 'combatBonus',
-                    attack: 3,
-                    defense: 3
-                },
-                productionInterval: 0,
-                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.barracks
-            },
-            workshop: {
-                name: '工坊',
-                icon: '🔨',
-                description: '第一座资源建筑，按节拍产出金币',
-                baseCost: { coins: 1000, crystals: 100 },
-                costMultiplier: 1.8,
-                maxLevel: 10,
-                effects: {
-                    type: 'production',
-                    resource: 'coins',
-                    value: 50  // 基础产出
-                },
-                productionInterval: 45000,  // 45秒产出一次
-                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.workshop
-            },
-            crystal_mine: {
-                name: '水晶矿',
-                icon: '💎',
-                description: '资源循环稳定后开放，按节拍产出水晶',
-                baseCost: { coins: 2000, crystals: 200 },
-                costMultiplier: 2.0,
-                maxLevel: 10,
-                effects: {
-                    type: 'production',
-                    resource: 'crystals',
-                    value: 10  // 基础产出
-                },
-                productionInterval: 90000,  // 90秒产出一次
-                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.crystal_mine
-            },
-            library: {
-                name: '图书馆',
-                icon: '📚',
-                description: '后段成长建筑，提升经验获取',
-                baseCost: { coins: 1500, crystals: 150 },
-                costMultiplier: 1.6,
-                maxLevel: 10,
-                effects: {
-                    type: 'expBonus',
-                    value: 5  // 每级+5%经验
-                },
-                productionInterval: 0,
-                unlock: TERRITORY_PROGRESSION_CONFIG.buildingUnlocks.library
-            }
-        };
-        
-        // ==================== 地块配置 ====================
-        this.slotConfig = {
-            initialSlots: 1,
-            maxSlots: 12,
-            unlockPulses: TERRITORY_PROGRESSION_CONFIG.slotUnlockPulses
-        };
-        
-        // ==================== 扩张成本配置 ====================
-        this.expansionCosts = TERRITORY_PROGRESSION_CONFIG.expansionCosts;
-        
-        // ==================== 领地状态 ====================
-        this.slots = [];           // 地块数组
-        this.buildings = [];       // 已建造的建筑
-        this.unlockedSlots = this.slotConfig.initialSlots;    // 已解锁地块数
-        this.expansionCount = 0;   // 扩张次数
-        this.lastProductionTime = Date.now();  // 上次产出时间
-        this.progressContext = this.createDefaultProgressContext();
-        
-        // 存储键
-        this.storageKey = 'petplan_territory';
-        this.onPersist = null;
-        
-        // 初始化地块
-        this.initSlots();
-        
-        console.log('[TerritorySystem] 初始化完成');
-    }
-    
-    /**
-     * 初始化地块
-     */
-    initSlots() {
-        this.slots = [];
-        for (let i = 0; i < this.slotConfig.maxSlots; i++) {
-            this.slots.push({
-                index: i,
-                unlockPulse: this.getSlotUnlockPulse(i),
-                building: null
-            });
-        }
-    }
-    
-    /**
-     * 设置系统引用
-     */
-    setResourceSystem(resourceSystem) {
-        this.resourceSystem = resourceSystem;
-    }
-    
-    setPlayerSystem(playerSystem) {
-        this.playerSystem = playerSystem;
-    }
+  constructor(resourceSystem = null, playerSystem = null) {
+    this.resourceSystem = resourceSystem;
+    this.playerSystem = playerSystem;
+    this.buildingData = {
+      main_base: {
+        name: "主基地",
+        icon: "🏰",
+        description: "领地核心。修复后开放三条基地建设路线。",
+        baseCost: { coins: 0, crystals: 0 },
+        costMultiplier: 1,
+        maxLevel: 1,
+        productionInterval: 0,
+        effects: { type: "base" },
+      },
+      training_ground: {
+        name: "训练场",
+        icon: "🏋️",
+        description: "进行实战训练，并永久提升主角攻击。",
+        baseCost: { coins: 400, crystals: 30 },
+        costMultiplier: 1.45,
+        maxLevel: 5,
+        productionInterval: 0,
+        effects: { type: "attackBonus", value: 4 },
+        activity: "training",
+      },
+      temple: {
+        name: "守护神庙",
+        icon: "🏛️",
+        description: "宠物休整与守护仪式，提升远征防御。",
+        baseCost: { coins: 400, crystals: 30 },
+        costMultiplier: 1.45,
+        maxLevel: 5,
+        productionInterval: 0,
+        effects: { type: "defenseBonus", value: 3 },
+        activity: "blessing",
+      },
+      workshop: {
+        name: "工坊",
+        icon: "🔨",
+        description: "制作远征补给并储备金币。",
+        baseCost: { coins: 450, crystals: 35 },
+        costMultiplier: 1.5,
+        maxLevel: 5,
+        productionInterval: 60000,
+        effects: { type: "production", resource: "coins", value: 45 },
+        activity: "supply",
+      },
+      barracks: {
+        name: "兵营",
+        icon: "⚔️",
+        description: "高阶战备设施，提供攻防与补给加成。",
+        baseCost: { coins: 1200, crystals: 100 },
+        costMultiplier: 1.5,
+        maxLevel: 5,
+        productionInterval: 0,
+        effects: { type: "combatBonus", attack: 3, defense: 3 },
+        activity: "drill",
+      },
+      library: {
+        name: "远征图书馆",
+        icon: "📚",
+        description: "研究路线情报，提高远征经验结算。",
+        baseCost: { coins: 1200, crystals: 100 },
+        costMultiplier: 1.5,
+        maxLevel: 5,
+        productionInterval: 0,
+        effects: { type: "expBonus", value: 4 },
+        activity: "research",
+      },
+      crystal_mine: {
+        name: "水晶矿",
+        icon: "💎",
+        description: "通过主动开采与仓储缓慢获得水晶。",
+        baseCost: { coins: 1500, crystals: 150 },
+        costMultiplier: 1.55,
+        maxLevel: 5,
+        productionInterval: 120000,
+        effects: { type: "production", resource: "crystals", value: 4 },
+        activity: "mining",
+      },
+    };
 
-    setOnPersist(callback) {
-        this.onPersist = typeof callback === 'function' ? callback : null;
-    }
+    Object.entries(this.buildingData).forEach(([type, data]) => {
+      data.site = TERRITORY_BUILDING_SITES[type];
+      data.unlock = {
+        stage: data.site?.requiredRank || 0,
+        pulse: 0,
+        label: `领地等级 ${data.site?.requiredRank || 0}`,
+      };
+    });
 
-    persist() {
-        if (this.onPersist) {
-            this.onPersist(this.getSaveData());
-            return;
-        }
+    this.slotConfig = {
+      initialSlots: 1,
+      maxSlots: 12,
+      unlockPulses: TERRITORY_PROGRESSION_CONFIG.slotUnlockPulses,
+    };
+    this.expansionCosts = TERRITORY_RANK_CONFIG.slice(2).map((entry) => ({
+      ...entry.cost,
+      requiredMainBaseLevel: 1,
+    }));
+    this.storageKey = "petplan_territory";
+    this.onPersist = null;
+    this.resetState();
+    console.log("[TerritorySystem] v2 初始化完成");
+  }
 
-        // 未装配完整游戏存档时，保留独立键作为旧版工具的兼容回退。
-        this.saveToLocalStorage();
-    }
+  resetState() {
+    this.territoryVersion = TERRITORY_VERSION;
+    this.rank = 0;
+    this.buildings = [];
+    this.slots = [];
+    this.unlockedSlots = 1;
+    this.expansionCount = 0;
+    this.lastProductionTime = Date.now();
+    this.progressContext = this.createDefaultProgressContext();
+    this.preparedBonuses = this.createEmptyPreparedBonuses();
+    this.lastActivityAt = {};
+    this.initSlots();
+  }
 
-    createDefaultProgressContext() {
-        return {
-            totalFlips: 0,
-            fateCoins: 1,
-            assistants: 0,
-            heroTrainingLevel: 0,
-            playerLevel: 1,
-            equippedPets: 0,
-            petLevelTotal: 0,
-            buildings: this.buildings?.length || 0,
-            expansionCount: this.expansionCount || 0,
-            unlockedSlots: this.unlockedSlots || this.slotConfig.initialSlots
-        };
+  initSlots() {
+    this.slots = [];
+    for (let index = 0; index < this.slotConfig.maxSlots; index += 1) {
+      this.slots.push({ index, unlockPulse: 0, building: null });
     }
+    for (const building of this.buildings || []) {
+      if (this.slots[building.slotIndex]) this.slots[building.slotIndex].building = building;
+    }
+  }
 
-    setProgressContext(context = {}) {
-        this.progressContext = {
-            ...this.createDefaultProgressContext(),
-            ...this.progressContext,
-            ...context,
-            buildings: this.buildings.length,
-            expansionCount: this.expansionCount,
-            unlockedSlots: this.getEffectiveUnlockedSlots({
-                ...this.progressContext,
-                ...context
-            })
-        };
+  setResourceSystem(resourceSystem) {
+    this.resourceSystem = resourceSystem;
+  }
 
-        return this.getProgressSummary();
-    }
+  setPlayerSystem(playerSystem) {
+    this.playerSystem = playerSystem;
+  }
 
-    getLoopPulseBreakdown(context = this.progressContext) {
-        const safe = {
-            ...this.createDefaultProgressContext(),
-            ...context
-        };
-        const extraPetLevels = Math.max(0, safe.petLevelTotal - safe.equippedPets);
-        const additionalEquippedPets = Math.max(0, safe.equippedPets - 1);
-        const weights = TERRITORY_PROGRESSION_CONFIG.pulseWeights;
+  setOnPersist(callback) {
+    this.onPersist = typeof callback === "function" ? callback : null;
+  }
 
-        return [
-            {
-                id: 'flips',
-                label: '翻转',
-                value:
-                    Math.min(
-                        Math.max(0, safe.totalFlips),
-                        weights.totalFlipsCap
-                    ) * weights.totalFlips
-            },
-            { id: 'table', label: '硬币', value: Math.max(0, safe.fateCoins - 1) * weights.fateCoins },
-            { id: 'assistants', label: '助手', value: safe.assistants * weights.assistants },
-            { id: 'hero', label: '训练', value: safe.heroTrainingLevel * weights.heroTrainingLevel },
-            { id: 'pets', label: '额外上阵', value: additionalEquippedPets * weights.equippedPets },
-            { id: 'petLevels', label: '宠物成长', value: extraPetLevels * weights.extraPetLevels },
-            { id: 'buildings', label: '建筑', value: safe.buildings * weights.buildings },
-            { id: 'expansion', label: '扩张', value: safe.expansionCount * weights.expansionCount }
-        ];
+  persist() {
+    if (this.onPersist) {
+      this.onPersist(this.getSaveData());
+      return;
     }
+    this.saveToLocalStorage();
+  }
 
-    getLoopPulse(context = this.progressContext) {
-        return Math.floor(
-            this.getLoopPulseBreakdown(context).reduce(
-                (total, contribution) => total + contribution.value,
-                0
-            )
-        );
-    }
+  createDefaultProgressContext() {
+    return {
+      totalFlips: 0,
+      fateCoins: 1,
+      assistants: 0,
+      heroTrainingLevel: 0,
+      playerLevel: 1,
+      equippedPets: 0,
+      petLevelTotal: 0,
+      buildings: this.buildings?.length || 0,
+      expansionCount: this.expansionCount || 0,
+      unlockedSlots: this.unlockedSlots || 1,
+      bestDepth: 0,
+      extractions: 0,
+      losses: 0,
+    };
+  }
 
-    getSlotUnlockPulse(slotIndex) {
-        return this.slotConfig.unlockPulses[slotIndex] ?? slotIndex * 32;
-    }
+  createEmptyPreparedBonuses() {
+    return { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
+  }
 
-    getLoopUnlockedSlotCount(context = this.progressContext) {
-        const pulse = this.getLoopPulse(context);
-        return Math.min(
-            this.slotConfig.maxSlots,
-            this.slotConfig.unlockPulses.filter((requiredPulse) => pulse >= requiredPulse).length
-        );
-    }
+  setProgressContext(context = {}) {
+    this.progressContext = {
+      ...this.createDefaultProgressContext(),
+      ...this.progressContext,
+      ...context,
+      buildings: this.buildings.length,
+      expansionCount: this.expansionCount,
+      unlockedSlots: this.getEffectiveUnlockedSlots(),
+    };
+    return this.getProgressSummary();
+  }
 
-    getEffectiveUnlockedSlots(context = this.progressContext) {
-        return Math.min(
-            this.slotConfig.maxSlots,
-            Math.max(this.unlockedSlots, this.getLoopUnlockedSlotCount(context))
-        );
-    }
+  getRankConfig(rank = this.rank) {
+    return TERRITORY_RANK_CONFIG[clampInt(rank, 0, TERRITORY_RANK_CONFIG.length - 1)];
+  }
 
-    getBuildingEntries() {
-        return Object.entries(this.buildingData).sort(([, a], [, b]) => {
-            const stageDiff = (a.unlock?.stage || 0) - (b.unlock?.stage || 0);
-            if (stageDiff !== 0) return stageDiff;
-            return (a.unlock?.pulse || 0) - (b.unlock?.pulse || 0);
-        });
-    }
+  getNextRankConfig() {
+    return TERRITORY_RANK_CONFIG[this.rank + 1] || null;
+  }
 
-    getBuildingUnlockState(buildingType, context = this.progressContext) {
-        const data = this.buildingData[buildingType];
-        if (!data) {
-            return {
-                unlocked: false,
-                reason: '无效建筑',
-                pulse: this.getLoopPulse(context),
-                requiredPulse: 0,
-                stage: 0
-            };
-        }
+  getWorldWidth() {
+    const occupiedX = this.buildings.reduce((max, building) => (
+      Math.max(max, this.buildingData[building.type]?.site?.x || 0)
+    ), 0);
+    return Math.max(this.getRankConfig().worldWidth, occupiedX + 420);
+  }
 
-        const pulse = this.getLoopPulse(context);
-        const requiredPulse = data.unlock?.pulse || 0;
-        const unlocked = pulse >= requiredPulse;
+  getBuildingEntries() {
+    return Object.entries(this.buildingData).sort(([, a], [, b]) => (
+      (a.site?.slotIndex || 0) - (b.site?.slotIndex || 0)
+    ));
+  }
 
-        return {
-            unlocked,
-            pulse,
-            requiredPulse,
-            stage: data.unlock?.stage || 1,
-            label: data.unlock?.label || `循环脉冲 ${requiredPulse}`,
-            reason: unlocked ? '已开放' : `需要循环脉冲 ${requiredPulse}`
-        };
-    }
+  getBuildingByType(type) {
+    return this.buildings.find((building) => building.type === type) || null;
+  }
 
-    isBuildingTypeUnlocked(buildingType, context = this.progressContext) {
-        return this.getBuildingUnlockState(buildingType, context).unlocked;
-    }
+  getBuildingAt(slotIndex) {
+    return this.buildings.find((building) => building.slotIndex === slotIndex) || null;
+  }
 
-    getUnlockedBuildingTypes(context = this.progressContext) {
-        return this.getBuildingEntries()
-            .filter(([type]) => this.isBuildingTypeUnlocked(type, context))
-            .map(([type]) => type);
-    }
+  getBuildings() {
+    return this.buildings.slice();
+  }
 
-    getNextBuildingUnlock(context = this.progressContext) {
-        return this.getBuildingEntries()
-            .map(([type, data]) => ({
-                type,
-                data,
-                state: this.getBuildingUnlockState(type, context)
-            }))
-            .find((entry) => !entry.state.unlocked) || null;
-    }
+  getBuildingLevel(type) {
+    return this.getBuildingByType(type)?.level || 0;
+  }
 
-    getNextSlotUnlock(context = this.progressContext) {
-        const pulse = this.getLoopPulse(context);
-        const index = this.slotConfig.unlockPulses.findIndex((requiredPulse) => pulse < requiredPulse);
-        if (index === -1) return null;
+  getConstructionScore() {
+    return this.buildings.reduce((score, building) => (
+      score + (building.type === "main_base" ? 0 : building.level)
+    ), 0);
+  }
 
-        return {
-            index,
-            requiredPulse: this.getSlotUnlockPulse(index),
-            pulse
-        };
-    }
+  getLoopPulseBreakdown(context = this.progressContext) {
+    const safe = { ...this.createDefaultProgressContext(), ...context };
+    const weights = TERRITORY_PROGRESSION_CONFIG.pulseWeights;
+    const extraPetLevels = Math.max(0, safe.petLevelTotal - safe.equippedPets);
+    const additionalEquippedPets = Math.max(0, safe.equippedPets - 1);
+    return [
+      { id: "flips", label: "翻转", value: Math.min(Math.max(0, safe.totalFlips), weights.totalFlipsCap) * weights.totalFlips },
+      { id: "table", label: "硬币", value: Math.max(0, safe.fateCoins - 1) * weights.fateCoins },
+      { id: "assistants", label: "助手", value: safe.assistants * weights.assistants },
+      { id: "hero", label: "训练", value: safe.heroTrainingLevel * weights.heroTrainingLevel },
+      { id: "pets", label: "额外上阵", value: additionalEquippedPets * weights.equippedPets },
+      { id: "petLevels", label: "宠物成长", value: extraPetLevels * weights.extraPetLevels },
+      { id: "expedition", label: "远征", value: safe.bestDepth * 8 + safe.extractions * 12 },
+    ];
+  }
 
-    getProgressSummary(context = this.progressContext) {
-        const pulse = this.getLoopPulse(context);
-        const nextBuilding = this.getNextBuildingUnlock(context);
-        const nextSlot = this.getNextSlotUnlock(context);
-        const nextTargetPulse = nextBuilding
-            ? nextBuilding.state.requiredPulse
-            : nextSlot
-                ? nextSlot.requiredPulse
-                : pulse;
-        const previousTargetPulse = Math.max(
-            0,
-            ...this.getBuildingEntries()
-                .map(([type]) => this.getBuildingUnlockState(type, context).requiredPulse)
-                .filter((requiredPulse) => requiredPulse <= pulse)
-        );
-        const span = Math.max(1, nextTargetPulse - previousTargetPulse);
-        const progress = nextTargetPulse <= pulse
-            ? 1
-            : Math.max(0, Math.min(1, (pulse - previousTargetPulse) / span));
+  getLoopPulse(context = this.progressContext) {
+    return Math.floor(this.getLoopPulseBreakdown(context).reduce(
+      (total, contribution) => total + contribution.value,
+      0
+    ));
+  }
 
-        return {
-            pulse,
-            pulseBreakdown: this.getLoopPulseBreakdown(context),
-            stage: this.getUnlockedBuildingTypes(context).length,
-            unlockedSlots: this.getEffectiveUnlockedSlots(context),
-            maxSlots: this.slotConfig.maxSlots,
-            unlockedBuildingTypes: this.getUnlockedBuildingTypes(context),
-            nextBuilding,
-            nextSlot,
-            nextTargetPulse,
-            progress
-        };
-    }
-    
-    // ==================== 地块状态查询 ====================
-    
-    /**
-     * 检查地块是否已解锁
-     */
-    isSlotUnlocked(slotIndex) {
-        if (slotIndex < 0 || slotIndex >= this.slots.length) return false;
+  getSlotUnlockPulse(slotIndex) {
+    return this.slotConfig.unlockPulses[slotIndex] ?? 0;
+  }
 
-        return slotIndex < this.getEffectiveUnlockedSlots();
-    }
-    
-    /**
-     * 获取地块状态
-     */
-    getSlotState(slotIndex) {
-        if (!this.isSlotUnlocked(slotIndex)) {
-            return 'locked';
-        }
-        
-        const slot = this.slots[slotIndex];
-        if (slot.building) {
-            return 'built';
-        }
-        
-        return 'empty';
-    }
-    
-    /**
-     * 获取所有已建造的建筑
-     */
-    getBuildings() {
-        return this.buildings.slice();
-    }
-    
-    /**
-     * 根据位置获取建筑
-     */
-    getBuildingAt(slotIndex) {
-        return this.buildings.find(b => b.slotIndex === slotIndex) || null;
-    }
-    
-    // ==================== 建筑建造 ====================
-    
-    /**
-     * 计算建造成本
-     */
-    calculateBuildCost(buildingType) {
-        const data = this.buildingData[buildingType];
-        if (!data) return null;
-        
-        return {
-            coins: data.baseCost.coins,
-            crystals: data.baseCost.crystals
-        };
-    }
-    
-    /**
-     * 计算升级成本
-     */
-    calculateUpgradeCost(buildingType, currentLevel) {
-        const data = this.buildingData[buildingType];
-        if (!data) return null;
-        
-        const multiplier = Math.pow(data.costMultiplier, currentLevel);
-        return {
-            coins: Math.floor(data.baseCost.coins * multiplier),
-            crystals: Math.floor(data.baseCost.crystals * multiplier)
-        };
-    }
-    
-    /**
-     * 检查是否可以建造
-     */
-    canBuild(buildingType, slotIndex) {
-        // 检查地块是否有效且已解锁
-        if (!this.isSlotUnlocked(slotIndex)) {
-            return { success: false, reason: '地块未解锁' };
-        }
-        
-        // 检查地块是否为空
-        const slot = this.slots[slotIndex];
-        if (slot.building) {
-            return { success: false, reason: '地块已被占用' };
-        }
-        
-        // 检查建筑类型是否有效
-        const data = this.buildingData[buildingType];
-        if (!data) {
-            return { success: false, reason: '无效的建筑类型' };
-        }
+  getLoopUnlockedSlotCount() {
+    return this.getRankConfig().slots;
+  }
 
-        const unlockState = this.getBuildingUnlockState(buildingType);
-        if (!unlockState.unlocked) {
-            return { success: false, reason: unlockState.reason, unlockState };
-        }
-        
-        // 主基地只能有一个
-        if (buildingType === 'main_base') {
-            const existingMainBase = this.buildings.find(b => b.type === 'main_base');
-            if (existingMainBase) {
-                return { success: false, reason: '主基地只能建造一个' };
-            }
-        }
-        
-        // 检查资源是否足够
-        const cost = this.calculateBuildCost(buildingType);
-        if (!this.resourceSystem) {
-            return { success: false, reason: '资源系统未初始化' };
-        }
-        
-        if (!this.resourceSystem.hasEnoughCoins(cost.coins)) {
-            return { success: false, reason: '金币不足' };
-        }
-        
-        if (!this.resourceSystem.hasEnoughCrystals(cost.crystals)) {
-            return { success: false, reason: '水晶不足' };
-        }
-        
-        return { success: true };
-    }
-    
-    /**
-     * 建造建筑
-     */
-    buildBuilding(buildingType, slotIndex) {
-        const canBuildResult = this.canBuild(buildingType, slotIndex);
-        if (!canBuildResult.success) {
-            console.warn('[TerritorySystem] 无法建造:', canBuildResult.reason);
-            return canBuildResult;
-        }
-        
-        // 扣除资源
-        const cost = this.calculateBuildCost(buildingType);
-        this.resourceSystem.spendCoins(cost.coins);
-        this.resourceSystem.spendCrystals(cost.crystals);
-        
-        // 创建建筑对象
-        const building = {
-            id: `building_${Date.now()}_${slotIndex}`,
-            type: buildingType,
-            slotIndex: slotIndex,
-            level: 1,
-            lastProduction: Date.now(),
-            position: { x: slotIndex % 3, y: Math.floor(slotIndex / 3) }
-        };
-        
-        // 添加到建筑列表
-        this.buildings.push(building);
-        
-        // 更新地块
-        this.slots[slotIndex].building = building;
-        
-        // 保存数据
-        this.persist();
-        
-        console.log('[TerritorySystem] ✅ 建造成功:', this.buildingData[buildingType].name);
-        return { success: true, building };
-    }
-    
-    /**
-     * 调试用：直接建造建筑（跳过资源检查）
-     */
-    debugBuildBuilding(buildingType, position) {
-        const slotIndex = position.y * 3 + position.x;
-        
-        if (!this.isSlotUnlocked(slotIndex)) {
-            // 自动解锁
-            this.unlockedSlots = Math.max(this.unlockedSlots, slotIndex + 1);
-        }
-        
-        const slot = this.slots[slotIndex];
-        if (slot.building) {
-            return false;
-        }
-        
-        const building = {
-            id: `building_${Date.now()}_${slotIndex}`,
-            type: buildingType,
-            slotIndex: slotIndex,
-            level: 1,
-            lastProduction: Date.now(),
-            position: position
-        };
-        
-        this.buildings.push(building);
-        this.slots[slotIndex].building = building;
-        this.persist();
-        
-        return true;
-    }
-    
-    // ==================== 建筑升级 ====================
-    
-    /**
-     * 检查是否可以升级
-     */
-    canUpgrade(slotIndex) {
-        const building = this.getBuildingAt(slotIndex);
-        if (!building) {
-            return { success: false, reason: '该地块没有建筑' };
-        }
-        
-        const data = this.buildingData[building.type];
-        if (building.level >= data.maxLevel) {
-            return { success: false, reason: '已达到最大等级' };
-        }
-        
-        const cost = this.calculateUpgradeCost(building.type, building.level);
-        if (!this.resourceSystem.hasEnoughCoins(cost.coins)) {
-            return { success: false, reason: '金币不足' };
-        }
-        
-        if (!this.resourceSystem.hasEnoughCrystals(cost.crystals)) {
-            return { success: false, reason: '水晶不足' };
-        }
-        
-        return { success: true, cost };
-    }
-    
-    /**
-     * 升级建筑
-     */
-    upgradeBuilding(slotIndex) {
-        const canUpgradeResult = this.canUpgrade(slotIndex);
-        if (!canUpgradeResult.success) {
-            console.warn('[TerritorySystem] 无法升级:', canUpgradeResult.reason);
-            return canUpgradeResult;
-        }
-        
-        const building = this.getBuildingAt(slotIndex);
-        const cost = canUpgradeResult.cost;
-        
-        // 扣除资源
-        this.resourceSystem.spendCoins(cost.coins);
-        this.resourceSystem.spendCrystals(cost.crystals);
-        
-        // 升级
-        building.level += 1;
-        
-        // 保存数据
-        this.persist();
-        
-        console.log('[TerritorySystem] ✅ 升级成功:', 
-            this.buildingData[building.type].name, 'Lv.', building.level);
-        return { success: true, building };
-    }
-    
-    // ==================== 建筑拆除 ====================
-    
-    /**
-     * 拆除建筑
-     */
-    demolishBuilding(slotIndex) {
-        const building = this.getBuildingAt(slotIndex);
-        if (!building) {
-            return { success: false, reason: '该地块没有建筑' };
-        }
-        
-        // 主基地不能拆除
-        if (building.type === 'main_base') {
-            return { success: false, reason: '主基地不能拆除' };
-        }
-        
-        // 返还部分资源（50%）
-        const data = this.buildingData[building.type];
-        const refundCoins = Math.floor(data.baseCost.coins * 0.5);
-        const refundCrystals = Math.floor(data.baseCost.crystals * 0.5);
-        
-        this.resourceSystem.addCoins(refundCoins);
-        this.resourceSystem.addCrystals(refundCrystals);
-        
-        // 从建筑列表移除
-        const index = this.buildings.findIndex(b => b.id === building.id);
-        if (index !== -1) {
-            this.buildings.splice(index, 1);
-        }
-        
-        // 清空地块
-        this.slots[slotIndex].building = null;
-        
-        // 保存数据
-        this.persist();
-        
-        console.log('[TerritorySystem] ✅ 拆除成功，返还:', refundCoins, '金币,', refundCrystals, '水晶');
-        return { success: true, refund: { coins: refundCoins, crystals: refundCrystals } };
-    }
-    
-    // ==================== 领地扩张 ====================
-    
-    /**
-     * 获取下一次扩张成本
-     */
-    getNextExpansionCost() {
-        if (this.expansionCount >= this.expansionCosts.length) {
-            return null;  // 已达最大扩张次数
-        }
-        return this.expansionCosts[this.expansionCount];
-    }
-    
-    /**
-     * 检查是否可以扩张
-     */
-    canExpand() {
-        if (this.getEffectiveUnlockedSlots() >= this.slotConfig.maxSlots) {
-            return { success: false, reason: '所有地块已开放' };
-        }
+  getHighestOccupiedSlot() {
+    return this.buildings.reduce((highest, building) => Math.max(highest, building.slotIndex), -1);
+  }
 
-        const cost = this.getNextExpansionCost();
-        if (!cost) {
-            return { success: false, reason: '已达到最大扩张次数' };
-        }
-        
-        // 检查主基地等级
-        const mainBase = this.buildings.find(b => b.type === 'main_base');
-        const mainBaseLevel = mainBase ? mainBase.level : 0;
-        if (mainBaseLevel < cost.requiredMainBaseLevel) {
-            return { success: false, reason: `需要主基地等级 ${cost.requiredMainBaseLevel}` };
-        }
-        
-        // 检查资源
-        if (!this.resourceSystem.hasEnoughCoins(cost.coins)) {
-            return { success: false, reason: '金币不足' };
-        }
-        
-        if (!this.resourceSystem.hasEnoughCrystals(cost.crystals)) {
-            return { success: false, reason: '水晶不足' };
-        }
-        
-        return { success: true, cost };
-    }
-    
-    /**
-     * 扩张领地
-     */
-    expandTerritory() {
-        const canExpandResult = this.canExpand();
-        if (!canExpandResult.success) {
-            console.warn('[TerritorySystem] 无法扩张:', canExpandResult.reason);
-            return canExpandResult;
-        }
-        
-        const cost = canExpandResult.cost;
-        
-        // 扣除资源
-        this.resourceSystem.spendCoins(cost.coins);
-        this.resourceSystem.spendCrystals(cost.crystals);
-        
-        // 更新扩张状态
-        this.expansionCount += 1;
-        this.unlockedSlots = Math.min(
-            this.getEffectiveUnlockedSlots() + 2,
-            this.slotConfig.maxSlots
-        );
-        
-        // 保存数据
-        this.persist();
-        
-        console.log('[TerritorySystem] ✅ 扩张成功，当前地块数:', this.unlockedSlots);
-        return { success: true, unlockedSlots: this.unlockedSlots };
-    }
-    
-    // ==================== 资源产出 ====================
-    
-    /**
-     * 收集资源产出
-     */
-    collectResources() {
-        const now = Date.now();
-        const collected = { coins: 0, crystals: 0 };
-        
-        for (const building of this.buildings) {
-            const data = this.buildingData[building.type];
-            if (!data || data.productionInterval <= 0) continue;
-            
-            // 计算自上次产出以来经过的时间
-            const elapsed = now - building.lastProduction;
-            const cycles = Math.floor(elapsed / data.productionInterval);
-            
-            if (cycles > 0) {
-                // 计算产出量（基础产出 × 等级）
-                const amount = data.effects.value * building.level * cycles;
-                
-                if (data.effects.resource === 'coins') {
-                    collected.coins += amount;
-                    this.resourceSystem.addCoins(amount);
-                } else if (data.effects.resource === 'crystals') {
-                    collected.crystals += amount;
-                    this.resourceSystem.addCrystals(amount);
-                }
-                
-                // 更新上次产出时间
-                building.lastProduction = now - (elapsed % data.productionInterval);
-            }
-        }
-        
-        if (collected.coins > 0 || collected.crystals > 0) {
-            this.persist();
-            console.log('[TerritorySystem] 收集资源:', collected);
-        }
-        
-        return collected;
-    }
-    
-    /**
-     * 计算离线收益
-     */
-    calculateOfflineGains(offlineDurationMs) {
-        const gains = { coins: 0, crystals: 0 };
-        const offlineMultiplier = 0.5;  // 离线收益为在线的50%
-        const maxOfflineHours = 24;
-        
-        // 限制离线时长
-        const cappedDuration = Math.min(
-            offlineDurationMs,
-            maxOfflineHours * 60 * 60 * 1000
-        );
-        
-        for (const building of this.buildings) {
-            const data = this.buildingData[building.type];
-            if (!data || data.productionInterval <= 0) continue;
-            
-            // 计算周期数
-            const cycles = Math.floor(cappedDuration / data.productionInterval);
-            const amount = Math.floor(
-                data.effects.value * building.level * cycles * offlineMultiplier
-            );
-            
-            if (data.effects.resource === 'coins') {
-                gains.coins += amount;
-            } else if (data.effects.resource === 'crystals') {
-                gains.crystals += amount;
-            }
-        }
-        
-        return gains;
-    }
-    
-    // ==================== 属性加成计算 ====================
-    
-    /**
-     * 计算领地提供的属性加成
-     */
-    calculateBonuses() {
-        const bonuses = {
-            attack: 0,
-            defense: 0,
-            expBonus: 0
-        };
-        
-        for (const building of this.buildings) {
-            const data = this.buildingData[building.type];
-            if (!data || !data.effects) continue;
-            
-            switch (data.effects.type) {
-                case 'attackBonus':
-                    bonuses.attack += data.effects.value * building.level;
-                    break;
-                case 'defenseBonus':
-                    bonuses.defense += data.effects.value * building.level;
-                    break;
-                case 'combatBonus':
-                    bonuses.attack += data.effects.attack * building.level;
-                    bonuses.defense += data.effects.defense * building.level;
-                    break;
-                case 'expBonus':
-                    bonuses.expBonus += data.effects.value * building.level;
-                    break;
-            }
-        }
-        
-        return bonuses;
-    }
-    
-    // ==================== 存档接口 ====================
-    
-    /**
-     * 获取存档数据
-     */
-    getSaveData() {
-        return {
-            buildings: this.buildings.map(b => ({
-                id: b.id,
-                type: b.type,
-                slotIndex: b.slotIndex,
-                level: b.level,
-                lastProduction: b.lastProduction,
-                position: b.position
-            })),
-            unlockedSlots: this.unlockedSlots,
-            expansionCount: this.expansionCount,
-            lastProductionTime: this.lastProductionTime
-        };
-    }
-    
-    /**
-     * 加载存档数据
-     */
-    loadSaveData(data) {
-        if (!data) return;
-        
-        // 重置状态
-        this.initSlots();
-        this.buildings = [];
-        
-        // 恢复扩张状态
-        this.unlockedSlots = data.unlockedSlots ?? this.slotConfig.initialSlots;
-        this.expansionCount = data.expansionCount ?? 0;
-        this.lastProductionTime = data.lastProductionTime || Date.now();
-        
-        // 恢复建筑
-        if (data.buildings && Array.isArray(data.buildings)) {
-            for (const buildingData of data.buildings) {
-                const building = {
-                    id: buildingData.id,
-                    type: buildingData.type,
-                    slotIndex: buildingData.slotIndex,
-                    level: buildingData.level,
-                    lastProduction: buildingData.lastProduction || Date.now(),
-                    position: buildingData.position
-                };
-                
-                this.buildings.push(building);
-                
-                if (this.slots[buildingData.slotIndex]) {
-                    this.slots[buildingData.slotIndex].building = building;
-                }
-            }
-        }
+  getEffectiveUnlockedSlots() {
+    return Math.min(
+      this.slotConfig.maxSlots,
+      Math.max(this.getRankConfig().slots, this.getHighestOccupiedSlot() + 1)
+    );
+  }
 
-        this.setProgressContext(this.progressContext);
-        
-        console.log('[TerritorySystem] 存档加载完成，建筑数量:', this.buildings.length);
-    }
-    
-    /**
-     * 保存到 LocalStorage
-     */
-    saveToLocalStorage() {
-        try {
-            const data = this.getSaveData();
-            localStorage.setItem(this.storageKey, JSON.stringify(data));
-        } catch (error) {
-            console.error('[TerritorySystem] 保存失败:', error);
-        }
-    }
-    
-    /**
-     * 从 LocalStorage 加载
-     */
-    loadFromLocalStorage() {
-        try {
-            const dataStr = localStorage.getItem(this.storageKey);
-            if (dataStr) {
-                const data = JSON.parse(dataStr);
-                this.loadSaveData(data);
-                return true;
-            }
-        } catch (error) {
-            console.error('[TerritorySystem] 加载失败:', error);
-        }
+  isSlotUnlocked(slotIndex) {
+    return slotIndex >= 0 && slotIndex < this.getEffectiveUnlockedSlots();
+  }
 
-        return false;
+  getSlotState(slotIndex) {
+    const building = this.getBuildingAt(slotIndex);
+    if (building) return "built";
+    if (!this.isSlotUnlocked(slotIndex)) return "locked";
+    return "empty";
+  }
+
+  getBlueprintRequirements(type) {
+    if (type === "barracks") {
+      return [
+        { id: "rank", label: "领地达到 R2", met: this.rank >= 2 },
+        { id: "training", label: "训练场达到 Lv.2", met: this.getBuildingLevel("training_ground") >= 2 },
+        { id: "depth", label: "最深远征达到区域 3", met: this.progressContext.bestDepth >= 3 },
+      ];
     }
-    
-    /**
-     * 清除领地数据
-     */
-    clearTerritoryData() {
-        this.initSlots();
-        this.buildings = [];
-        this.unlockedSlots = this.slotConfig.initialSlots;
-        this.expansionCount = 0;
-        this.lastProductionTime = Date.now();
-        this.setProgressContext(this.createDefaultProgressContext());
-        this.persist();
-        console.log('[TerritorySystem] 领地数据已清除');
+    if (type === "library") {
+      return [
+        { id: "rank", label: "领地达到 R2", met: this.rank >= 2 },
+        { id: "temple", label: "守护神庙达到 Lv.2", met: this.getBuildingLevel("temple") >= 2 },
+        { id: "pets", label: "至少上阵 2 只宠物", met: this.progressContext.equippedPets >= 2 },
+      ];
     }
+    if (type === "crystal_mine") {
+      return [
+        { id: "rank", label: "领地达到 R3", met: this.rank >= 3 },
+        { id: "workshop", label: "工坊达到 Lv.2", met: this.getBuildingLevel("workshop") >= 2 },
+        { id: "extraction", label: "至少成功撤离 1 次", met: this.progressContext.extractions >= 1 },
+      ];
+    }
+    const requiredRank = this.buildingData[type]?.site?.requiredRank || 0;
+    return [{ id: "rank", label: `领地达到 R${requiredRank}`, met: this.rank >= requiredRank }];
+  }
+
+  getBuildingUnlockState(type) {
+    const data = this.buildingData[type];
+    if (!data) return { unlocked: false, reason: "无效建筑", requirements: [] };
+    const requirements = this.getBlueprintRequirements(type);
+    const unmet = requirements.filter((requirement) => !requirement.met);
+    return {
+      unlocked: unmet.length === 0,
+      reason: unmet.length === 0 ? "蓝图已开放" : unmet[0].label,
+      requirements,
+      requiredRank: data.site?.requiredRank || 0,
+      stage: data.site?.requiredRank || 0,
+      requiredPulse: 0,
+      pulse: this.getLoopPulse(),
+      label: unmet.length === 0 ? "蓝图已开放" : unmet.map((item) => item.label).join(" · "),
+    };
+  }
+
+  isBuildingTypeUnlocked(type) {
+    return this.getBuildingUnlockState(type).unlocked;
+  }
+
+  getUnlockedBuildingTypes() {
+    return this.getBuildingEntries()
+      .filter(([type]) => this.isBuildingTypeUnlocked(type))
+      .map(([type]) => type);
+  }
+
+  getNextBuildingUnlock() {
+    return this.getBuildingEntries()
+      .map(([type, data]) => ({ type, data, state: this.getBuildingUnlockState(type) }))
+      .find((entry) => !entry.state.unlocked) || null;
+  }
+
+  getNextSlotUnlock() {
+    const next = this.getNextRankConfig();
+    if (!next) return null;
+    return { index: this.getEffectiveUnlockedSlots(), requiredRank: next.rank, pulse: this.getLoopPulse() };
+  }
+
+  getRankRequirementState(targetRank = this.rank + 1) {
+    const config = TERRITORY_RANK_CONFIG[targetRank];
+    if (!config) return { complete: true, checks: [], progress: 1, config: null };
+    const values = {
+      mainBase: this.getBuildingLevel("main_base"),
+      bestDepth: this.progressContext.bestDepth || 0,
+      extractions: this.progressContext.extractions || 0,
+      constructionScore: this.getConstructionScore(),
+    };
+    const labels = {
+      mainBase: "修复主基地",
+      bestDepth: "最深远征",
+      extractions: "成功撤离",
+      constructionScore: "建设度",
+    };
+    const checks = Object.entries(config.requirements).map(([metric, target]) => ({
+      metric,
+      label: labels[metric] || metric,
+      value: values[metric] || 0,
+      target,
+      met: (values[metric] || 0) >= target,
+    }));
+    const cost = config.cost || { coins: 0, crystals: 0 };
+    const resourceChecks = [
+      { metric: "coins", label: "金币", value: this.resourceSystem?.coins || 0, target: cost.coins, met: (this.resourceSystem?.coins || 0) >= cost.coins },
+      { metric: "crystals", label: "水晶", value: this.resourceSystem?.crystals || 0, target: cost.crystals, met: (this.resourceSystem?.crystals || 0) >= cost.crystals },
+    ].filter((check) => check.target > 0);
+    const allChecks = [...checks, ...resourceChecks];
+    return {
+      complete: allChecks.every((check) => check.met),
+      checks: allChecks,
+      progress: allChecks.length === 0 ? 1 : allChecks.filter((check) => check.met).length / allChecks.length,
+      config,
+    };
+  }
+
+  getProgressSummary() {
+    const pulse = this.getLoopPulse();
+    const nextBuilding = this.getNextBuildingUnlock();
+    const nextRankState = this.getRankRequirementState();
+    return {
+      pulse,
+      pulseBreakdown: this.getLoopPulseBreakdown(),
+      stage: this.rank,
+      rank: this.rank,
+      rankName: this.getRankConfig().name,
+      constructionScore: this.getConstructionScore(),
+      unlockedSlots: this.getEffectiveUnlockedSlots(),
+      maxSlots: this.slotConfig.maxSlots,
+      unlockedBuildingTypes: this.getUnlockedBuildingTypes(),
+      nextBuilding,
+      nextSlot: this.getNextSlotUnlock(),
+      nextRank: nextRankState.config,
+      rankRequirements: nextRankState.checks,
+      nextTargetPulse: pulse,
+      progress: nextRankState.progress,
+      worldWidth: this.getWorldWidth(),
+      preparedBonuses: { ...this.preparedBonuses },
+      production: this.getProductionSnapshot(),
+    };
+  }
+
+  calculateBuildCost(type) {
+    const data = this.buildingData[type];
+    return data ? { ...data.baseCost } : null;
+  }
+
+  getBuildingLevelCap(type) {
+    const data = this.buildingData[type];
+    if (!data) return 0;
+    if (type === "main_base") return 1;
+    return Math.min(data.maxLevel, Math.max(2, this.rank + 1));
+  }
+
+  calculateUpgradeCost(type, currentLevel) {
+    const data = this.buildingData[type];
+    if (!data || type === "main_base") return { coins: 0, crystals: 0 };
+    const multiplier = Math.pow(data.costMultiplier, Math.max(0, currentLevel - 1));
+    return {
+      coins: Math.floor(data.baseCost.coins * multiplier),
+      crystals: Math.floor(data.baseCost.crystals * multiplier),
+    };
+  }
+
+  canBuild(type, slotIndex = this.buildingData[type]?.site?.slotIndex) {
+    const data = this.buildingData[type];
+    if (!data) return { success: false, reason: "无效建筑" };
+    const expectedSlot = data.site?.slotIndex;
+    if (slotIndex !== expectedSlot) return { success: false, reason: "该建筑只能在对应分区建造" };
+    if (!this.isSlotUnlocked(slotIndex)) return { success: false, reason: `需要领地达到 R${data.site.requiredRank}` };
+    if (this.getBuildingByType(type)) return { success: false, reason: `${data.name}只能建造一座` };
+    const unlockState = this.getBuildingUnlockState(type);
+    if (!unlockState.unlocked) return { success: false, reason: unlockState.reason, unlockState };
+    if (!this.resourceSystem) return { success: false, reason: "资源系统未初始化" };
+    const cost = this.calculateBuildCost(type);
+    if (!this.resourceSystem.hasEnoughCoins(cost.coins)) return { success: false, reason: "金币不足" };
+    if (!this.resourceSystem.hasEnoughCrystals(cost.crystals)) return { success: false, reason: "水晶不足" };
+    return { success: true, cost };
+  }
+
+  buildBuilding(type, slotIndex = this.buildingData[type]?.site?.slotIndex) {
+    const result = this.canBuild(type, slotIndex);
+    if (!result.success) return result;
+    const cost = result.cost;
+    this.resourceSystem.spendCoins(cost.coins);
+    this.resourceSystem.spendCrystals(cost.crystals);
+    const building = {
+      id: `building_${type}_${Date.now()}`,
+      type,
+      slotIndex,
+      level: 1,
+      lastProduction: Date.now(),
+      investedCoins: cost.coins,
+      investedCrystals: cost.crystals,
+      position: { x: this.buildingData[type].site.x, y: 0 },
+    };
+    this.buildings.push(building);
+    this.slots[slotIndex].building = building;
+    if (type === "main_base" && this.rank === 0) {
+      this.rank = 1;
+      this.expansionCount = 0;
+      this.unlockedSlots = this.getRankConfig().slots;
+    }
+    this.setProgressContext(this.progressContext);
+    this.persist();
+    return { success: true, building, message: `${this.buildingData[type].name}建造完成` };
+  }
+
+  debugBuildBuilding(type, position = {}) {
+    const data = this.buildingData[type];
+    if (!data || this.getBuildingByType(type)) return false;
+    while (this.rank < data.site.requiredRank) this.rank += 1;
+    const building = {
+      id: `building_${type}_${Date.now()}`,
+      type,
+      slotIndex: data.site.slotIndex,
+      level: 1,
+      lastProduction: Date.now(),
+      investedCoins: data.baseCost.coins,
+      investedCrystals: data.baseCost.crystals,
+      position: { x: data.site.x, y: Number(position.y) || 0 },
+    };
+    this.buildings.push(building);
+    this.initSlots();
+    if (type === "main_base") this.rank = Math.max(1, this.rank);
+    this.unlockedSlots = this.getEffectiveUnlockedSlots();
+    this.persist();
+    return true;
+  }
+
+  canUpgrade(slotIndex) {
+    const building = this.getBuildingAt(slotIndex);
+    if (!building) return { success: false, reason: "该位置没有建筑" };
+    if (building.type === "main_base") return { success: false, reason: "主基地通过领地升阶强化" };
+    const cap = this.getBuildingLevelCap(building.type);
+    if (building.level >= cap) return { success: false, reason: `当前领地等级上限为 Lv.${cap}` };
+    const cost = this.calculateUpgradeCost(building.type, building.level);
+    if (!this.resourceSystem?.hasEnoughCoins(cost.coins)) return { success: false, reason: "金币不足", cost };
+    if (!this.resourceSystem?.hasEnoughCrystals(cost.crystals)) return { success: false, reason: "水晶不足", cost };
+    return { success: true, cost };
+  }
+
+  upgradeBuilding(slotIndex) {
+    const result = this.canUpgrade(slotIndex);
+    if (!result.success) return result;
+    const building = this.getBuildingAt(slotIndex);
+    this.resourceSystem.spendCoins(result.cost.coins);
+    this.resourceSystem.spendCrystals(result.cost.crystals);
+    building.investedCoins += result.cost.coins;
+    building.investedCrystals += result.cost.crystals;
+    building.level += 1;
+    this.setProgressContext(this.progressContext);
+    this.persist();
+    return { success: true, building, message: `${this.buildingData[building.type].name}升级至 Lv.${building.level}` };
+  }
+
+  demolishBuilding(slotIndex) {
+    const building = this.getBuildingAt(slotIndex);
+    if (!building) return { success: false, reason: "该位置没有建筑" };
+    if (building.type === "main_base") return { success: false, reason: "主基地不能拆除" };
+    const refund = {
+      coins: Math.floor((building.investedCoins || 0) * 0.7),
+      crystals: Math.floor((building.investedCrystals || 0) * 0.7),
+    };
+    this.resourceSystem?.addCoins(refund.coins);
+    this.resourceSystem?.addCrystals(refund.crystals);
+    this.buildings = this.buildings.filter((item) => item.id !== building.id);
+    this.initSlots();
+    this.setProgressContext(this.progressContext);
+    this.persist();
+    return { success: true, refund, message: `建筑已拆除，返还70%累计投入` };
+  }
+
+  getNextExpansionCost() {
+    return this.getNextRankConfig()?.cost ? { ...this.getNextRankConfig().cost } : null;
+  }
+
+  canExpand() {
+    const next = this.getNextRankConfig();
+    if (!next) return { success: false, reason: "领地已达到最高等级" };
+    if (!this.getBuildingByType("main_base")) return { success: false, reason: "先修复主基地" };
+    const state = this.getRankRequirementState(next.rank);
+    if (!state.complete) {
+      const missing = state.checks.find((check) => !check.met);
+      return { success: false, reason: missing ? `${missing.label} ${missing.value}/${missing.target}` : "升阶条件未满足", requirementState: state };
+    }
+    return { success: true, cost: { ...next.cost }, next, requirementState: state };
+  }
+
+  expandTerritory() {
+    const result = this.canExpand();
+    if (!result.success) return result;
+    this.resourceSystem.spendCoins(result.cost.coins);
+    this.resourceSystem.spendCrystals(result.cost.crystals);
+    this.rank = result.next.rank;
+    this.expansionCount = Math.max(0, this.rank - 1);
+    this.unlockedSlots = this.getEffectiveUnlockedSlots();
+    this.setProgressContext(this.progressContext);
+    this.persist();
+    return {
+      success: true,
+      rank: this.rank,
+      rankName: result.next.name,
+      unlockedSlots: this.unlockedSlots,
+      message: `领地升阶为 R${this.rank} · ${result.next.name}`,
+    };
+  }
+
+  getProductionSnapshot(now = Date.now()) {
+    const capMs = this.getRankConfig().storageHours * 60 * 60 * 1000;
+    const totals = { coins: 0, crystals: 0 };
+    const buildings = [];
+    for (const building of this.buildings) {
+      const data = this.buildingData[building.type];
+      if (!data || data.effects?.type !== "production" || data.productionInterval <= 0) continue;
+      const elapsed = Math.max(0, now - (building.lastProduction || now));
+      const cappedElapsed = Math.min(elapsed, capMs);
+      const cycles = Math.floor(cappedElapsed / data.productionInterval);
+      const amount = Math.floor(data.effects.value * building.level * cycles * PRODUCTION_EFFICIENCY);
+      if (amount > 0) totals[data.effects.resource] += amount;
+      buildings.push({
+        type: building.type,
+        resource: data.effects.resource,
+        amount,
+        cycles,
+        elapsed,
+        capped: elapsed > capMs,
+      });
+    }
+    return { ...totals, buildings, storageHours: this.getRankConfig().storageHours, efficiency: PRODUCTION_EFFICIENCY };
+  }
+
+  collectResources(now = Date.now()) {
+    const snapshot = this.getProductionSnapshot(now);
+    if (snapshot.coins > 0) this.resourceSystem?.addCoins(snapshot.coins);
+    if (snapshot.crystals > 0) this.resourceSystem?.addCrystals(snapshot.crystals);
+    for (const item of snapshot.buildings) {
+      const building = this.getBuildingByType(item.type);
+      const data = this.buildingData[item.type];
+      if (!building || !data) continue;
+      building.lastProduction = item.capped
+        ? now
+        : now - Math.max(0, (now - building.lastProduction) % data.productionInterval);
+    }
+    if (snapshot.coins > 0 || snapshot.crystals > 0) this.persist();
+    return { coins: snapshot.coins, crystals: snapshot.crystals };
+  }
+
+  calculateOfflineGains(durationMs) {
+    const capMs = this.getRankConfig().storageHours * 60 * 60 * 1000;
+    const duration = Math.min(Math.max(0, Number(durationMs) || 0), capMs);
+    const gains = { coins: 0, crystals: 0 };
+    for (const building of this.buildings) {
+      const data = this.buildingData[building.type];
+      if (!data || data.effects?.type !== "production") continue;
+      const cycles = Math.floor(duration / data.productionInterval);
+      gains[data.effects.resource] += Math.floor(data.effects.value * building.level * cycles * PRODUCTION_EFFICIENCY);
+    }
+    return gains;
+  }
+
+  getActivityDefinition(type) {
+    const definitions = {
+      training: { label: "实战训练", durationMs: 2600, buffs: { attack: 6 } },
+      blessing: { label: "守护仪式", durationMs: 2600, buffs: { defense: 4 } },
+      supply: { label: "制作补给", durationMs: 3000, buffs: { supplies: 1 } },
+      drill: { label: "战备演练", durationMs: 3200, buffs: { attack: 3, defense: 3 } },
+      research: { label: "路线研究", durationMs: 3000, buffs: { expBonus: 10 } },
+      mining: { label: "主动开采", durationMs: 3200, reward: { crystals: 6 } },
+    };
+    return definitions[type] || null;
+  }
+
+  canPerformActivity(buildingType, now = Date.now()) {
+    const building = this.getBuildingByType(buildingType);
+    const activityType = this.buildingData[buildingType]?.activity;
+    const definition = this.getActivityDefinition(activityType);
+    if (!building || !definition) return { success: false, reason: "该建筑没有可用活动" };
+    const readyAt = (this.lastActivityAt[buildingType] || 0) + ACTIVITY_COOLDOWN_MS;
+    if (now < readyAt) {
+      return { success: false, reason: `活动恢复中 ${Math.ceil((readyAt - now) / 60000)} 分钟`, readyAt };
+    }
+    return { success: true, activityType, definition, building };
+  }
+
+  performActivity(buildingType, now = Date.now()) {
+    const result = this.canPerformActivity(buildingType, now);
+    if (!result.success) return result;
+    const { definition } = result;
+    Object.entries(definition.buffs || {}).forEach(([key, value]) => {
+      this.preparedBonuses[key] = Math.max(this.preparedBonuses[key] || 0, value);
+    });
+    if (definition.reward?.crystals) this.resourceSystem?.addCrystals(definition.reward.crystals);
+    this.lastActivityAt[buildingType] = now;
+    this.persist();
+    return {
+      success: true,
+      message: `${definition.label}完成`,
+      preparedBonuses: { ...this.preparedBonuses },
+      reward: { ...(definition.reward || {}) },
+    };
+  }
+
+  getPreparedBonuses() {
+    return { ...this.preparedBonuses };
+  }
+
+  consumePreparedBonuses() {
+    const bonuses = { ...this.preparedBonuses };
+    this.preparedBonuses = this.createEmptyPreparedBonuses();
+    if (Object.values(bonuses).some((value) => value > 0)) this.persist();
+    return bonuses;
+  }
+
+  calculateBonuses() {
+    const bonuses = {
+      attack: 0,
+      defense: 0,
+      expBonus: 0,
+      coinBonus: 0,
+      crystalBonus: 0,
+      supplyBonus: 0,
+      petCooldownReduction: 0,
+    };
+    for (const building of this.buildings) {
+      const data = this.buildingData[building.type];
+      if (!data) continue;
+      if (building.type === "training_ground") bonuses.attack += data.effects.value * building.level;
+      if (building.type === "temple") {
+        bonuses.defense += data.effects.value * building.level;
+        bonuses.petCooldownReduction += building.level * 2;
+      }
+      if (building.type === "barracks") {
+        bonuses.attack += data.effects.attack * building.level;
+        bonuses.defense += data.effects.defense * building.level;
+        bonuses.supplyBonus += Math.floor(building.level / 3);
+      }
+      if (building.type === "library") bonuses.expBonus += data.effects.value * building.level;
+      if (building.type === "workshop") bonuses.coinBonus += building.level * 3;
+      if (building.type === "crystal_mine") bonuses.crystalBonus += building.level * 2;
+    }
+    bonuses.petCooldownReduction = Math.min(20, bonuses.petCooldownReduction);
+    bonuses.expBonus = Math.min(30, bonuses.expBonus);
+    return bonuses;
+  }
+
+  getSaveData() {
+    return {
+      territoryVersion: TERRITORY_VERSION,
+      rank: this.rank,
+      buildings: this.buildings.map((building) => ({
+        id: building.id,
+        type: building.type,
+        slotIndex: building.slotIndex,
+        level: building.level,
+        lastProduction: building.lastProduction,
+        investedCoins: building.investedCoins || 0,
+        investedCrystals: building.investedCrystals || 0,
+        position: building.position,
+      })),
+      unlockedSlots: this.getEffectiveUnlockedSlots(),
+      expansionCount: this.expansionCount,
+      lastProductionTime: this.lastProductionTime,
+      preparedBonuses: { ...this.preparedBonuses },
+      lastActivityAt: { ...this.lastActivityAt },
+    };
+  }
+
+  loadSaveData(data) {
+    if (!data || typeof data !== "object") return;
+    const now = Date.now();
+    const incoming = Array.isArray(data.buildings) ? data.buildings : [];
+    const merged = new Map();
+    for (const raw of incoming) {
+      const definition = this.buildingData[raw?.type];
+      if (!definition) continue;
+      const type = raw.type;
+      const level = type === "main_base"
+        ? 1
+        : clampInt(raw.level || 1, 1, definition.maxLevel);
+      const previous = merged.get(type);
+      const investedCoins = Math.max(0, Number(raw.investedCoins) || this.estimateInvestment(type, level).coins);
+      const investedCrystals = Math.max(0, Number(raw.investedCrystals) || this.estimateInvestment(type, level).crystals);
+      if (previous) {
+        previous.level = Math.min(definition.maxLevel, previous.level + level);
+        previous.investedCoins += investedCoins;
+        previous.investedCrystals += investedCrystals;
+        previous.lastProduction = Math.min(previous.lastProduction, Number(raw.lastProduction) || now);
+        continue;
+      }
+      merged.set(type, {
+        id: typeof raw.id === "string" ? raw.id : `building_${type}_${now}`,
+        type,
+        slotIndex: definition.site.slotIndex,
+        level,
+        lastProduction: Math.min(now, Math.max(0, Number(raw.lastProduction) || now)),
+        investedCoins,
+        investedCrystals,
+        position: { x: definition.site.x, y: 0 },
+      });
+    }
+    this.buildings = Array.from(merged.values());
+    const isV2 = Number(data.territoryVersion) >= TERRITORY_VERSION;
+    this.rank = isV2
+      ? clampInt(data.rank, 0, TERRITORY_RANK_CONFIG.length - 1)
+      : this.deriveLegacyRank(data);
+    if (this.getBuildingByType("main_base")) this.rank = Math.max(1, this.rank);
+    while (
+      this.rank < TERRITORY_RANK_CONFIG.length - 1 &&
+      TERRITORY_RANK_CONFIG[this.rank].slots <= this.getHighestOccupiedSlot()
+    ) this.rank += 1;
+    this.expansionCount = Math.max(0, this.rank - 1);
+    this.unlockedSlots = this.getEffectiveUnlockedSlots();
+    this.lastProductionTime = Math.min(now, Math.max(0, Number(data.lastProductionTime) || now));
+    this.preparedBonuses = {
+      ...this.createEmptyPreparedBonuses(),
+      ...(isV2 && data.preparedBonuses ? data.preparedBonuses : {}),
+    };
+    Object.keys(this.preparedBonuses).forEach((key) => {
+      this.preparedBonuses[key] = clampInt(this.preparedBonuses[key], 0, 100);
+    });
+    this.lastActivityAt = isV2 && data.lastActivityAt && typeof data.lastActivityAt === "object"
+      ? Object.fromEntries(Object.entries(data.lastActivityAt).map(([key, value]) => [key, Math.min(now, Math.max(0, Number(value) || 0))]))
+      : {};
+    this.initSlots();
+    this.setProgressContext(this.progressContext);
+    console.log(`[TerritorySystem] v2 存档加载完成，R${this.rank}，建筑 ${this.buildings.length}`);
+  }
+
+  deriveLegacyRank(data) {
+    if (!this.getBuildingByType("main_base")) return 0;
+    const expansionRank = 1 + clampInt(data.expansionCount, 0, 4);
+    const legacySlots = clampInt(data.unlockedSlots, 1, 12);
+    const slotRank = TERRITORY_RANK_CONFIG.find((entry) => entry.slots >= legacySlots)?.rank || 5;
+    return Math.max(1, expansionRank, Math.min(slotRank, 5));
+  }
+
+  estimateInvestment(type, level) {
+    const buildCost = this.calculateBuildCost(type) || { coins: 0, crystals: 0 };
+    const total = { ...buildCost };
+    for (let current = 1; current < level; current += 1) {
+      const cost = this.calculateUpgradeCost(type, current);
+      total.coins += cost.coins;
+      total.crystals += cost.crystals;
+    }
+    return total;
+  }
+
+  saveToLocalStorage() {
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(this.getSaveData()));
+    } catch (error) {
+      console.error("[TerritorySystem] 保存失败:", error);
+    }
+  }
+
+  loadFromLocalStorage() {
+    try {
+      const serialized = localStorage.getItem(this.storageKey);
+      if (!serialized) return false;
+      this.loadSaveData(JSON.parse(serialized));
+      return true;
+    } catch (error) {
+      console.error("[TerritorySystem] 加载失败:", error);
+      return false;
+    }
+  }
+
+  clearTerritoryData() {
+    this.resetState();
+    this.persist();
+  }
 }
 
-/**
- * 获取单例实例
- */
 export function getTerritorySystemInstance(resourceSystem, playerSystem) {
-    if (!instance) {
-        instance = new TerritorySystem(resourceSystem, playerSystem);
-    }
-    return instance;
+  if (!instance) instance = new TerritorySystem(resourceSystem, playerSystem);
+  return instance;
 }

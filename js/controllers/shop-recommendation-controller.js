@@ -763,8 +763,8 @@ export class ShopRecommendationController {
 
     if (guide.id === "territory") {
       return {
-        title: "建立第 1 座领地建筑",
-        detail: "前往领地，选择已开放地块完成建造",
+        title: "修复领地主基地",
+        detail: "前往领地，控制角色走到主基地遗迹并完成修复",
         route: "首局教学",
         routeType: "territory",
         alt: "继续积累正面与反面",

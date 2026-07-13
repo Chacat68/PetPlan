@@ -564,8 +564,9 @@ test("命运商店评分、主次推荐和分类顺序可独立回归", () => {
 
 });
 
-test("领地脉冲、建筑门槛和地块门槛覆盖完整配置", () => {
+test("领地共鸣纳入远征功绩，但地块只由永久领地等级开放", () => {
   const territory = new TerritorySystem(createResourceStub(), null);
+  territory.setOnPersist(() => {});
   const breakdown = territory.getLoopPulseBreakdown({
     totalFlips: 999,
     fateCoins: 2,
@@ -573,8 +574,8 @@ test("领地脉冲、建筑门槛和地块门槛覆盖完整配置", () => {
     heroTrainingLevel: 1,
     equippedPets: 3,
     petLevelTotal: 7,
-    buildings: 1,
-    expansionCount: 1,
+    bestDepth: 5,
+    extractions: 2,
   });
 
   assert.deepEqual(
@@ -586,73 +587,35 @@ test("领地脉冲、建筑门槛和地块门槛覆盖完整配置", () => {
       ["hero", 16],
       ["pets", 36],
       ["petLevels", 24],
-      ["buildings", 14],
-      ["expansion", 20],
+      ["expedition", 64],
     ]
   );
   assert.equal(
     breakdown.reduce((total, contribution) => total + contribution.value, 0),
-    176
+    206
   );
 
-  const buildingThresholds = {
-    main_base: 0,
-    training_ground: 8,
-    workshop: 24,
-    temple: 42,
-    barracks: 64,
-    crystal_mine: 88,
-    library: 118,
-  };
-  for (const [type, threshold] of Object.entries(buildingThresholds)) {
-    if (threshold > 0) {
-      assert.equal(
-        territory.getBuildingUnlockState(type, pulseContext(threshold - 1)).unlocked,
-        false,
-        `${type} 不应提前开放`
-      );
-    }
-    assert.equal(
-      territory.getBuildingUnlockState(type, pulseContext(threshold)).unlocked,
-      true,
-      `${type} 应在门槛开放`
-    );
-  }
-
-  const slotThresholds = [0, 12, 28, 48, 72, 100, 132, 168, 208, 252, 300, 352];
-  slotThresholds.forEach((threshold, index) => {
-    if (threshold > 0) {
-      assert.equal(
-        territory.getLoopUnlockedSlotCount(pulseContext(threshold - 1)),
-        index
-      );
-    }
-    assert.equal(
-      territory.getLoopUnlockedSlotCount(pulseContext(threshold)),
-      index + 1
-    );
-  });
-
-  const summary = territory.getProgressSummary(pulseContext(66));
-  assert.equal(summary.stage, 5);
-  assert.equal(summary.unlockedSlots, 4);
-  assert.equal(summary.nextBuilding?.type, "crystal_mine");
+  territory.setProgressContext({ totalFlips: 999, fateCoins: 8, assistants: 8 });
+  assert.equal(territory.getLoopUnlockedSlotCount(), 1);
+  assert.equal(territory.getProgressSummary().rank, 0);
+  assert.equal(territory.buildBuilding("main_base", 0).success, true);
+  assert.equal(territory.getProgressSummary().rank, 1);
+  assert.equal(territory.getLoopUnlockedSlotCount(), 4);
 });
 
-test("领地建造同时执行建筑与地块解锁保护", () => {
+test("领地主建筑唯一、使用固定施工点并受蓝图条件保护", () => {
   const territory = new TerritorySystem(createResourceStub(), null);
   territory.setOnPersist(() => {});
 
   assert.equal(territory.canBuild("training_ground", 0).success, false);
-  territory.setProgressContext(pulseContext(8));
-  assert.equal(territory.canBuild("training_ground", 0).success, true);
-  assert.equal(territory.canBuild("training_ground", 1).reason, "地块未解锁");
-
-  const secondTerritory = new TerritorySystem(createResourceStub(), null);
-  secondTerritory.setOnPersist(() => {});
-  secondTerritory.setProgressContext(pulseContext(12));
-  assert.equal(secondTerritory.buildBuilding("main_base", 0).success, true);
-  assert.equal(secondTerritory.canBuild("main_base", 1).reason, "主基地只能建造一个");
+  assert.equal(territory.buildBuilding("main_base", 0).success, true);
+  assert.equal(territory.canBuild("training_ground", 1).success, true);
+  assert.equal(territory.buildBuilding("training_ground", 1).success, true);
+  assert.equal(territory.canBuild("training_ground", 1).reason, "训练场只能建造一座");
+  assert.equal(territory.canBuild("main_base", 0).reason, "主基地只能建造一座");
+  assert.equal(territory.canUpgrade(1).success, true);
+  assert.equal(territory.upgradeBuilding(1).success, true);
+  assert.equal(territory.getBuildingLevel("training_ground"), 2);
 });
 
 test("成就奖励只可领取一次，未完成目标不会发奖", () => {
@@ -759,7 +722,7 @@ test("现代存档可往返，旧版存档可迁移且不会串入会话状态",
 
     assert.equal(await save.saveGame(1), true);
     const serialized = JSON.parse(storage.getItem("petplan_save_1"));
-    assert.equal(serialized.version, "1.1.0");
+    assert.equal(serialized.version, "1.2.0");
     assert.equal(serialized.level, 7);
     assert.deepEqual(serialized.data.fate, { fateCoins: 2, totalFlips: 9 });
     assert.deepEqual(serialized.data.progression, {
@@ -788,7 +751,7 @@ test("现代存档可往返，旧版存档可迁移且不会串入会话状态",
     assert.equal(await save.loadGame(2), true);
     assert.deepEqual(systems.fate.loaded, {});
     assert.deepEqual(systems.progression.loaded, {});
-    assert.equal(JSON.parse(storage.getItem("petplan_save_2")).version, "1.1.0");
+    assert.equal(JSON.parse(storage.getItem("petplan_save_2")).version, "1.2.0");
 
     storage.setItem("petplan_save_3", "{broken-json");
     const expectedErrors = [];

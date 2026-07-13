@@ -286,6 +286,32 @@ test("CombatSystem 遭遇生成、宠物技能冷却和主角承伤可回归", (
   );
 });
 
+test("基地一次性战备只在远征成功开始时消费并接入局内属性", () => {
+  const { combat } = createCombatHarness();
+  let consumeCalls = 0;
+  const prepared = { attack: 6, defense: 4, supplies: 1, expBonus: 10 };
+  combat.setTerritorySystem({
+    calculateBonuses() {
+      return { attack: 3, defense: 4, expBonus: 10, supplyBonus: 1 };
+    },
+    getPreparedBonuses() {
+      return { ...prepared };
+    },
+    consumePreparedBonuses() {
+      consumeCalls += 1;
+      return { ...prepared };
+    },
+  });
+
+  assert.equal(combat.startRun().success, true);
+  assert.equal(consumeCalls, 1);
+  assert.equal(combat.getBattleState().supplies, 4);
+  assert.equal(combat.getPlayerAttackDamage(), 33);
+  assert.equal(combat.runMaxHp, 124);
+  assert.equal(combat.startRun().success, false);
+  assert.equal(consumeCalls, 1, "进行中的远征不能重复消费基地战备");
+});
+
 test("CombatSystem 撤离成功的资源、经验和长期记录只结算一次", () => {
   const { combat, resourceTotals, experience } = createCombatHarness();
   startCombatEncounter(combat);

@@ -7,7 +7,7 @@ PetPlan 是一款以横屏街机舞台呈现的宠物养成放置游戏。玩家
 1. 在命运桌点击硬币并积累正面、反面与桌面硬币。
 2. 按商店推荐购买自动结算、小助手、主角或宠物训练。
 3. 进入宠物远征，亲自移动探索迷雾地图，追踪地点、搜索物资、击败敌人，并在合适时机返回入口撤离。
-4. 在领地消耗资源、解锁地块与建筑，获得长期属性和产出。
+4. 回到可自由行走的基地，修复设施、准备下一次远征并推动领地永久升阶。
 
 宠物编队和成就位于 HUD 导航中，以模态页面打开。
 
@@ -34,6 +34,8 @@ python3 -m http.server 4174 --directory .
 | 点击地图地点 | 追踪目标；不会自动移动或立即进入 |
 | E / 屏幕“交互”按钮 | 靠近地点后进入、搜索或启动撤离 |
 | 点击敌人 / 宠物技能 | 锁定战斗目标 / 释放主动技能 |
+| A / D、左右方向键 / 屏幕左右键 | 在领地基地中横向移动 |
+| E / 领地“交互”按钮 | 靠近基地设施后建造、升级、活动或收取 |
 | 宠物 / 成就 | 打开辅助管理页面 |
 | F5 / F9 | 保存 / 加载槽位 1 |
 | Escape | 关闭当前弹窗 |
@@ -57,7 +59,9 @@ PetPlan/
 │   ├── expedition-world-system.js # 地图地点、碰撞、探索迷雾与交互距离
 │   ├── camera-system.js          # 世界坐标、屏幕坐标与跟随相机
 │   ├── expedition-run-system.js  # 地点事件、搜索、威胁、背包与撤离规则
-│   ├── territory-system.js       # 地块、建筑、长期进度
+│   ├── territory-system.js       # 永久领地等级、建筑、生产与战备
+│   ├── territory-world-system.js # 基地移动、跟随、邻近设施与场景活动
+│   ├── territory-art-config.js   # 领地完整环境与建筑美术资源清单
 │   ├── resource-system.js        # 金币、红宝石、水晶
 │   ├── save-system.js            # LocalStorage 存档
 │   ├── scene-router.js           # 主场景与 URL 状态
@@ -73,6 +77,7 @@ PetPlan/
 - [玩家指南](./doc/player-guide.md)
 - [产品体验设计](./doc/design/product-experience.md)
 - [宠物远征设计](./doc/design/extraction-rpg-rework.md)
+- [实际基地领地设计](./doc/design/territory-world-rework.md)
 - [系统架构](./doc/design/architecture.md)
 - [系统规则](./doc/design/systems.md)
 - [开发环境](./doc/dev/setup.md)

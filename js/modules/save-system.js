@@ -11,7 +11,7 @@ export class SaveSystem {
         this.maxSlots = 5;
         
         // 存档版本
-        this.version = '1.1.0';
+        this.version = '1.2.0';
         
         // 存档前缀
         this.storagePrefix = 'petplan_save_';

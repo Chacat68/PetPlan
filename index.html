@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=world-exploration-20260712b" />
+    <link rel="stylesheet" href="css/style.css?v=territory-prompt-layout-20260713a" />
   </head>
   <body>
     <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
@@ -296,96 +296,63 @@
           </aside>
         </div>
 
-        <!-- 领地场景 -->
-        <div class="scene-container" id="territory-scene" style="display: none">
-          <section class="territory-board-panel">
+        <!-- 可游走领地基地 -->
+        <div class="scene-container territory-world-scene" id="territory-scene" style="display: none">
+          <section class="territory-world-panel">
             <div class="territory-scorebar">
-              <span>TERRITORY</span>
-              <span class="score-dollar">MAP</span>
+              <span>BASE TERRITORY</span>
+              <span class="score-dollar" id="territory-rank-badge">R0 · 未建营地</span>
             </div>
 
-            <div class="territory-map-surface">
-              <div class="territory-content">
-                <div class="territory-grid" id="territory-grid">
-                  <!-- 地块将动态生成 -->
-                </div>
+            <div class="territory-world-surface">
+              <div class="territory-resource-strip" aria-label="领地状态">
+                <span>金币 <b id="territory-gold">0</b></span>
+                <span>水晶 <b id="territory-crystal">0</b></span>
+                <span>建设度 <b id="territory-construction-score">0</b></span>
+                <span>成长共鸣 <b id="territory-resonance">0</b></span>
               </div>
+
+              <div class="territory-objective-hud">
+                <span class="territory-objective-label">基地目标</span>
+                <strong id="territory-objective-title">修复主基地</strong>
+                <span id="territory-objective-detail">前往主基地遗迹并进行交互</span>
+              </div>
+
+              <div class="territory-canvas-frame">
+                <canvas id="territoryCanvas" width="1280" height="720" aria-label="可游走领地基地"></canvas>
+              </div>
+
+              <div class="territory-event-feed" id="territory-event-feed" aria-live="polite">
+                使用 A/D、方向键或点击地面移动，靠近建筑后进行交互。
+              </div>
+              <output class="territory-nearby-prompt" id="territory-nearby-prompt" aria-live="polite" hidden></output>
+
+              <div class="territory-world-controls" aria-label="基地移动与交互">
+                <button type="button" class="territory-move-btn" data-territory-direction="left" aria-label="向左移动" aria-pressed="false">◀</button>
+                <button type="button" class="territory-interact-btn" id="territory-interact-btn" disabled>
+                  <strong id="territory-interact-label">靠近建筑后交互</strong>
+                  <span id="territory-interact-detail">按 E 打开建筑操作</span>
+                </button>
+                <button type="button" class="territory-move-btn" data-territory-direction="right" aria-label="向右移动" aria-pressed="false">▶</button>
+              </div>
+
+              <section class="territory-context-panel" id="territory-context-panel" aria-labelledby="territory-context-title" hidden>
+                <button type="button" class="territory-context-close" data-territory-action="close" aria-label="关闭建筑操作">×</button>
+                <span class="territory-context-kicker" id="territory-context-kicker">基地设施</span>
+                <h2 id="territory-context-title">主基地</h2>
+                <p id="territory-context-detail">靠近建筑后可进行建设与活动。</p>
+                <div class="territory-context-stats" id="territory-context-stats"></div>
+                <div class="territory-context-actions">
+                  <button type="button" data-territory-action="build" hidden>开始建造</button>
+                  <button type="button" data-territory-action="promote" hidden>领地升阶</button>
+                  <button type="button" data-territory-action="upgrade" hidden>升级建筑</button>
+                  <button type="button" data-territory-action="activity" hidden>进行基地活动</button>
+                  <button type="button" data-territory-action="collect" hidden>收取储备</button>
+                  <button type="button" data-territory-action="depart" hidden>进入远征</button>
+                </div>
+              </section>
             </div>
           </section>
-
-          <aside class="territory-shop-panel">
-            <div class="territory-shop-tabs">
-              <button type="button" class="shop-tab active">▦</button>
-              <button type="button" class="shop-tab">⌂</button>
-              <button type="button" class="shop-tab">◆</button>
-              <button type="button" class="shop-tab">↗</button>
-            </div>
-            <h2>领地</h2>
-
-            <div class="territory-panel-list">
-              <div class="territory-panel-card territory-loop-card">
-                <span class="shop-icon coin-gold">↻</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">循环阶段</span>
-                  <span class="upgrade-cost" id="territory-loop-detail">脉冲 0 / 8</span>
-                  <span class="territory-loop-track" aria-hidden="true">
-                    <span id="territory-loop-fill"></span>
-                  </span>
-                  <span class="territory-pulse-breakdown" id="territory-pulse-breakdown" aria-label="脉冲构成">翻转 +0</span>
-                </span>
-                <span class="upgrade-effect" id="territory-loop-stage">1</span>
-              </div>
-              <div class="territory-unlock-list" id="territory-unlock-list" aria-label="建筑开放状态"></div>
-              <div class="territory-panel-card territory-next-card">
-                <span class="shop-icon coin-silver">⌂</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">下个建筑</span>
-                  <span class="upgrade-cost" id="territory-next-requirement">继续推进循环</span>
-                </span>
-                <span class="upgrade-effect" id="territory-next-building">训练场</span>
-              </div>
-              <div class="territory-panel-card">
-                <span class="shop-icon coin-copper">⏱</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">产出节奏</span>
-                  <span class="upgrade-cost">在线每分钟</span>
-                </span>
-                <span class="upgrade-effect" id="territory-production-rate">0</span>
-              </div>
-              <div class="territory-panel-card">
-                <span class="shop-icon coin-copper">💰</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">金币库存</span>
-                  <span class="upgrade-cost">当前金币</span>
-                </span>
-                <span class="upgrade-effect" id="territory-gold">0</span>
-              </div>
-              <div class="territory-panel-card">
-                <span class="shop-icon coin-silver">💎</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">水晶库存</span>
-                  <span class="upgrade-cost">当前水晶</span>
-                </span>
-                <span class="upgrade-effect" id="territory-crystal">0</span>
-              </div>
-              <div class="territory-panel-card territory-progress-card">
-                <span class="shop-icon coin-gold">▦</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">已解锁地块</span>
-                  <span class="upgrade-cost">已解锁地块</span>
-                </span>
-                <span class="upgrade-effect" id="territory-slot-count">6/12</span>
-              </div>
-              <button class="territory-panel-card expand-btn" id="expand-territory-btn" type="button">
-                <span class="shop-icon coin-gold">↗</span>
-                <span class="upgrade-main">
-                  <span class="upgrade-name">扩张</span>
-                  <span class="upgrade-cost">扩张领地</span>
-                </span>
-                <span class="upgrade-effect" id="expansion-progress">6/12</span>
-              </button>
-            </div>
-          </aside>
         </div>
 
         <!-- 游戏内功能按钮 -->
@@ -639,7 +606,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=world-exploration-20260712b";
+        var moduleSrc = "js/main.js?v=territory-ground-unified-20260713a";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

@@ -45,7 +45,7 @@ index.html
 | `settings-controller.js` | 设置模态、显示设置、快捷存档/读档和存档状态 |
 | `player-modal-controller.js` | 玩家属性模态、属性升级和升级按钮状态 |
 | `pet-modal-controller.js` | 宠物编队、背包、图鉴以及解锁/上阵操作 |
-| `territory-scene-controller.js` | 领地网格、建筑操作、扩建和循环进度反馈 |
+| `territory-scene-controller.js` | 实际基地 Canvas、角色移动、设施交互、升阶与战备反馈 |
 | `shop-recommendation-controller.js` | 命运商店推荐、筛选、下一目标和成长提示 |
 | `fate-scene-controller.js` | 命运桌翻面与购买、界面刷新、硬币反馈和助手动画 |
 
