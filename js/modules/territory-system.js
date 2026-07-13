@@ -14,9 +14,10 @@ import {
 
 let instance = null;
 
-const TERRITORY_VERSION = 2;
+const TERRITORY_VERSION = 3;
 const PRODUCTION_EFFICIENCY = 0.5;
 const ACTIVITY_COOLDOWN_MS = 5 * 60 * 1000;
+const MEANINGFUL_COLLECTION = { coins: 100, crystals: 10 };
 
 const clampInt = (value, min, max) => Math.max(
   min,
@@ -127,12 +128,13 @@ export class TerritorySystem {
     this.storageKey = "petplan_territory";
     this.onPersist = null;
     this.resetState();
-    console.log("[TerritorySystem] v2 初始化完成");
+    console.log("[TerritorySystem] v3 初始化完成");
   }
 
   resetState() {
     this.territoryVersion = TERRITORY_VERSION;
     this.rank = 0;
+    this.legacyVeteranRank = 0;
     this.buildings = [];
     this.slots = [];
     this.unlockedSlots = 1;
@@ -405,10 +407,272 @@ export class TerritorySystem {
     };
   }
 
+  getDistrictLabel(path) {
+    const labels = {
+      core: "核心区",
+      hero: "先攻区",
+      companion: "协同区",
+      territory: "拓域区",
+      gate: "远征区",
+    };
+    return labels[path] || "基地设施";
+  }
+
+  getRequirementGoal(requirement) {
+    if (!requirement) return null;
+    const shared = {
+      kind: "requirement",
+      action: "progress",
+      status: "in_progress",
+      metric: requirement.metric,
+      value: requirement.value,
+      target: requirement.target,
+      requirement: { ...requirement },
+      blockers: requirement.met ? [] : [{ ...requirement, gap: Math.max(0, requirement.target - requirement.value) }],
+    };
+    const progress = `${requirement.value} / ${requirement.target}`;
+    const definitions = {
+      bestDepth: {
+        title: `远征达到区域 ${requirement.target}`,
+        detail: `当前最深区域 ${progress}`,
+        scene: "dungeon",
+        ctaLabel: "前往远征",
+        route: "远征目标",
+        routeType: "combat",
+      },
+      extractions: {
+        title: `成功撤离 ${requirement.target} 次`,
+        detail: `当前撤离次数 ${progress}`,
+        scene: "dungeon",
+        ctaLabel: "前往远征",
+        route: "远征目标",
+        routeType: "combat",
+      },
+      constructionScore: {
+        title: `提升建设度至 ${requirement.target}`,
+        detail: `当前建设度 ${progress}，建造或升级基地设施`,
+        scene: "territory",
+        ctaLabel: "前往领地",
+        route: "领地目标",
+        routeType: "territory",
+      },
+      coins: {
+        title: `积累 ${requirement.target} 金币`,
+        detail: `当前金币 ${progress}，远征或收取基地储备`,
+        scene: "dungeon",
+        ctaLabel: "前往远征",
+        route: "资源目标",
+        routeType: "combat",
+      },
+      crystals: {
+        title: `积累 ${requirement.target} 水晶`,
+        detail: `当前水晶 ${progress}，远征或收取矿区储备`,
+        scene: "dungeon",
+        ctaLabel: "前往远征",
+        route: "资源目标",
+        routeType: "combat",
+      },
+    };
+    return { ...shared, ...(definitions[requirement.metric] || {
+      title: `推进${requirement.label}`,
+      detail: progress,
+      scene: "territory",
+      ctaLabel: "前往领地",
+      route: "领地目标",
+      routeType: "territory",
+    }) };
+  }
+
+  getResourceBlockers(cost = {}) {
+    const resources = {
+      coins: this.resourceSystem?.coins || 0,
+      crystals: this.resourceSystem?.crystals || 0,
+    };
+    const labels = { coins: "金币", crystals: "水晶" };
+    return Object.entries(cost)
+      .filter(([metric, target]) => (target || 0) > (resources[metric] || 0))
+      .map(([metric, target]) => ({
+        metric,
+        label: labels[metric] || metric,
+        value: resources[metric] || 0,
+        target,
+        gap: target - (resources[metric] || 0),
+      }));
+  }
+
+  getConstructionGoalOptions() {
+    const options = [];
+    this.getBuildingEntries().forEach(([type, data]) => {
+      if (type === "main_base" || this.getBuildingByType(type)) return;
+      if (data.site.slotIndex >= this.getEffectiveUnlockedSlots()) return;
+      if (!this.getBuildingUnlockState(type).unlocked) return;
+      const cost = this.calculateBuildCost(type);
+      options.push({
+        kind: "build",
+        action: "build",
+        buildingType: type,
+        title: `建设${data.name}`,
+        detail: `前往${this.getDistrictLabel(data.site.path)}分区查看施工点`,
+        cost,
+        blockers: this.getResourceBlockers(cost),
+        ready: this.canBuild(type, data.site.slotIndex).success,
+      });
+    });
+    this.buildings.forEach((building) => {
+      if (building.type === "main_base") return;
+      const data = this.buildingData[building.type];
+      if (!data || building.level >= this.getBuildingLevelCap(building.type)) return;
+      const cost = this.calculateUpgradeCost(building.type, building.level);
+      options.push({
+        kind: "upgrade",
+        action: "upgrade",
+        buildingType: building.type,
+        slotIndex: building.slotIndex,
+        title: `升级${data.name}至 Lv.${building.level + 1}`,
+        detail: `升级后建设度 +1`,
+        cost,
+        blockers: this.getResourceBlockers(cost),
+        ready: this.canUpgrade(building.slotIndex).success,
+      });
+    });
+    return options;
+  }
+
+  createConstructionGoal(option, status = option?.ready ? "ready" : "blocked") {
+    if (!option) return null;
+    const costText = `${option.cost.coins || 0} 金币 / ${option.cost.crystals || 0} 水晶`;
+    const gapText = option.blockers.map((item) => `还差 ${item.gap} ${item.label}`).join("、");
+    return {
+      ...option,
+      status,
+      detail: status === "ready"
+        ? `${option.detail} · 费用 ${costText}`
+        : `费用 ${costText}；${gapText || "当前条件不足"}`,
+      scene: "territory",
+      ctaLabel: "前往领地",
+      route: "领地目标",
+      routeType: "territory",
+    };
+  }
+
+  shouldPrioritizeCollection(production, resourceBlockers = []) {
+    if (!production) return false;
+    const reachesThreshold =
+      (production.coins || 0) >= MEANINGFUL_COLLECTION.coins ||
+      (production.crystals || 0) >= MEANINGFUL_COLLECTION.crystals;
+    const capped = production.buildings?.some((building) => building.capped) || false;
+    const closesGap = resourceBlockers.some((blocker) => (
+      (production[blocker.metric] || 0) >= blocker.gap
+    ));
+    return capped || reachesThreshold || closesGap;
+  }
+
+  createCollectionGoal(production) {
+    return {
+      kind: "collect",
+      action: "collect",
+      status: "ready",
+      blockers: [],
+      title: "收取基地储备",
+      detail: `工坊与矿区共储备 ${production.coins || 0} 金币、${production.crystals || 0} 水晶`,
+      scene: "territory",
+      ctaLabel: "前往领地",
+      route: "领地目标",
+      routeType: "territory",
+    };
+  }
+
+  getNextProgressionGoal(production = this.getProductionSnapshot()) {
+    if (!this.getBuildingByType("main_base")) {
+      return {
+        kind: "build",
+        action: "build",
+        status: "ready",
+        blockers: [],
+        buildingType: "main_base",
+        title: "修复主基地",
+        detail: "前往中央主基地遗迹并进行交互",
+        scene: "territory",
+        ctaLabel: "前往领地",
+        route: "领地目标",
+        routeType: "territory",
+      };
+    }
+
+    const promotion = this.canExpand();
+    if (promotion.success) {
+      return {
+        kind: "promote",
+        action: "promote",
+        status: "ready",
+        blockers: [],
+        title: `领地升阶为 R${promotion.next.rank}`,
+        detail: "返回主基地完成升阶，开放新的基地区域",
+        scene: "territory",
+        ctaLabel: "前往领地",
+        route: "领地目标",
+        routeType: "territory",
+      };
+    }
+
+    const requirementState = this.getRankRequirementState();
+    const missingProgress = requirementState.checks.filter((check) => (
+      !check.met && check.metric !== "coins" && check.metric !== "crystals"
+    ));
+    const missingConstruction = missingProgress.find((check) => check.metric === "constructionScore");
+    const constructionOptions = this.getConstructionGoalOptions();
+    const readyConstruction = constructionOptions.find((option) => option.ready);
+    if (missingConstruction && readyConstruction) {
+      return this.createConstructionGoal(readyConstruction);
+    }
+
+    const expeditionRequirement = missingProgress.find((check) => (
+      check.metric === "bestDepth" || check.metric === "extractions"
+    ));
+    if (expeditionRequirement) return this.getRequirementGoal(expeditionRequirement);
+
+    if (missingConstruction) {
+      const blockedConstruction = constructionOptions[0];
+      if (blockedConstruction) return this.createConstructionGoal(blockedConstruction, "blocked");
+      return this.getRequirementGoal(missingConstruction);
+    }
+
+    const resourceRequirement = requirementState.checks.find((check) => (
+      !check.met && (check.metric === "coins" || check.metric === "crystals")
+    ));
+    const resourceBlockers = requirementState.checks
+      .filter((check) => !check.met && (check.metric === "coins" || check.metric === "crystals"))
+      .map((check) => ({ ...check, gap: check.target - check.value }));
+    if (this.shouldPrioritizeCollection(production, resourceBlockers)) {
+      return this.createCollectionGoal(production);
+    }
+    if (resourceRequirement) return this.getRequirementGoal(resourceRequirement);
+
+    if (readyConstruction) {
+      return { ...this.createConstructionGoal(readyConstruction), status: "optional" };
+    }
+
+    if (this.shouldPrioritizeCollection(production)) return this.createCollectionGoal(production);
+
+    return {
+      kind: "prepare",
+      action: "depart",
+      status: "optional",
+      blockers: [],
+      title: "完成基地准备后进入远征",
+      detail: "训练、祈福或制作补给，再前往西侧远征入口",
+      scene: "dungeon",
+      ctaLabel: "前往远征",
+      route: "远征目标",
+      routeType: "combat",
+    };
+  }
+
   getProgressSummary() {
     const pulse = this.getLoopPulse();
     const nextBuilding = this.getNextBuildingUnlock();
     const nextRankState = this.getRankRequirementState();
+    const production = this.getProductionSnapshot();
     return {
       pulse,
       pulseBreakdown: this.getLoopPulseBreakdown(),
@@ -423,11 +687,13 @@ export class TerritorySystem {
       nextSlot: this.getNextSlotUnlock(),
       nextRank: nextRankState.config,
       rankRequirements: nextRankState.checks,
+      nextGoal: this.getNextProgressionGoal(production),
       nextTargetPulse: pulse,
       progress: nextRankState.progress,
       worldWidth: this.getWorldWidth(),
       preparedBonuses: { ...this.preparedBonuses },
-      production: this.getProductionSnapshot(),
+      production,
+      legacyVeteranRank: this.legacyVeteranRank,
     };
   }
 
@@ -652,14 +918,84 @@ export class TerritorySystem {
 
   getActivityDefinition(type) {
     const definitions = {
-      training: { label: "实战训练", durationMs: 2600, buffs: { attack: 6 } },
-      blessing: { label: "守护仪式", durationMs: 2600, buffs: { defense: 4 } },
-      supply: { label: "制作补给", durationMs: 3000, buffs: { supplies: 1 } },
-      drill: { label: "战备演练", durationMs: 3200, buffs: { attack: 3, defense: 3 } },
-      research: { label: "路线研究", durationMs: 3000, buffs: { expBonus: 10 } },
-      mining: { label: "主动开采", durationMs: 3200, reward: { crystals: 6 } },
+      training: {
+        label: "实战训练",
+        durationMs: 2600,
+        buffs: { attack: 6 },
+        supportByTier: {
+          1: { buffs: { attack: 1 }, detail: "攻击战备 +1" },
+          2: { buffs: { attack: 2 }, detail: "攻击战备 +2" },
+          3: { buffs: { attack: 3 }, detail: "攻击战备 +3" },
+        },
+      },
+      blessing: {
+        label: "守护仪式",
+        durationMs: 2600,
+        buffs: { defense: 4 },
+        supportByTier: {
+          1: { buffs: { defense: 1 }, detail: "防御战备 +1" },
+          2: { buffs: { defense: 2 }, detail: "防御战备 +2" },
+          3: { buffs: { defense: 3 }, detail: "防御战备 +3" },
+        },
+      },
+      supply: {
+        label: "制作补给",
+        durationMs: 3000,
+        buffs: { supplies: 1 },
+        supportByTier: {
+          1: { buffs: { supplies: 1 }, detail: "额外补给 +1" },
+          2: { buffs: { supplies: 1, expBonus: 2 }, detail: "额外补给 +1，经验战备 +2%" },
+          3: { buffs: { supplies: 1, expBonus: 5 }, detail: "额外补给 +1，经验战备 +5%" },
+        },
+      },
+      drill: {
+        label: "战备演练",
+        durationMs: 3200,
+        buffs: { attack: 3, defense: 3 },
+        supportByTier: {
+          1: { buffs: { attack: 1 }, detail: "攻击战备 +1" },
+          2: { buffs: { attack: 1, defense: 1 }, detail: "攻防战备各 +1" },
+          3: { buffs: { attack: 2, defense: 2 }, detail: "攻防战备各 +2" },
+        },
+      },
+      research: {
+        label: "路线研究",
+        durationMs: 3000,
+        buffs: { expBonus: 10 },
+        supportByTier: {
+          1: { buffs: { expBonus: 2 }, detail: "经验战备 +2%" },
+          2: { buffs: { expBonus: 4 }, detail: "经验战备 +4%" },
+          3: { buffs: { expBonus: 6 }, detail: "经验战备 +6%" },
+        },
+      },
+      mining: {
+        label: "主动开采",
+        durationMs: 3200,
+        reward: { crystals: 6 },
+        supportByTier: {
+          1: { reward: { crystals: 1 }, detail: "额外水晶 +1" },
+          2: { reward: { crystals: 2 }, detail: "额外水晶 +2" },
+          3: { reward: { crystals: 3 }, detail: "额外水晶 +3" },
+        },
+      },
     };
     return definitions[type] || null;
+  }
+
+  getActivitySupportBonus(buildingType, petSupport = null) {
+    if (!petSupport || petSupport.buildingType !== buildingType) return null;
+    const activityType = this.buildingData[buildingType]?.activity;
+    const definition = this.getActivityDefinition(activityType);
+    const tier = clampInt(petSupport.tier, 1, 3);
+    const bonus = definition?.supportByTier?.[tier];
+    if (!bonus) return null;
+    return {
+      tier,
+      tierLabel: petSupport.tierLabel || ["", "熟悉", "默契", "挚友"][tier],
+      buffs: { ...(bonus.buffs || {}) },
+      reward: { ...(bonus.reward || {}) },
+      detail: bonus.detail || "宠物岗位生效",
+    };
   }
 
   canPerformActivity(buildingType, now = Date.now()) {
@@ -674,21 +1010,35 @@ export class TerritorySystem {
     return { success: true, activityType, definition, building };
   }
 
-  performActivity(buildingType, now = Date.now()) {
+  performActivity(buildingType, now = Date.now(), { petSupport = null } = {}) {
     const result = this.canPerformActivity(buildingType, now);
     if (!result.success) return result;
     const { definition } = result;
-    Object.entries(definition.buffs || {}).forEach(([key, value]) => {
+    const supportBonus = this.getActivitySupportBonus(buildingType, petSupport);
+    const appliedBuffs = { ...(definition.buffs || {}) };
+    Object.entries(supportBonus?.buffs || {}).forEach(([key, value]) => {
+      appliedBuffs[key] = (appliedBuffs[key] || 0) + value;
+    });
+    const appliedReward = { ...(definition.reward || {}) };
+    Object.entries(supportBonus?.reward || {}).forEach(([key, value]) => {
+      appliedReward[key] = (appliedReward[key] || 0) + value;
+    });
+    Object.entries(appliedBuffs).forEach(([key, value]) => {
       this.preparedBonuses[key] = Math.max(this.preparedBonuses[key] || 0, value);
     });
-    if (definition.reward?.crystals) this.resourceSystem?.addCrystals(definition.reward.crystals);
+    if (appliedReward.coins) this.resourceSystem?.addCoins(appliedReward.coins);
+    if (appliedReward.crystals) this.resourceSystem?.addCrystals(appliedReward.crystals);
     this.lastActivityAt[buildingType] = now;
     this.persist();
+    const supportMessage = supportBonus && petSupport?.petName
+      ? `，${petSupport.petName}以${petSupport.roleLabel || "基地岗位"}协助（${supportBonus.detail}）`
+      : "";
     return {
       success: true,
-      message: `${definition.label}完成`,
+      message: `${definition.label}完成${supportMessage}`,
       preparedBonuses: { ...this.preparedBonuses },
-      reward: { ...(definition.reward || {}) },
+      reward: appliedReward,
+      petSupport: supportBonus ? { ...petSupport, effect: supportBonus } : null,
     };
   }
 
@@ -739,6 +1089,7 @@ export class TerritorySystem {
     return {
       territoryVersion: TERRITORY_VERSION,
       rank: this.rank,
+      legacyVeteranRank: this.legacyVeteranRank,
       buildings: this.buildings.map((building) => ({
         id: building.id,
         type: building.type,
@@ -791,10 +1142,20 @@ export class TerritorySystem {
       });
     }
     this.buildings = Array.from(merged.values());
-    const isV2 = Number(data.territoryVersion) >= TERRITORY_VERSION;
-    this.rank = isV2
-      ? clampInt(data.rank, 0, TERRITORY_RANK_CONFIG.length - 1)
-      : this.deriveLegacyRank(data);
+    const incomingVersion = Math.max(0, Number(data.territoryVersion) || 0);
+    const isCurrent = incomingVersion >= TERRITORY_VERSION;
+    const hasV2State = incomingVersion >= 2;
+    const savedRank = clampInt(data.rank, 0, TERRITORY_RANK_CONFIG.length - 1);
+    this.legacyVeteranRank = isCurrent
+      ? clampInt(data.legacyVeteranRank, 0, TERRITORY_RANK_CONFIG.length - 1)
+      : hasV2State
+        ? savedRank
+        : 0;
+    this.rank = isCurrent
+      ? savedRank
+      : hasV2State
+        ? this.deriveV2MigrationRank(savedRank)
+        : this.deriveLegacyRank(data);
     if (this.getBuildingByType("main_base")) this.rank = Math.max(1, this.rank);
     while (
       this.rank < TERRITORY_RANK_CONFIG.length - 1 &&
@@ -805,25 +1166,41 @@ export class TerritorySystem {
     this.lastProductionTime = Math.min(now, Math.max(0, Number(data.lastProductionTime) || now));
     this.preparedBonuses = {
       ...this.createEmptyPreparedBonuses(),
-      ...(isV2 && data.preparedBonuses ? data.preparedBonuses : {}),
+      ...(hasV2State && data.preparedBonuses ? data.preparedBonuses : {}),
     };
     Object.keys(this.preparedBonuses).forEach((key) => {
       this.preparedBonuses[key] = clampInt(this.preparedBonuses[key], 0, 100);
     });
-    this.lastActivityAt = isV2 && data.lastActivityAt && typeof data.lastActivityAt === "object"
+    this.lastActivityAt = hasV2State && data.lastActivityAt && typeof data.lastActivityAt === "object"
       ? Object.fromEntries(Object.entries(data.lastActivityAt).map(([key, value]) => [key, Math.min(now, Math.max(0, Number(value) || 0))]))
       : {};
     this.initSlots();
     this.setProgressContext(this.progressContext);
-    console.log(`[TerritorySystem] v2 存档加载完成，R${this.rank}，建筑 ${this.buildings.length}`);
+    console.log(`[TerritorySystem] v3 存档加载完成，R${this.rank}，建筑 ${this.buildings.length}`);
   }
 
   deriveLegacyRank(data) {
     if (!this.getBuildingByType("main_base")) return 0;
     const expansionRank = 1 + clampInt(data.expansionCount, 0, 4);
-    const legacySlots = clampInt(data.unlockedSlots, 1, 12);
-    const slotRank = TERRITORY_RANK_CONFIG.find((entry) => entry.slots >= legacySlots)?.rank || 5;
-    return Math.max(1, expansionRank, Math.min(slotRank, 5));
+    const siteRank = this.buildings.reduce((highest, building) => Math.max(
+      highest,
+      this.buildingData[building.type]?.site?.requiredRank || 0
+    ), 1);
+    return Math.min(TERRITORY_RANK_CONFIG.length - 1, Math.max(1, expansionRank, siteRank));
+  }
+
+  deriveV2MigrationRank(savedRank) {
+    if (!this.getBuildingByType("main_base")) return 0;
+    const siteRank = this.buildings.reduce((highest, building) => Math.max(
+      highest,
+      this.buildingData[building.type]?.site?.requiredRank || 0
+    ), 1);
+    const constructionScore = this.getConstructionScore();
+    const constructionRank = TERRITORY_RANK_CONFIG.reduce((highest, config) => {
+      const target = Number(config.requirements?.constructionScore) || 0;
+      return target > 0 && constructionScore >= target ? Math.max(highest, config.rank) : highest;
+    }, 1);
+    return Math.min(savedRank, Math.max(1, siteRank, constructionRank));
   }
 
   estimateInvestment(type, level) {

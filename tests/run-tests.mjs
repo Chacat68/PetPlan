@@ -11,6 +11,8 @@ const controllerFiles = readdirSync(
   .map((fileName) => `js/controllers/${fileName}`);
 const sourceFiles = [
   "js/main.js",
+  "js/modules/achievement-config.js",
+  "js/modules/achievement-system.js",
   "js/modules/combat-system.js",
   "js/modules/camera-system.js",
   "js/modules/expedition-run-system.js",
@@ -20,6 +22,7 @@ const sourceFiles = [
   "js/modules/game-core.js",
   "js/modules/modal-focus-manager.js",
   "js/modules/player-system.js",
+  "js/modules/save-system.js",
   "js/modules/scene-router.js",
   "js/modules/territory-art-config.js",
   "js/modules/territory-system.js",

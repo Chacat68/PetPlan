@@ -185,7 +185,7 @@ async function testSaveMigration() {
   assert.deepEqual(progression.loaded, {});
 
   const migrated = JSON.parse(localStorage.getItem("petplan_save_1"));
-  assert.equal(migrated.version, "1.2.0");
+  assert.equal(migrated.version, "1.3.0");
   assert.equal(migrated.data.resource.coins, 321);
   assert.ok(localStorage.getItem("petplan_save_slot1"));
 

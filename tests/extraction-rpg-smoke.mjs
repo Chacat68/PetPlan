@@ -22,6 +22,7 @@ const { ExpeditionRunSystem } = await import(
   "../js/modules/expedition-run-system.js"
 );
 const { CombatSystem } = await import("../js/modules/combat-system.js");
+const { PetSystem } = await import("../js/modules/pet-system.js");
 
 const fixedRandom = () => 0.5;
 
@@ -80,22 +81,12 @@ function createCombatHarness() {
     instanceId: 101,
     templateId: 1,
     level: 1,
+    friendship: 0,
     equipped: true,
   };
-  const petTemplate = {
-    id: 1,
-    name: "火焰犬",
-    emoji: "🔥",
-    type: "fire",
-    baseStats: { attack: 15, attackSpeed: 1 },
-    skill: { name: "火球术", cooldown: 5000, damage: 12 },
-  };
-  const petSystem = {
-    equippedPets: [pet],
-    getTemplate(id) {
-      return id === petTemplate.id ? petTemplate : null;
-    },
-  };
+  const petSystem = new PetSystem();
+  petSystem.unlockedPets = [pet];
+  petSystem.equippedPets = [pet];
   const territorySystem = {
     calculateBonuses() {
       return { attack: 3, defense: 4, expBonus: 10 };
@@ -119,6 +110,7 @@ function createCombatHarness() {
     playerSystem,
     resourceTotals,
     experience,
+    petSystem,
   };
 }
 
@@ -225,6 +217,65 @@ test("远征状态机完成路线、搜索、战斗节点和撤离幂等结算",
   assert.equal(run.getState().active, false);
 });
 
+test("宠物探索天赋只强化匹配的搜索方式并受规则上限约束", () => {
+  const petSystem = new PetSystem();
+  const fireDog = {
+    instanceId: 201,
+    templateId: 1,
+    level: 1,
+    friendship: 20,
+    equipped: true,
+  };
+  petSystem.unlockedPets = [fireDog];
+  petSystem.equippedPets = [fireDog];
+
+  const quickBonuses = petSystem.getExplorationSearchBonuses("quick");
+  assert.equal(quickBonuses.qualityBonus, 1);
+  assert.equal(quickBonuses.contributors[0].label, "灼热嗅觉");
+  assert.equal(petSystem.getExplorationSearchBonuses("pet").contributors.length, 0);
+  const baseSupport = petSystem.getBaseSupport("training_ground");
+  assert.equal(baseSupport.roleLabel, "训练陪练");
+  assert.equal(baseSupport.tier, 1);
+  assert.equal(baseSupport.tierLabel, "熟悉");
+
+  const training = petSystem.trainEquippedPets(1);
+  assert.equal(training.success, true);
+  assert.equal(fireDog.level, 2);
+  assert.equal(fireDog.friendship, 20, "命运桌训练不能增加远征羁绊");
+
+  fireDog.friendship = 100;
+  const cappedBond = petSystem.applyExpeditionBond({ extracted: true, depth: 4 });
+  assert.equal(cappedBond.plannedGain, 8);
+  assert.equal(cappedBond.totalGain, 0);
+  assert.equal(cappedBond.gainedCount, 0);
+  assert.equal(cappedBond.cappedCount, 1);
+  assert.equal(cappedBond.pets[0].gain, 0);
+  fireDog.friendship = 20;
+
+  const run = new ExpeditionRunSystem({ random: () => 0.3, maxDepth: 4 });
+  run.startRun();
+  const searchNode = run.getState().routeChoices.find(node => node.type === "search");
+  assert.ok(searchNode);
+  run.chooseNode(searchNode.id);
+  const searchResult = run.resolveSearch("quick", {
+    hasPet: true,
+    searchBonuses: {
+      ...quickBonuses,
+      lootCountBonus: 9,
+      threatReduction: 9,
+      supplyChanceBonus: 1,
+      ambushChanceReduction: 1,
+    },
+  });
+
+  assert.equal(searchResult.success, true);
+  assert.equal(searchResult.gainedLoot.length, 2, "额外战利品数量应封顶为 1");
+  assert.equal(run.getState().threat, 0, "威胁减免应在应用后保持非负");
+  assert.equal(searchResult.supplyFound, true);
+  assert.equal(searchResult.ambushed, false);
+  assert.match(searchResult.message, /火焰犬·灼热嗅觉生效/);
+});
+
 test("背包满载时拒绝低价值物品并用高价值物品替换最低项", () => {
   const run = new ExpeditionRunSystem({
     random: fixedRandom,
@@ -313,7 +364,7 @@ test("基地一次性战备只在远征成功开始时消费并接入局内属�
 });
 
 test("CombatSystem 撤离成功的资源、经验和长期记录只结算一次", () => {
-  const { combat, resourceTotals, experience } = createCombatHarness();
+  const { combat, resourceTotals, experience, petSystem } = createCombatHarness();
   startCombatEncounter(combat);
 
   combat.monsters = [];
@@ -342,6 +393,9 @@ test("CombatSystem 撤离成功的资源、经验和长期记录只结算一次"
   });
   assert.equal(experience.total, firstSettlement.exp);
   assert.equal(combat.meta.extractions, 1);
+  assert.equal(firstSettlement.petBond.totalGain, 2);
+  assert.equal(firstSettlement.petBond.pets[0].gain, 2);
+  assert.equal(petSystem.equippedPets[0].friendship, 2);
 
   const secondSettlement = combat.finishExpedition(true, "duplicate-call");
   assert.deepEqual(secondSettlement, firstSettlement);
@@ -351,6 +405,7 @@ test("CombatSystem 撤离成功的资源、经验和长期记录只结算一次"
   });
   assert.equal(experience.total, firstSettlement.exp);
   assert.equal(combat.meta.extractions, 1);
+  assert.equal(petSystem.equippedPets[0].friendship, 2, "重复结算不能重复增加羁绊");
 });
 
 test("CombatSystem 失败仅发放保底收益且重复失败不会再次发奖", () => {

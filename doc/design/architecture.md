@@ -30,7 +30,8 @@ index.html
 | `SceneRouter` | 命运/战斗/领地显示状态、HUD 状态、`?scene=` URL |
 | `ModalFocusManager` | 模态初始焦点、Tab 限制、关闭后的焦点恢复 |
 | `TerritorySystem` | 地块、建筑、循环脉冲、长期资源产出 |
-| `ProgressionSystem` | 首局目标、成长倾向、成就领取状态 |
+| `ProgressionSystem` | 首局目标与成长倾向；保留旧领取 ID 仅用于存档迁移 |
+| `AchievementSystem` | 长期里程碑目录、历史最高指标、完成锁存、领取与奖励 |
 | `progression-config.js` | 成本、脉冲权重、目标与倾向映射的唯一数值来源 |
 | `SaveSystem` | 槽位存档、导入导出、系统数据汇总 |
 
@@ -40,7 +41,7 @@ index.html
 
 | 控制器 | 责任 |
 | --- | --- |
-| `achievement-controller.js` | 成就/任务模态、奖励领取和模态内标签状态 |
+| `achievement-controller.js` | 里程碑模态、分类筛选、HUD 徽标和领取交互 |
 | `battle-scene-controller.js` | WASD/方向键/屏幕 D-pad、`E` 与按钮交互、路线追踪、三种搜索、安全屋、补给、宠物技能、撤离/放弃、Canvas 锁敌、面板刷新和结算反馈 |
 | `settings-controller.js` | 设置模态、显示设置、快捷存档/读档和存档状态 |
 | `player-modal-controller.js` | 玩家属性模态、属性升级和升级按钮状态 |
@@ -68,7 +69,7 @@ Game 初始化
   -> LocalStorage
 ```
 
-场景路由只管理表现状态，不复制游戏数据。命运、远征、领地共享同一批系统实例和槽位存档。旧版独立领地键只在没有可用槽位时作为一次性迁移回退。`ProgressionSystem` 只保存领取状态；首局步骤和成长倾向始终从当前玩法状态派生。
+场景路由只管理表现状态，不复制游戏数据。命运、远征、领地共享同一批系统实例和槽位存档。旧版独立领地键只在没有可用槽位时作为一次性迁移回退。首局步骤和成长倾向始终从当前玩法状态派生；`AchievementSystem` 单独保存里程碑完成时间、历史最高值和领取状态，并迁移旧版 `ProgressionSystem` 领取 ID。
 
 ### 大地图远征数据流
 
@@ -159,6 +160,8 @@ PetPlan/
 │   ├── territory-system.js
 │   ├── resource-system.js
 │   ├── save-system.js
+│   ├── achievement-config.js
+│   ├── achievement-system.js
 │   ├── progression-system.js
 │   ├── progression-config.js
 │   ├── scene-router.js

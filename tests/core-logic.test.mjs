@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AchievementController } from "../js/controllers/achievement-controller.js";
+import { AchievementSystem } from "../js/modules/achievement-system.js";
 import { FateSceneController } from "../js/controllers/fate-scene-controller.js";
 import { SettingsController } from "../js/controllers/settings-controller.js";
 import { ShopRecommendationController } from "../js/controllers/shop-recommendation-controller.js";
@@ -540,6 +541,38 @@ test("命运商店评分、主次推荐和分类顺序可独立回归", () => {
   assert.equal(flipGoal.title, "熟悉命运翻转");
   assert.match(flipGoal.detail, /每个面值周期可结算一次/);
 
+  const territoryGoal = shop.getFateNextGoal(
+    fateCoinSystem.getDisplayData(),
+    {
+      nextGoal: {
+        title: "成功撤离 1 次",
+        detail: "当前撤离次数 0 / 1",
+        route: "远征目标",
+        routeType: "combat",
+        scene: "dungeon",
+        action: "progress",
+        status: "in_progress",
+        blockers: [{ metric: "extractions", gap: 1 }],
+        ctaLabel: "前往远征",
+      },
+    },
+    initialRecommendation,
+    { complete: true }
+  );
+  assert.deepEqual(territoryGoal, {
+    title: "成功撤离 1 次",
+    detail: "当前撤离次数 0 / 1",
+    route: "远征目标",
+    routeType: "combat",
+    scene: "dungeon",
+    action: "progress",
+    status: "in_progress",
+    blockers: [{ metric: "extractions", gap: 1 }],
+    ctaLabel: "前往远征",
+    alt: "购买第 1 个助手",
+  });
+  assert.doesNotMatch(territoryGoal.detail, /循环脉冲/);
+
   const tableGuide = progressionSystem.getFirstSessionGuide({ totalFlips: 8 });
   const guidedRecommendation = shop.applyFirstSessionRecommendation(
     initialRecommendation,
@@ -618,39 +651,43 @@ test("领地主建筑唯一、使用固定施工点并受蓝图条件保护", ()
   assert.equal(territory.getBuildingLevel("training_ground"), 2);
 });
 
-test("成就奖励只可领取一次，未完成目标不会发奖", () => {
-  const progressionSystem = new ProgressionSystem();
+test("里程碑完成会锁存，奖励只可领取一次且支持批量领取", async () => {
   const totals = { coins: 0, rubies: 0, crystals: 0 };
   const calls = {
-    resourceDisplay: 0,
     fateDisplay: 0,
     territoryDisplay: 0,
     saves: 0,
-    renders: 0,
   };
   const toasts = [];
-  const game = {
-    fateCoinSystem: {
-      getDisplayData: () => ({ totalFlips: 10, fateCoins: 1 }),
-    },
-    playerSystem: {
-      player: { level: 1 },
-      calculateTotalPower: () => 0,
-    },
-    petSystem: {
-      unlockedPets: [],
-      equippedPets: [],
-      getEquippedPetLevelTotal: () => 0,
-    },
-    territorySystem: { buildings: [] },
-    resourceSystem: {
-      coins: 0,
-      addCoins: (amount) => (totals.coins += amount),
-      addRubies: (amount) => (totals.rubies += amount),
-      addCrystals: (amount) => (totals.crystals += amount),
-      updateDisplay: () => (calls.resourceDisplay += 1),
-    },
-    progressionSystem,
+  const resourceSystem = {
+    addCoins: (amount) => (totals.coins += amount),
+    addRubies: (amount) => (totals.rubies += amount),
+    addCrystals: (amount) => (totals.crystals += amount),
+  };
+  const achievementSystem = new AchievementSystem({
+    resourceSystem,
+    now: () => 12345,
+  });
+  const initialUpdate = achievementSystem.updateProgress(
+    { totalFlips: 10, equippedPets: 3 },
+    { notify: false }
+  );
+  assert.deepEqual(
+    initialUpdate.newCompletions.map((item) => item.id),
+    ["fate_10", "pet_team"]
+  );
+
+  achievementSystem.updateProgress(
+    { totalFlips: 0, equippedPets: 0 },
+    { notify: false }
+  );
+  assert.equal(achievementSystem.getItem("fate_10").current, 10);
+  assert.equal(achievementSystem.getItem("pet_team").current, 3);
+  assert.equal(achievementSystem.getItem("pet_team").completedAt, 12345);
+
+  const controller = new AchievementController({
+    achievementSystem,
+    getContext: () => ({ totalFlips: 0, equippedPets: 0 }),
     saveSystem: {
       saveGame(slot) {
         assert.equal(slot, 1);
@@ -663,41 +700,52 @@ test("成就奖励只可领取一次，未完成目标不会发奖", () => {
         toasts.push({ message, type });
       },
     },
-    updateFateDisplay: () => (calls.fateDisplay += 1),
-    updateTerritoryDisplay: () => (calls.territoryDisplay += 1),
     escapeHTML: (value) => String(value),
-    formatGameNumber: (value) => String(value),
-  };
-  const controller = new AchievementController({
-    ...game,
-    escapeHTML: game.escapeHTML,
-    formatNumber: game.formatGameNumber,
+    formatNumber: (value) => String(value),
     onRewardClaimed() {
-      game.updateFateDisplay();
-      game.updateTerritoryDisplay();
+      calls.fateDisplay += 1;
+      calls.territoryDisplay += 1;
     },
   });
-  controller.render = () => (calls.renders += 1);
 
-  controller.claimReward("fate_10");
+  await controller.claimReward("fate_10");
   assert.equal(totals.coins, 80);
-  assert.equal(progressionSystem.isAchievementClaimed("fate_10"), true);
+  assert.equal(achievementSystem.isClaimed("fate_10"), true);
   assert.deepEqual(calls, {
-    resourceDisplay: 1,
     fateDisplay: 1,
     territoryDisplay: 1,
     saves: 1,
-    renders: 1,
   });
 
-  controller.claimReward("fate_10");
+  await controller.claimReward("fate_10");
   assert.equal(totals.coins, 80);
   assert.equal(calls.saves, 1);
   assert.deepEqual(toasts.at(-1), { message: "奖励已领取", type: "info" });
 
-  controller.claimReward("fate_100");
-  assert.equal(progressionSystem.isAchievementClaimed("fate_100"), false);
-  assert.deepEqual(toasts.at(-1), { message: "目标尚未完成", type: "info" });
+  await controller.claimReward("fate_100");
+  assert.equal(achievementSystem.isClaimed("fate_100"), false);
+  assert.deepEqual(toasts.at(-1), { message: "里程碑尚未达成", type: "info" });
+
+  const claimAll = achievementSystem.claimAllRewards();
+  assert.equal(claimAll.success, true);
+  assert.deepEqual(claimAll.claimedItems.map((item) => item.id), ["pet_team"]);
+  assert.equal(totals.rubies, 30);
+  assert.equal(achievementSystem.getSummary().claimable, 0);
+
+  const savedState = achievementSystem.getSaveData();
+  const restored = new AchievementSystem({ resourceSystem });
+  restored.loadSaveData(savedState);
+  assert.equal(restored.isClaimed("fate_10"), true);
+  assert.equal(restored.getItem("pet_team").completed, true);
+  assert.equal(restored.getItem("pet_team").current, 3);
+
+  const legacy = new AchievementSystem({ resourceSystem });
+  legacy.loadSaveData({
+    claimedAchievementIds: ["fate_10", "task_coins_1000"],
+  });
+  assert.equal(legacy.isClaimed("fate_10"), true);
+  assert.equal(legacy.getItem("fate_10").completed, true);
+  assert.deepEqual(legacy.getSaveData().claimedIds, ["fate_10"]);
 });
 
 test("现代存档可往返，旧版存档可迁移且不会串入会话状态", async () => {
@@ -716,17 +764,29 @@ test("现代存档可往返，旧版存档可迁移且不会串入会话状态",
       territory: createStateSystem({ buildings: [], unlockedSlots: 2 }),
       fate: createStateSystem({ fateCoins: 2, totalFlips: 9 }),
       progression: createStateSystem({ claimedAchievementIds: ["fate_10"] }),
+      achievement: createStateSystem({
+        schemaVersion: 1,
+        claimedIds: ["pet_first"],
+        completedAtById: { pet_first: 10 },
+        highWaterMarks: { unlockedPets: 1 },
+      }),
     };
     const save = new SaveSystem();
     save.setGameSystems(systems);
 
     assert.equal(await save.saveGame(1), true);
     const serialized = JSON.parse(storage.getItem("petplan_save_1"));
-    assert.equal(serialized.version, "1.2.0");
+    assert.equal(serialized.version, "1.3.0");
     assert.equal(serialized.level, 7);
     assert.deepEqual(serialized.data.fate, { fateCoins: 2, totalFlips: 9 });
     assert.deepEqual(serialized.data.progression, {
       claimedAchievementIds: ["fate_10"],
+    });
+    assert.deepEqual(serialized.data.achievement, {
+      schemaVersion: 1,
+      claimedIds: ["pet_first"],
+      completedAtById: { pet_first: 10 },
+      highWaterMarks: { unlockedPets: 1 },
     });
 
     assert.equal(await save.loadGame(1), true);
@@ -737,6 +797,12 @@ test("现代存档可往返，旧版存档可迁移且不会串入会话状态",
     });
     assert.deepEqual(systems.progression.loaded, {
       claimedAchievementIds: ["fate_10"],
+    });
+    assert.deepEqual(systems.achievement.loaded, {
+      schemaVersion: 1,
+      claimedIds: ["pet_first"],
+      completedAtById: { pet_first: 10 },
+      highWaterMarks: { unlockedPets: 1 },
     });
 
     storage.setItem(
@@ -751,7 +817,8 @@ test("现代存档可往返，旧版存档可迁移且不会串入会话状态",
     assert.equal(await save.loadGame(2), true);
     assert.deepEqual(systems.fate.loaded, {});
     assert.deepEqual(systems.progression.loaded, {});
-    assert.equal(JSON.parse(storage.getItem("petplan_save_2")).version, "1.2.0");
+    assert.deepEqual(systems.achievement.loaded, { claimedAchievementIds: [] });
+    assert.equal(JSON.parse(storage.getItem("petplan_save_2")).version, "1.3.0");
 
     storage.setItem("petplan_save_3", "{broken-json");
     const expectedErrors = [];

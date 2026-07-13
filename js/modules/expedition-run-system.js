@@ -232,7 +232,7 @@ export class ExpeditionRunSystem {
     };
   }
 
-  resolveSearch(mode, { hasPet = false } = {}) {
+  resolveSearch(mode, { hasPet = false, searchBonuses = {} } = {}) {
     const profile = SEARCH_PROFILES[mode];
     if (!this.active || this.phase !== "search" || !this.currentNode) {
       return { success: false, message: "这里没有可搜索的区域" };
@@ -242,23 +242,49 @@ export class ExpeditionRunSystem {
       return { success: false, message: "需要至少上阵一只宠物才能侦察" };
     }
 
+    const appliedBonuses = {
+      qualityBonus: Math.max(0, Math.min(2, Math.floor(Number(searchBonuses.qualityBonus) || 0))),
+      lootCountBonus: Math.max(0, Math.min(1, Math.floor(Number(searchBonuses.lootCountBonus) || 0))),
+      threatReduction: Math.max(0, Math.min(6, Math.floor(Number(searchBonuses.threatReduction) || 0))),
+      supplyChanceBonus: Math.max(0, Math.min(0.25, Number(searchBonuses.supplyChanceBonus) || 0)),
+      ambushChanceReduction: Math.max(0, Math.min(0.2, Number(searchBonuses.ambushChanceReduction) || 0)),
+      contributors: Array.isArray(searchBonuses.contributors)
+        ? searchBonuses.contributors.slice(0, 3).map(item => ({
+          petName: String(item?.petName || "宠物"),
+          label: String(item?.label || "探索天赋"),
+        }))
+        : [],
+    };
     const cacheBonus = this.currentNode.type === "cache" ? 1 : 0;
-    const lootCount = this.randomInt(profile.lootMin, profile.lootMax) + cacheBonus;
+    const lootCount = this.randomInt(profile.lootMin, profile.lootMax)
+      + cacheBonus
+      + appliedBonuses.lootCountBonus;
     const gainedLoot = [];
     const discardedLoot = [];
     for (let index = 0; index < lootCount; index += 1) {
-      const item = this.generateLoot(profile.quality + cacheBonus);
+      const item = this.generateLoot(profile.quality + cacheBonus + appliedBonuses.qualityBonus);
       const result = this.addLoot(item);
       if (result.kept) gainedLoot.push(item);
       if (result.discarded) discardedLoot.push(result.discarded);
     }
 
-    this.addThreat(profile.threat + cacheBonus * 3);
-    const supplyFound = this.random() < profile.supplyChance + cacheBonus * 0.08;
+    this.addThreat(Math.max(0, profile.threat + cacheBonus * 3 - appliedBonuses.threatReduction));
+    const supplyChance = Math.min(
+      0.95,
+      profile.supplyChance + cacheBonus * 0.08 + appliedBonuses.supplyChanceBonus,
+    );
+    const supplyFound = this.random() < supplyChance;
     if (supplyFound) this.supplies += 1;
 
-    const ambushed = this.random() < profile.ambushChance + cacheBonus * 0.08;
-    const summary = `${profile.name}获得 ${gainedLoot.length} 件战利品${supplyFound ? "和 1 份补给" : ""}`;
+    const ambushChance = Math.max(
+      0,
+      profile.ambushChance + cacheBonus * 0.08 - appliedBonuses.ambushChanceReduction,
+    );
+    const ambushed = this.random() < ambushChance;
+    const talentSummary = appliedBonuses.contributors.length > 0
+      ? `，${appliedBonuses.contributors.map(item => `${item.petName}·${item.label}`).join("、")}生效`
+      : "";
+    const summary = `${profile.name}获得 ${gainedLoot.length} 件战利品${supplyFound ? "和 1 份补给" : ""}${talentSummary}`;
     if (ambushed) {
       this.phase = "combat";
       this.currentNode.ambushed = true;
@@ -270,6 +296,7 @@ export class ExpeditionRunSystem {
         gainedLoot,
         discardedLoot,
         supplyFound,
+        searchBonuses: appliedBonuses,
         encounter: this.getEncounterSpec("ambush"),
       };
     }
@@ -283,6 +310,7 @@ export class ExpeditionRunSystem {
       gainedLoot,
       discardedLoot,
       supplyFound,
+      searchBonuses: appliedBonuses,
     };
   }
 

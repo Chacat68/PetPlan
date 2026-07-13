@@ -18,6 +18,8 @@
 | `territory-world-system.js` | 基地世界移动、宠物跟随、邻近设施和活动过程 |
 | `territory-art-config.js` | 领地天空、地表、环境道具、边界和七类建筑的统一资源清单与渲染尺寸 |
 | `resource-system.js` | 金币、红宝石、水晶 |
+| `achievement-config.js` | 长期里程碑分类、指标、阈值与奖励目录 |
+| `achievement-system.js` | 里程碑历史最高值、完成锁存、领取与存档 |
 | `save-system.js` | 存档槽位和导入导出 |
 | `ui-system.js` | Toast、确认框等基础 UI |
 | `scene-router.js` | 主场景显示、HUD 状态、URL 同步 |
@@ -27,7 +29,7 @@
 
 | 控制器 | 责任 |
 | --- | --- |
-| `achievement-controller.js` | 成就/任务模态与奖励领取 |
+| `achievement-controller.js` | 里程碑分类模态、HUD 徽标与奖励领取 |
 | `battle-scene-controller.js` | 键盘与屏幕方向输入、地点追踪、就近交互、补给、技能、撤离与结算反馈 |
 | `settings-controller.js` | 设置模态、显示设置与快捷存档/读档 |
 | `player-modal-controller.js` | 玩家属性展示与升级交互 |

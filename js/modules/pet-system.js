@@ -23,7 +23,19 @@ export class PetSystem {
                 requiredLevel: 1,
                 cost: { coins: 500, rubies: 0 },
                 baseStats: { attack: 15, hp: 80, defense: 5, attackSpeed: 1.0 },
-                skill: { name: '火球术', cooldown: 5000, damage: 50 }
+                skill: { name: '火球术', cooldown: 5000, damage: 50 },
+                explorationTalent: {
+                    id: 'heated-trail',
+                    label: '灼热嗅觉',
+                    searchMode: 'quick',
+                    qualityBonus: 1,
+                    detail: '快速搜索品质判定 +1'
+                },
+                baseRole: {
+                    buildingType: 'training_ground',
+                    label: '训练陪练',
+                    detail: '强化实战训练产出的战备'
+                }
             },
             {
                 id: 2,
@@ -35,7 +47,19 @@ export class PetSystem {
                 requiredLevel: 1,
                 cost: { coins: 500, rubies: 0 },
                 baseStats: { attack: 12, hp: 70, defense: 8, attackSpeed: 1.2 },
-                skill: { name: '冰霜新星', cooldown: 6000, damage: 40 }
+                skill: { name: '冰霜新星', cooldown: 6000, damage: 40 },
+                explorationTalent: {
+                    id: 'calm-scout',
+                    label: '冷静侦察',
+                    searchMode: 'pet',
+                    threatReduction: 3,
+                    detail: '宠物侦察威胁 -3'
+                },
+                baseRole: {
+                    buildingType: 'temple',
+                    label: '仪式守护',
+                    detail: '强化守护仪式产出的战备'
+                }
             },
             {
                 id: 3,
@@ -47,7 +71,19 @@ export class PetSystem {
                 requiredLevel: 5,
                 cost: { coins: 2000, rubies: 50 },
                 baseStats: { attack: 20, hp: 60, defense: 3, attackSpeed: 1.5 },
-                skill: { name: '连锁闪电', cooldown: 7000, damage: 60 }
+                skill: { name: '连锁闪电', cooldown: 7000, damage: 60 },
+                explorationTalent: {
+                    id: 'static-sense',
+                    label: '电磁感应',
+                    searchMode: 'thorough',
+                    supplyChanceBonus: 0.12,
+                    detail: '仔细搜刮补给发现率 +12%'
+                },
+                baseRole: {
+                    buildingType: 'crystal_mine',
+                    label: '矿脉勘探',
+                    detail: '提高主动开采的水晶产量'
+                }
             },
             {
                 id: 4,
@@ -59,7 +95,19 @@ export class PetSystem {
                 requiredLevel: 8,
                 cost: { coins: 3000, rubies: 100 },
                 baseStats: { attack: 18, hp: 150, defense: 15, attackSpeed: 0.8 },
-                skill: { name: '地震', cooldown: 8000, damage: 80 }
+                skill: { name: '地震', cooldown: 8000, damage: 80 },
+                explorationTalent: {
+                    id: 'steady-step',
+                    label: '稳重步伐',
+                    searchMode: 'pet',
+                    ambushChanceReduction: 0.08,
+                    detail: '宠物侦察伏击率 -8%'
+                },
+                baseRole: {
+                    buildingType: 'barracks',
+                    label: '驻地教官',
+                    detail: '强化战备演练产出的战备'
+                }
             },
             {
                 id: 5,
@@ -71,7 +119,19 @@ export class PetSystem {
                 requiredLevel: 15,
                 cost: { coins: 10000, rubies: 300 },
                 baseStats: { attack: 35, hp: 120, defense: 10, attackSpeed: 1.3 },
-                skill: { name: '龙卷风', cooldown: 10000, damage: 120 }
+                skill: { name: '龙卷风', cooldown: 10000, damage: 120 },
+                explorationTalent: {
+                    id: 'wind-sweep',
+                    label: '风场扫掠',
+                    searchMode: 'thorough',
+                    lootCountBonus: 1,
+                    detail: '仔细搜刮额外发现 1 件战利品'
+                },
+                baseRole: {
+                    buildingType: 'library',
+                    label: '路线推演',
+                    detail: '强化路线研究产出的战备'
+                }
             },
             {
                 id: 6,
@@ -83,7 +143,19 @@ export class PetSystem {
                 requiredLevel: 20,
                 cost: { coins: 20000, rubies: 500 },
                 baseStats: { attack: 25, hp: 100, defense: 12, attackSpeed: 1.0 },
-                skill: { name: '圣光祝福', cooldown: 12000, damage: 0, heal: 50 }
+                skill: { name: '圣光祝福', cooldown: 12000, damage: 0, heal: 50 },
+                explorationTalent: {
+                    id: 'guiding-light',
+                    label: '寻路圣光',
+                    searchMode: 'pet',
+                    supplyChanceBonus: 0.15,
+                    detail: '宠物侦察补给发现率 +15%'
+                },
+                baseRole: {
+                    buildingType: 'temple',
+                    label: '圣所司祭',
+                    detail: '强化守护仪式产出的战备'
+                }
             },
             {
                 id: 7,
@@ -95,7 +167,19 @@ export class PetSystem {
                 requiredLevel: 25,
                 cost: { coins: 25000, rubies: 600 },
                 baseStats: { attack: 45, hp: 90, defense: 8, attackSpeed: 1.4 },
-                skill: { name: '暗影突袭', cooldown: 6000, damage: 150 }
+                skill: { name: '暗影突袭', cooldown: 6000, damage: 150 },
+                explorationTalent: {
+                    id: 'silent-paw',
+                    label: '无声潜行',
+                    searchMode: 'quick',
+                    ambushChanceReduction: 0.1,
+                    detail: '快速搜索伏击率 -10%'
+                },
+                baseRole: {
+                    buildingType: 'training_ground',
+                    label: '突袭陪练',
+                    detail: '强化实战训练产出的战备'
+                }
             },
             {
                 id: 8,
@@ -107,7 +191,19 @@ export class PetSystem {
                 requiredLevel: 30,
                 cost: { coins: 50000, rubies: 1000 },
                 baseStats: { attack: 50, hp: 200, defense: 15, attackSpeed: 1.2 },
-                skill: { name: '浴火重生', cooldown: 30000, damage: 200 }
+                skill: { name: '浴火重生', cooldown: 30000, damage: 200 },
+                explorationTalent: {
+                    id: 'ashes-memory',
+                    label: '余烬记忆',
+                    searchMode: 'thorough',
+                    qualityBonus: 1,
+                    detail: '仔细搜刮品质判定 +1'
+                },
+                baseRole: {
+                    buildingType: 'workshop',
+                    label: '炉火监工',
+                    detail: '强化制作补给产出的战备'
+                }
             }
         ];
         
@@ -307,7 +403,6 @@ export class PetSystem {
         const gain = Math.max(1, Math.floor(levelGain));
         this.equippedPets.forEach(pet => {
             pet.level += gain;
-            pet.friendship = (pet.friendship || 0) + gain * 5;
         });
 
         return {
@@ -319,6 +414,103 @@ export class PetSystem {
 
     getEquippedPetLevelTotal() {
         return this.equippedPets.reduce((total, pet) => total + (pet.level || 1), 0);
+    }
+
+    getFriendshipTier(friendship = 0) {
+        const value = Math.max(0, Math.min(100, Number(friendship) || 0));
+        if (value >= 80) {
+            return { level: 3, label: '挚友', min: 80, nextAt: 100, value };
+        }
+        if (value >= 40) {
+            return { level: 2, label: '默契', min: 40, nextAt: 80, value };
+        }
+        return { level: 1, label: '熟悉', min: 0, nextAt: 40, value };
+    }
+
+    getExplorationSearchBonuses(searchMode) {
+        const bonuses = {
+            qualityBonus: 0,
+            lootCountBonus: 0,
+            threatReduction: 0,
+            supplyChanceBonus: 0,
+            ambushChanceReduction: 0,
+            contributors: []
+        };
+
+        this.equippedPets.forEach(pet => {
+            const template = this.getTemplate(pet.templateId);
+            const talent = template?.explorationTalent;
+            if (!talent || talent.searchMode !== searchMode) return;
+
+            bonuses.qualityBonus += Number(talent.qualityBonus) || 0;
+            bonuses.lootCountBonus += Number(talent.lootCountBonus) || 0;
+            bonuses.threatReduction += Number(talent.threatReduction) || 0;
+            bonuses.supplyChanceBonus += Number(talent.supplyChanceBonus) || 0;
+            bonuses.ambushChanceReduction += Number(talent.ambushChanceReduction) || 0;
+            bonuses.contributors.push({
+                petName: template.name,
+                label: talent.label,
+                detail: talent.detail
+            });
+        });
+
+        return {
+            ...bonuses,
+            qualityBonus: Math.min(2, bonuses.qualityBonus),
+            lootCountBonus: Math.min(1, bonuses.lootCountBonus),
+            threatReduction: Math.min(6, bonuses.threatReduction),
+            supplyChanceBonus: Math.min(0.25, bonuses.supplyChanceBonus),
+            ambushChanceReduction: Math.min(0.2, bonuses.ambushChanceReduction)
+        };
+    }
+
+    getBaseSupport(buildingType) {
+        const candidates = this.equippedPets
+            .map(pet => ({ pet, template: this.getTemplate(pet.templateId) }))
+            .filter(({ template }) => template?.baseRole?.buildingType === buildingType)
+            .sort((left, right) => (right.pet.friendship || 0) - (left.pet.friendship || 0));
+        const selected = candidates[0];
+        if (!selected) return null;
+
+        const { pet, template } = selected;
+        const friendship = Math.max(0, Math.min(100, Number(pet.friendship) || 0));
+        const role = template.baseRole;
+        const tier = this.getFriendshipTier(friendship);
+        return {
+            buildingType,
+            petName: template.name,
+            roleLabel: role.label,
+            friendship,
+            tier: tier.level,
+            tierLabel: tier.label,
+            nextTierAt: tier.nextAt
+        };
+    }
+
+    applyExpeditionBond(settlement) {
+        const depth = Math.max(0, Math.floor(Number(settlement?.depth) || 0));
+        const baseGain = settlement?.extracted
+            ? Math.max(2, Math.min(12, depth * 2))
+            : Math.max(1, Math.min(4, Math.floor(depth / 2)));
+        const pets = this.equippedPets.map(pet => {
+            const before = Math.max(0, Math.min(100, Number(pet.friendship) || 0));
+            pet.friendship = Math.min(100, before + baseGain);
+            return {
+                instanceId: pet.instanceId,
+                petName: this.getTemplate(pet.templateId)?.name || '宠物',
+                gain: pet.friendship - before,
+                friendship: pet.friendship
+            };
+        });
+
+        return {
+            plannedGain: baseGain,
+            totalGain: pets.reduce((total, pet) => total + pet.gain, 0),
+            count: pets.length,
+            gainedCount: pets.filter(pet => pet.gain > 0).length,
+            cappedCount: pets.filter(pet => pet.friendship >= 100).length,
+            pets
+        };
     }
     
     /**
@@ -693,13 +885,20 @@ export class PetSystem {
     loadSaveData(data) {
         if (!data) return;
         
-        this.unlockedPets = data.unlockedPets || [];
+        this.unlockedPets = Array.isArray(data.unlockedPets)
+            ? data.unlockedPets.map(pet => ({
+                ...pet,
+                level: Math.max(1, Math.floor(Number(pet.level) || 1)),
+                friendship: Math.max(0, Math.min(100, Number(pet.friendship) || 0)),
+                equipped: false
+            }))
+            : [];
         
         // 恢复装备状态
         this.equippedPets = [];
         if (data.equippedPets) {
             data.equippedPets.forEach(id => {
-                const pet = this.unlockedPets.find(p => p.instanceId === id);
+                const pet = this.unlockedPets.find(p => String(p.instanceId) === String(id));
                 if (pet) {
                     pet.equipped = true;
                     this.equippedPets.push(pet);

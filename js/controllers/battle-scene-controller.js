@@ -265,6 +265,7 @@ export class BattleSceneController {
     this.renderRouteChoices(state.routeChoices, state.world, state);
     this.renderLoot(state.backpack);
     this.renderPetSkills(state.petSkills, state.isWaveActive);
+    this.renderSearchBonuses(state.searchBonuses, state.petSkills.length > 0);
 
     setHidden("battle-route-panel", !state.actions.canTrackMap);
     setHidden("battle-search-actions", !state.actions.canSearch);
@@ -444,11 +445,40 @@ export class BattleSceneController {
     dock.replaceChildren(...buttons);
   }
 
+  renderSearchBonuses(searchBonuses = {}, hasPets = false) {
+    const defaults = {
+      quick: "低风险",
+      thorough: "高收益",
+      pet: hasPets ? "稳妥" : "需要上阵宠物",
+    };
+    document.querySelectorAll("[data-search-mode]").forEach((button) => {
+      const mode = button.dataset.searchMode;
+      const bonus = searchBonuses?.[mode] || {};
+      const parts = [];
+      if (bonus.qualityBonus > 0) parts.push(`品质 +${bonus.qualityBonus}`);
+      if (bonus.lootCountBonus > 0) parts.push(`战利品 +${bonus.lootCountBonus}`);
+      if (bonus.threatReduction > 0) parts.push(`威胁 -${bonus.threatReduction}`);
+      if (bonus.supplyChanceBonus > 0) parts.push(`补给 +${Math.round(bonus.supplyChanceBonus * 100)}%`);
+      if (bonus.ambushChanceReduction > 0) parts.push(`伏击 -${Math.round(bonus.ambushChanceReduction * 100)}%`);
+      const preview = button.querySelector("[data-search-preview]");
+      if (preview) preview.textContent = parts.join(" / ") || defaults[mode] || "";
+      const contributors = Array.isArray(bonus.contributors) ? bonus.contributors : [];
+      button.dataset.talentActive = parts.length > 0 ? "true" : "false";
+      button.title = contributors.length > 0
+        ? contributors.map((item) => `${item.petName} · ${item.label}：${item.detail}`).join("；")
+        : defaults[mode] || "";
+    });
+  }
+
   getTip(state) {
     if (state.settlement) {
+      const bondSummary = this.formatPetBondSummary(state.settlement.petBond);
+      const bondSuffix = bondSummary
+        ? `，羁绊：${bondSummary}`
+        : "";
       return state.settlement.extracted
-        ? `撤离成功：获得 ${state.settlement.coins} 金币、${state.settlement.crystals} 水晶、${state.settlement.exp} 经验。`
-        : `本局结束：保留 ${state.settlement.coins} 金币和 ${state.settlement.exp} 经验，遗失 ${state.settlement.lootLost} 件战利品。`;
+        ? `撤离成功：获得 ${state.settlement.coins} 金币、${state.settlement.crystals} 水晶、${state.settlement.exp} 经验${bondSuffix}。`
+        : `本局结束：保留 ${state.settlement.coins} 金币和 ${state.settlement.exp} 经验，遗失 ${state.settlement.lootLost} 件战利品${bondSuffix}。`;
     }
     const tips = {
       briefing: "开始后用 WASD、方向键或屏幕方向键探索 3000×1900 的远征地图。",
@@ -478,9 +508,24 @@ export class BattleSceneController {
     const levelDisplay = document.querySelector(".player-level");
     if (levelDisplay) levelDisplay.textContent = `Lv.${this.playerSystem.player.level}`;
     void this.saveSystem?.saveGame?.(1);
+    const bondSummary = this.formatPetBondSummary(settlement.petBond);
+    const bondMessage = bondSummary
+      ? `，${bondSummary}`
+      : "";
     this.uiSystem?.showToast(
-      settlement.extracted ? "撤离成功，背包奖励已入库" : "远征结束，已结算保底收益",
+      settlement.extracted
+        ? `撤离成功，背包奖励已入库${bondMessage}`
+        : `远征结束，已结算保底收益${bondMessage}`,
       settlement.extracted ? "success" : "info"
     );
+  }
+
+  formatPetBondSummary(petBond = null) {
+    if (!Array.isArray(petBond?.pets) || petBond.pets.length === 0) return "";
+    return petBond.pets.map((pet) => (
+      pet.gain > 0
+        ? `${pet.petName}羁绊 +${pet.gain}`
+        : `${pet.petName}羁绊已满`
+    )).join("、");
   }
 }

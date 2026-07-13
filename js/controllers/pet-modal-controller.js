@@ -6,6 +6,7 @@
 export class PetModalController {
   constructor({
     petSystem,
+    territorySystem,
     playerSystem,
     resourceSystem,
     uiSystem,
@@ -16,6 +17,7 @@ export class PetModalController {
     onChanged,
   }) {
     this.petSystem = petSystem;
+    this.territorySystem = territorySystem;
     this.playerSystem = playerSystem;
     this.resourceSystem = resourceSystem;
     this.uiSystem = uiSystem;
@@ -50,6 +52,27 @@ export class PetModalController {
       parts.push(`红宝石 ${this.formatNumber(cost.rubies)}`);
     }
     return parts.join(" / ") || "免费";
+  }
+
+  getPetEffectSummary(pet, template = this.getPetTemplateForInstance(pet)) {
+    const tier = this.petSystem?.getFriendshipTier?.(pet?.friendship || 0) || {
+      level: 1,
+      label: "熟悉",
+    };
+    const buildingType = template?.baseRole?.buildingType;
+    const buildingName = this.territorySystem?.buildingData?.[buildingType]?.name || "基地活动";
+    const support = buildingType ? {
+      buildingType,
+      tier: tier.level,
+      tierLabel: tier.label,
+    } : null;
+    const baseEffect = this.territorySystem?.getActivitySupportBonus?.(buildingType, support);
+    return {
+      exploration: template?.explorationTalent?.detail || "参与远征搜索",
+      buildingName,
+      tierLabel: tier.label,
+      base: baseEffect?.detail || template?.baseRole?.detail || "协助基地活动",
+    };
   }
 
   canUnlockPet(template) {
@@ -207,6 +230,18 @@ export class PetModalController {
       `;
     }).join("");
 
+    const activeEffects = equippedPets.map((pet) => {
+      const template = this.getPetTemplateForInstance(pet);
+      const effect = this.getPetEffectSummary(pet, template);
+      return `
+        <div class="formation-effect">
+          <b>${this.escapeHTML(template?.name || "宠物")}</b>
+          <span>探索 · ${this.escapeHTML(template?.explorationTalent?.label || "协同搜索")}：${this.escapeHTML(effect.exploration)}</span>
+          <span>基地 · ${this.escapeHTML(effect.buildingName)} / ${this.escapeHTML(effect.tierLabel)}：${this.escapeHTML(effect.base)}</span>
+        </div>
+      `;
+    }).join("");
+
     return `
       <div class="pet-formation">
         <section class="formation-section">
@@ -226,6 +261,10 @@ export class PetModalController {
           <div class="stat-item">
             <span class="stat-label">防御加成</span>
             <span class="stat-value">+${this.formatNumber(powerBonus.defense)}</span>
+          </div>
+          <div class="formation-effect-list">
+            <h4>编队效果</h4>
+            ${activeEffects || `<span class="formation-effect-empty">上阵宠物后显示探索与基地效果</span>`}
           </div>
         </section>
       </div>
@@ -263,6 +302,7 @@ export class PetModalController {
     const canEquip = pet.equipped || equippedCount < 3;
     const action = pet.equipped ? "unequip" : "equip";
     const actionLabel = pet.equipped ? "卸下" : canEquip ? "上阵" : "编队已满";
+    const effect = this.getPetEffectSummary(pet, template);
 
     return `
       <article class="pet-card">
@@ -281,6 +321,12 @@ export class PetModalController {
             <span class="stat-mini">生命 ${this.formatNumber(hp)}</span>
             <span class="stat-mini">防御 ${this.formatNumber(defense)}</span>
           </div>
+          <p class="collection-card-desc">探索 · ${this.escapeHTML(
+            template?.explorationTalent?.label || "协同搜索"
+          )}：${this.escapeHTML(template?.explorationTalent?.detail || "参与远征搜索")}</p>
+          <p class="collection-card-desc">基地 · ${this.escapeHTML(
+            template?.baseRole?.label || "驻地伙伴"
+          )} / ${this.escapeHTML(effect.tierLabel)}：${this.escapeHTML(effect.base)}</p>
           <div class="pet-card-status">
             ${this.renderStatusBar("经验", pet.exp || 0, 100)}
             ${this.renderStatusBar("羁绊", pet.friendship || 0, 100)}
@@ -332,7 +378,13 @@ export class PetModalController {
             </div>
             <div class="pet-card-body">
               <h3 class="pet-card-name">${this.escapeHTML(template.name)}</h3>
-              <p class="collection-card-desc">${this.escapeHTML(template.skill?.name || "基础协战")}</p>
+              <p class="collection-card-desc">战斗 · ${this.escapeHTML(template.skill?.name || "基础协战")}</p>
+              <p class="collection-card-desc">探索 · ${this.escapeHTML(
+                template.explorationTalent?.label || "协同搜索"
+              )}</p>
+              <p class="collection-card-desc">基地 · ${this.escapeHTML(
+                template.baseRole?.label || "驻地伙伴"
+              )}</p>
               <div class="collection-card-info">
                 <div class="info-row">
                   <span>解锁等级</span>

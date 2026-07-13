@@ -9,24 +9,25 @@
 import { getGameCoreInstance } from "./modules/game-core.js?v=world-exploration-20260712b";
 import { getResourceSystemInstance } from "./modules/resource-system.js";
 import { getPlayerSystemInstance } from "./modules/player-system.js?v=world-exploration-20260712b";
-import { getCombatSystemInstance } from "./modules/combat-system.js?v=territory-world-20260712b";
-import { getSaveSystemInstance } from "./modules/save-system.js?v=phase-one-20260710b";
+import { getCombatSystemInstance } from "./modules/combat-system.js?v=pet-loop-calibration-20260713a";
+import { getSaveSystemInstance } from "./modules/save-system.js?v=achievement-v2-20260714a";
 import { getUISystemInstance } from "./modules/ui-system.js";
-import { getPetSystemInstance } from "./modules/pet-system.js?v=world-exploration-20260712b";
-import { getTerritorySystemInstance } from "./modules/territory-system.js?v=territory-world-20260712a";
+import { getPetSystemInstance } from "./modules/pet-system.js?v=pet-loop-calibration-20260713a";
+import { getTerritorySystemInstance } from "./modules/territory-system.js?v=pet-loop-calibration-20260713a";
 import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
 import { getProgressionSystemInstance } from "./modules/progression-system.js?v=phase-one-20260710b";
+import { getAchievementSystemInstance } from "./modules/achievement-system.js?v=achievement-v2-20260714a";
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
-import { AchievementController } from "./controllers/achievement-controller.js?v=controllers-phase-two-20260711b";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=world-exploration-20260712b";
+import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-v2-20260714a";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=pet-loop-calibration-20260713a";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=controllers-phase-two-20260711b";
-import { PetModalController } from "./controllers/pet-modal-controller.js?v=controllers-phase-two-20260711b";
+import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-loop-calibration-20260713a";
 import { PlayerModalController } from "./controllers/player-modal-controller.js?v=controllers-phase-two-20260711b";
 import { SettingsController } from "./controllers/settings-controller.js?v=fate-stability-20260711b";
-import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=fate-stability-20260711b";
-import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=territory-ground-unified-20260713a";
+import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=pet-loop-calibration-20260713a";
+import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=pet-loop-calibration-20260713a";
 
 export class Game {
   constructor() {
@@ -54,6 +55,7 @@ export class Game {
       this.modalFocusManager.bind();
       this.resourceSystem = getResourceSystemInstance();
       this.progressionSystem = getProgressionSystemInstance();
+      this.achievementSystem = getAchievementSystemInstance(this.resourceSystem);
       this.fateCoinSystem = getFateCoinSystemInstance();
 
       this.playerSystem = getPlayerSystemInstance();
@@ -92,6 +94,7 @@ export class Game {
         territory: this.territorySystem,
         fate: this.fateCoinSystem,
         progression: this.progressionSystem,
+        achievement: this.achievementSystem,
       });
 
       this.uiSystem = getUISystemInstance();
@@ -119,7 +122,7 @@ export class Game {
       }
       this.territorySceneController.syncProgress({ silent: true });
 
-      this.updateUI();
+      this.updateUI({ announceAchievements: false });
       this.handleNavigation(
         this.sceneRouter.getRequestedScene("fate", { normalize: true }),
         true
@@ -152,6 +155,7 @@ export class Game {
       getProgressionContext,
       getCurrentScene: () => this.currentScene,
       onNavigate: (scene) => this.handleNavigation(scene),
+      onChanged: () => this.updateUI(),
     });
 
     this.shopRecommendationController = new ShopRecommendationController({
@@ -161,6 +165,7 @@ export class Game {
       progressionSystem: this.progressionSystem,
       formatNumber,
       getProgressionContext,
+      onNavigate: (scene) => this.handleNavigation(scene),
     });
 
     this.fateSceneController = new FateSceneController({
@@ -205,11 +210,12 @@ export class Game {
         this.fateSceneController.resetTransientRuntime();
         this.shopRecommendationController.resetRecommendationStability();
       },
-      onGameLoaded: () => this.updateUI(),
+      onGameLoaded: () => this.updateUI({ announceAchievements: false }),
     });
 
     this.petModalController = new PetModalController({
       petSystem: this.petSystem,
+      territorySystem: this.territorySystem,
       playerSystem: this.playerSystem,
       resourceSystem: this.resourceSystem,
       uiSystem: this.uiSystem,
@@ -221,15 +227,11 @@ export class Game {
     });
 
     this.achievementController = new AchievementController({
-      fateCoinSystem: this.fateCoinSystem,
-      playerSystem: this.playerSystem,
-      petSystem: this.petSystem,
-      territorySystem: this.territorySystem,
-      resourceSystem: this.resourceSystem,
-      progressionSystem: this.progressionSystem,
+      achievementSystem: this.achievementSystem,
       saveSystem: this.saveSystem,
       uiSystem: this.uiSystem,
       modalFocusManager: this.modalFocusManager,
+      getContext: () => this.getAchievementContext(),
       escapeHTML,
       formatNumber,
       onBeforeOpen: () => this.petModalController?.close(),
@@ -241,16 +243,22 @@ export class Game {
   }
 
   connectSystemCallbacks() {
-    this.fateCoinSystem.setOnChange(() =>
-      this.fateSceneController.updateDisplay()
+    this.achievementSystem.setOnChange((event) =>
+      this.achievementController.handleSystemChange(event)
     );
+    this.fateCoinSystem.setOnChange(() => {
+      this.fateSceneController.updateDisplay();
+      this.refreshAchievements();
+    });
     this.fateCoinSystem.setOnAutoFlip((request) =>
       this.fateSceneController.handleAutoFlip(request)
     );
-    this.combatSystem.setOnStateChange((state) =>
-      this.battleSceneController.updateBattleDisplay(state)
-    );
+    this.combatSystem.setOnStateChange((state) => {
+      this.battleSceneController.updateBattleDisplay(state);
+      this.refreshAchievements();
+    });
     this.territorySystem.setOnPersist(() => {
+      this.refreshAchievements();
       void this.saveSystem.saveGame(1);
     });
   }
@@ -313,6 +321,7 @@ export class Game {
     this.fateCoinSystem?.setOnAutoFlip(null);
     this.combatSystem?.setOnStateChange(null);
     this.territorySystem?.setOnPersist(null);
+    this.achievementSystem?.setOnChange(null);
     this.gameCore?.stop();
     this.modalFocusManager?.destroy();
     this.isInitialized = false;
@@ -385,7 +394,7 @@ export class Game {
     console.log("[Game] 切换到:", this.currentScene);
   }
 
-  updateUI() {
+  updateUI({ announceAchievements = true } = {}) {
     this.resourceSystem.updateDisplay();
     this.playerSystem.updateDisplay();
     this.playerModalController.updateUpgradeControls();
@@ -403,6 +412,13 @@ export class Game {
 
     this.fateSceneController.updateDisplay();
     this.battleSceneController.updateBattleDisplay();
+    this.refreshAchievements({ announce: announceAchievements });
+  }
+
+  refreshAchievements({ announce = true } = {}) {
+    const result = this.achievementController?.refreshProgress({ announce });
+    this.achievementController?.updateBadge(result?.summary);
+    return result;
   }
 
   getProgressionContext(fateData = null) {
@@ -438,6 +454,28 @@ export class Game {
       bestDepth: this.combatSystem?.meta?.bestDepth || 0,
       extractions: this.combatSystem?.meta?.extractions || 0,
       losses: this.combatSystem?.meta?.losses || 0,
+    };
+  }
+
+  getAchievementContext() {
+    const progression = this.getProgressionContext();
+    const unlockedPets = this.petSystem?.unlockedPets || [];
+    return {
+      totalFlips: progression.totalFlips,
+      fateCoins: progression.fateCoins,
+      assistants: progression.assistants,
+      playerLevel: progression.playerLevel,
+      bestDepth: progression.bestDepth,
+      extractions: progression.extractions,
+      unlockedPets: unlockedPets.length,
+      equippedPets: progression.equippedPets,
+      maxPetFriendship: unlockedPets.reduce(
+        (highest, pet) => Math.max(highest, Number(pet?.friendship) || 0),
+        0
+      ),
+      territoryRank: this.territorySystem?.rank || 0,
+      constructionScore:
+        this.territorySystem?.getConstructionScore?.() || 0,
     };
   }
 

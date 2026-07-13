@@ -354,7 +354,7 @@
             await step("同源 iframe 加载并初始化游戏", async () => {
               frame = document.createElement("iframe");
               frame.title = "PetPlan 被测游戏";
-              frame.src = "../index.html";
+              frame.src = "../index.html?browser-smoke=pet-loop-calibration-20260713a";
               frameHost.appendChild(frame);
 
               const game = await waitFor(
@@ -457,6 +457,12 @@
               trigger.click();
               await waitFor(() => doc.getElementById("pet-modal"), "宠物弹窗打开");
 
+              const formationText = doc.querySelector("#pet-modal .team-stats")?.textContent || "";
+              assert(formationText.includes("编队效果"), "编队未展示实际效果区");
+              assert(formationText.includes("灼热嗅觉"), "编队未展示探索天赋");
+              assert(formationText.includes("熟悉"), "编队未展示羁绊档位");
+              assert(formationText.includes("攻击战备 +1"), "编队未展示基地整数奖励");
+
               const bagTab = doc.querySelector(
                 '#pet-modal [data-pet-tab="bag"]',
               );
@@ -473,6 +479,10 @@
                 doc.querySelector("#pet-modal .pet-bag-list"),
                 "宠物背包内容未渲染",
               );
+              const petBagText = doc.querySelector("#pet-modal .pet-bag-list").textContent;
+              assert(petBagText.includes("灼热嗅觉"), "宠物探索天赋未展示");
+              assert(petBagText.includes("训练陪练"), "宠物基地岗位未展示");
+              assert(petBagText.includes("攻击战备 +1"), "宠物背包未展示岗位实际效果");
 
               const closeButton = doc.querySelector(
                 "#pet-modal [data-pet-close]",
@@ -483,15 +493,20 @@
                 () => !doc.getElementById("pet-modal"),
                 "宠物弹窗关闭",
               );
-              return "pet → bag → close";
+              return "pet → bag (talent + role) → close";
             });
 
-            await step("成就导航可打开弹窗、切到任务并关闭", async () => {
+            await step("里程碑可筛选、实时更新、批量领取并关闭", async () => {
               const doc = frame.contentDocument;
+              const game = frame.contentWindow.game;
               const trigger = doc.querySelector(
                 '.nav-btn[data-tab="achievement"]',
               );
               assert(trigger, "未找到成就导航按钮");
+              await waitFor(
+                () => doc.getElementById("achievement-claimable-badge")?.textContent === "1",
+                "首只宠物里程碑徽标",
+              );
 
               trigger.click();
               await waitFor(
@@ -499,17 +514,50 @@
                 "成就弹窗打开",
               );
 
-              const tasksTab = doc.querySelector(
-                '#achievement-modal [data-achievement-tab="tasks"]',
+              const expeditionTab = doc.querySelector(
+                '#achievement-modal [data-achievement-tab="expedition"]',
               );
-              assert(tasksTab, "未找到任务标签");
-              tasksTab.click();
+              assert(expeditionTab, "未找到远征分类");
+              assert(
+                expeditionTab.getAttribute("aria-controls") === "achievement-panel",
+                "远征分类缺少面板关联",
+              );
+              expeditionTab.click();
               await waitFor(
                 () =>
                   doc.querySelector(
-                    '#achievement-modal [data-achievement-tab="tasks"][aria-selected="true"]',
+                    '#achievement-modal [data-achievement-tab="expedition"][aria-selected="true"]',
                   ),
-                "任务标签激活",
+                "远征分类激活",
+              );
+
+              const allTab = doc.querySelector(
+                '#achievement-modal [data-achievement-tab="all"]',
+              );
+              assert(allTab, "未找到全部分类");
+              allTab.click();
+              game.achievementSystem.updateProgress(
+                { totalFlips: 10, unlockedPets: 1 },
+                { announce: false },
+              );
+              await waitFor(
+                () =>
+                  doc.querySelector(
+                    '#achievement-modal [data-achievement-id="fate_10"] .achievement-status',
+                  )?.textContent === "可领取",
+                "打开弹窗时实时刷新里程碑",
+              );
+
+              const claimAllButton = doc.querySelector(
+                "#achievement-modal [data-achievement-claim-all]",
+              );
+              assert(claimAllButton && !claimAllButton.disabled, "全部领取按钮未启用");
+              claimAllButton.click();
+              await waitFor(
+                () =>
+                  doc.getElementById("achievement-claimable-badge")?.hidden &&
+                  doc.querySelector("#achievement-modal [data-achievement-claim-all]")?.disabled,
+                "批量领取完成并清空徽标",
               );
 
               const closeButton = doc.querySelector(
@@ -521,7 +569,7 @@
                 () => !doc.getElementById("achievement-modal"),
                 "成就弹窗关闭",
               );
-              return "achievement → tasks → close";
+              return "badge → expedition → live progress → claim all → close";
             });
 
             await step("点击桌面硬币并增加翻转进度", async () => {
@@ -598,6 +646,14 @@
                 !doc.getElementById("fate-buy-gold-btn")?.hidden,
                 "命运分类未显示桌面硬币",
               );
+              const goldReason = doc
+                .getElementById("fate-buy-gold-btn")
+                ?.querySelector(".upgrade-reason")
+                ?.textContent || "";
+              assert(
+                !goldReason.includes("脉冲"),
+                `桌面硬币仍显示旧领地脉冲理由：${goldReason}`,
+              );
 
               autoFilter.click();
               await waitFor(
@@ -626,7 +682,7 @@
                   doc.getElementById("fate-shop-title")?.textContent === "推荐",
                 "返回推荐分类",
               );
-              return `推荐 ${recommendedCards.length} · 命运 ${fateCards.length} · 自动 ${autoCards.length}`;
+              return `推荐 ${recommendedCards.length} · 命运 ${fateCards.length} · 自动 ${autoCards.length} · ${goldReason}`;
             });
 
             await step("准备资源并点击购买桌面硬币", async () => {
@@ -795,6 +851,8 @@
                 '[data-search-mode="quick"]',
               );
               assert(quickSearch, "未找到快速搜索按钮");
+              assert(quickSearch.textContent.includes("品质 +1"), "搜索按钮未展示宠物实际加成");
+              assert(quickSearch.dataset.talentActive === "true", "搜索按钮未标记天赋生效");
               quickSearch.click();
 
               const after = await waitFor(() => {
@@ -839,6 +897,14 @@
                 territory.buildings.length === 0,
                 `新存档已有 ${territory.buildings.length} 座建筑`,
               );
+
+              game.fateCoinSystem.totalFlips = 8;
+              game.updateUI();
+              const goalRoute = doc.getElementById("fate-next-goal-route");
+              assert(goalRoute?.tagName === "BUTTON", "下一目标入口不是可操作按钮");
+              assert(!goalRoute.disabled, "领地目标入口不可操作");
+              assert(goalRoute.dataset.scene === "territory", "下一目标入口没有绑定领地场景");
+              assert(goalRoute.textContent.includes("前往领地"), "下一目标入口文案不明确");
 
               const canvas = doc.getElementById("territoryCanvas");
               assert(canvas instanceof frame.contentWindow.HTMLCanvasElement, "未找到领地 Canvas");
@@ -903,6 +969,60 @@
                 slotIndex: building.slotIndex,
               };
               return `${building.type} · slot=${building.slotIndex} · rank=${territory.rank} · world=${game.territorySceneController.world.width}`;
+            });
+
+            await step("基地设施面板显示宠物岗位实际效果", async () => {
+              const game = frame.contentWindow.game;
+              const doc = frame.contentDocument;
+              const territory = game.territorySystem;
+              assert(territory.debugBuildBuilding("training_ground"), "测试训练场创建失败");
+              game.territorySceneController.syncProgress();
+              game.territorySceneController.updateDisplay();
+              game.territorySceneController.selectedSiteType = "training_ground";
+              game.territorySceneController.renderContextPanel("training_ground");
+
+              const panel = doc.getElementById("territory-context-panel");
+              const panelText = panel?.textContent || "";
+              assert(panel && !panel.hidden, "训练场设施面板未显示");
+              assert(panelText.includes("火焰犬 · 训练陪练 / 熟悉"), "基地面板未显示岗位档位");
+              assert(panelText.includes("攻击战备 +1"), "基地面板未显示岗位整数奖励");
+              savedBuilding.count = territory.buildings.length;
+              game.territorySceneController.closeContextPanel();
+              return "火焰犬 · 训练陪练 / 熟悉 · 攻击战备 +1";
+            });
+
+            await step("远征结算显示实际羁绊增长与满值反馈", async () => {
+              const game = frame.contentWindow.game;
+              const doc = frame.contentDocument;
+              const settlement = {
+                runId: "browser-bond-preview",
+                extracted: true,
+                depth: 4,
+                kills: 3,
+                coins: 120,
+                crystals: 4,
+                exp: 60,
+                petBond: {
+                  pets: [
+                    { petName: "火焰犬", gain: 0, friendship: 100 },
+                    { petName: "冰霜猫", gain: 2, friendship: 42 },
+                  ],
+                },
+              };
+              const activeSaveSystem = game.battleSceneController.saveSystem;
+              game.battleSceneController.saveSystem = null;
+              game.battleSceneController.handleSettlement({ settlement });
+              game.battleSceneController.saveSystem = activeSaveSystem;
+              const toast = await waitFor(() => {
+                return Array.from(doc.querySelectorAll("#toast-container .toast")).find(
+                  (candidate) => candidate.textContent?.includes("火焰犬羁绊已满"),
+                ) || null;
+              }, "满羁绊结算提示");
+              assert(toast.textContent.includes("冰霜猫羁绊 +2"), "结算未显示实际羁绊增长");
+              const tip = game.battleSceneController.getTip({ settlement });
+              assert(tip.includes("火焰犬羁绊已满"), "结算说明未显示满值反馈");
+              assert(tip.includes("冰霜猫羁绊 +2"), "结算说明未显示实际增长");
+              return "火焰犬羁绊已满 · 冰霜猫羁绊 +2";
             });
 
             await step("通过 F5 快捷键保存槽位 1", async () => {
@@ -997,6 +1117,19 @@
                 "重载后实际基地 Canvas 未恢复",
               );
               return `硬币 ${restored.fateCoins} · 助手 ${restored.assistants} · 翻转 ${restored.totalFlips} · 建筑 ${restoredBuildings.length} · scene=${game.currentScene}`;
+            });
+
+            await step("领地画布脱离 DOM 后控制器仍可安全重绑", () => {
+              const game = frame.contentWindow.game;
+              const controller = game.territorySceneController;
+              const canvas = frame.contentDocument.getElementById("territoryCanvas");
+              assert(controller && canvas, "缺少领地控制器或画布");
+              controller.destroy();
+              canvas.remove();
+              controller.bind();
+              controller.destroy();
+              assert(controller.resizeObserver === null, "销毁后仍残留 ResizeObserver");
+              return "detached canvas bind/destroy ok";
             });
           } catch (error) {
             result.error = error?.message || String(error);

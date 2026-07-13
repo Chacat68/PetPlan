@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=territory-prompt-layout-20260713a" />
+    <link rel="stylesheet" href="css/style.css?v=achievement-v2-20260714a" />
   </head>
   <body>
     <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
@@ -124,13 +124,13 @@
 
               <div class="expedition-action-group" id="battle-search-actions" hidden>
                 <button type="button" class="expedition-action-btn" data-search-mode="quick">
-                  快速搜索 <span>低风险</span>
+                  快速搜索 <span data-search-preview>低风险</span>
                 </button>
                 <button type="button" class="expedition-action-btn" data-search-mode="thorough">
-                  仔细搜刮 <span>高收益</span>
+                  仔细搜刮 <span data-search-preview>高收益</span>
                 </button>
                 <button type="button" class="expedition-action-btn" data-search-mode="pet">
-                  宠物侦察 <span>稳妥</span>
+                  宠物侦察 <span data-search-preview>稳妥</span>
                 </button>
               </div>
 
@@ -202,7 +202,7 @@
                   <span class="goal-title" id="fate-next-goal-title">购买第 1 个助手</span>
                   <span class="goal-detail" id="fate-next-goal-detail">还差 25 反面</span>
                 </span>
-                <span class="goal-route" id="fate-next-goal-route">反面路线</span>
+                <button type="button" class="goal-route" id="fate-next-goal-route" disabled>反面路线</button>
                 <span class="goal-alt" id="fate-next-goal-alt">备选：金色硬币</span>
                 <span class="goal-guide" id="fate-first-session-guide" data-route="mixed">首局 1/4 · 熟悉翻转 0/8</span>
                 <span class="goal-path" id="fate-path-summary" data-path="neutral">倾向：自由探索</span>
@@ -387,6 +387,7 @@
             <button class="hud-scene-btn nav-btn" data-tab="achievement" type="button" aria-label="成就">
               <span class="scene-icon">★</span>
               <span class="scene-label">成就</span>
+              <span class="achievement-claimable-badge" id="achievement-claimable-badge" hidden aria-hidden="true">0</span>
             </button>
           </div>
         </div>
@@ -606,7 +607,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=territory-ground-unified-20260713a";
+        var moduleSrc = "js/main.js?v=achievement-v2-20260714a";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

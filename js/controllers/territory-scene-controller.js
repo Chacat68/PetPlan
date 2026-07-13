@@ -33,6 +33,7 @@ export class TerritorySceneController {
     getProgressionContext = () => ({}),
     getCurrentScene = () => "territory",
     onNavigate = null,
+    onChanged = null,
   }) {
     this.canvas = canvas || document.getElementById("territoryCanvas");
     this.ctx = this.canvas?.getContext?.("2d", { alpha: false }) || null;
@@ -47,6 +48,7 @@ export class TerritorySceneController {
     this.getProgressionContext = getProgressionContext;
     this.getCurrentScene = getCurrentScene;
     this.onNavigate = onNavigate;
+    this.onChanged = typeof onChanged === "function" ? onChanged : null;
 
     this.world = new TerritoryWorldSystem();
     this.camera = new CameraSystem({
@@ -140,9 +142,12 @@ export class TerritorySceneController {
       this.handleContextAction(button.dataset.territoryAction);
     }, { signal });
 
-    if (typeof ResizeObserver === "function" && this.canvas) {
+    const resizeTarget = this.canvas?.parentElement;
+    if (typeof ResizeObserver === "function" && resizeTarget) {
       this.resizeObserver = new ResizeObserver(() => this.resizeCanvas());
-      this.resizeObserver.observe(this.canvas.parentElement);
+      this.resizeObserver.observe(resizeTarget);
+    } else {
+      window.addEventListener("resize", () => this.resizeCanvas(), { signal });
     }
     this.updateDisplay();
   }
@@ -231,9 +236,15 @@ export class TerritorySceneController {
     const state = this.world.update(deltaTime);
     const completed = this.world.consumeCompletedActivity();
     if (completed) {
-      const result = this.territorySystem.performActivity(completed.buildingType);
+      const petSupport = this.petSystem?.getBaseSupport?.(completed.buildingType) || null;
+      const result = this.territorySystem.performActivity(
+        completed.buildingType,
+        Date.now(),
+        { petSupport },
+      );
       this.handleActionResult(result);
       this.updateDisplay();
+      if (result?.success) this.onChanged?.(result);
     }
     const center = this.getWorldPlayerCenter();
     this.camera.follow(center.x, this.world.groundY - 170, deltaTime);
@@ -396,6 +407,17 @@ export class TerritorySceneController {
         const item = this.territorySystem.getProductionSnapshot().buildings.find((entry) => entry.type === type);
         rows.push(["待收取", `${this.formatNumber(item?.amount || 0)} ${data.effects.resource === "coins" ? "金币" : "水晶"}`]);
       }
+      if (data.activity) {
+        const support = this.petSystem?.getBaseSupport?.(type);
+        if (support) {
+          const effect = this.territorySystem.getActivitySupportBonus(type, support);
+          rows.push([
+            "宠物岗位",
+            `${support.petName} · ${support.roleLabel} / ${support.tierLabel}`,
+          ]);
+          if (effect) rows.push(["岗位效果", effect.detail]);
+        }
+      }
     } else {
       const cost = this.territorySystem.calculateBuildCost(type);
       rows.push(["蓝图状态", unlock.unlocked ? "可以建设" : unlock.reason]);
@@ -497,6 +519,7 @@ export class TerritorySceneController {
     this.syncProgress();
     this.world.setRank(this.territorySystem.rank);
     this.updateDisplay();
+    if (result?.success) this.onChanged?.(result);
     if (!this.world.activity && type) this.renderContextPanel(type);
   }
 
@@ -540,41 +563,9 @@ export class TerritorySceneController {
     const title = document.getElementById("territory-objective-title");
     const detail = document.getElementById("territory-objective-detail");
     if (!title || !detail) return;
-    if (!this.territorySystem.getBuildingByType("main_base")) {
-      title.textContent = "修复主基地";
-      detail.textContent = "前往中央主基地遗迹并进行交互";
-      return;
-    }
-    const promotion = this.territorySystem.canExpand();
-    if (promotion.success) {
-      title.textContent = `领地可以升阶为 R${promotion.next.rank}`;
-      detail.textContent = "返回主基地完成升阶，开放新的基地区域";
-      return;
-    }
-    const pending = summary.production;
-    if ((pending.coins || 0) + (pending.crystals || 0) > 0) {
-      title.textContent = "基地储备可以收取";
-      detail.textContent = `工坊与矿区共储备 ${this.formatNumber(pending.coins)} 金币、${this.formatNumber(pending.crystals)} 水晶`;
-      return;
-    }
-    const buildable = this.territorySystem.getBuildingEntries().find(([type, data]) => (
-      !this.territorySystem.getBuildingByType(type) &&
-      data.site.slotIndex < summary.unlockedSlots &&
-      this.territorySystem.getBuildingUnlockState(type).unlocked
-    ));
-    if (buildable) {
-      title.textContent = `建设${buildable[1].name}`;
-      detail.textContent = `前往${this.getPathLabel(buildable[1].site.path)}分区查看施工点`;
-      return;
-    }
-    const missing = summary.rankRequirements?.find((check) => !check.met);
-    if (missing) {
-      title.textContent = `推进${missing.label}`;
-      detail.textContent = `${this.formatNumber(missing.value)} / ${this.formatNumber(missing.target)}，完成后可继续领地升阶`;
-      return;
-    }
-    title.textContent = "完成基地准备后进入远征";
-    detail.textContent = "训练、祈福或制作补给，再前往西侧远征入口";
+    const goal = summary.nextGoal || this.territorySystem.getNextProgressionGoal(summary.production);
+    title.textContent = goal.title;
+    detail.textContent = goal.detail || "";
   }
 
   getPreparedBonusRows() {

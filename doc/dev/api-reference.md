@@ -12,6 +12,7 @@
 | `handleNavigation(tab, silent)` | 切换命运、战斗或领地；宠物和成就打开模态 |
 | `updateUI()` | 协调资源、玩家、命运和战斗控制器的全局刷新 |
 | `getProgressionContext()` | 汇总首局目标、成长倾向和领地脉冲所需上下文 |
+| `getAchievementContext()` | 汇总命运、远征、宠物羁绊与领地的长期指标 |
 | `destroy()` | 解绑控制器、系统回调、路由和主循环 |
 
 ## 控制器
@@ -27,7 +28,7 @@
 | `PlayerModalController` | `bindEvents()`、`open()`、`close()`、`updateUpgradeControls()`、`destroy()` |
 | `SettingsController` | `bindEvents()`、`open()`、`close()`、`quickSave()`、`quickLoad()`、`destroy()` |
 | `PetModalController` | `open()`、`close()`、`render()`、`handleAction()` |
-| `AchievementController` | `open()`、`close()`、`render()`、`claimReward()` |
+| `AchievementController` | `open()`、`close()`、`render()`、`refreshProgress()`、`claimReward()`、`claimAllRewards()` |
 
 ## 玩法系统
 
@@ -41,6 +42,7 @@
 | `CombatSystem` | `prepareBattle()`、`startRun()`、`setViewportSize()`、`setMovementInput()`、`updateHeroMovement()`、`trackLocation()`、`interactWithNearbyLocation()`、`chooseRoute()`、`searchArea()`、`requestExtraction()`、`useSupply()`、`usePetSkill()`、`selectTargetAt()`、`abandonRun()`、`getBattleState()`、`update(deltaTime)`、`renderExplorationFrame(ctx)`、`getSaveData()` |
 | `PetSystem` | `unlockPet()`、`equipPet()`、`unequipPet()`、`resetBattleStates()`、`getTotalPowerBonus()`、`getSaveData()` |
 | `TerritorySystem` | `setProgressContext()`、`buildBuilding()`、`upgradeBuilding()`、`collectResources()`、`getSaveData()` |
+| `AchievementSystem` | `updateProgress()`、`getItems()`、`getSummary()`、`claimReward()`、`claimAllRewards()`、`getSaveData()` |
 | `ResourceSystem` | `addCoins()`、`spendCoins()`、`addRubies()`、`addCrystals()`、`formatNumber()` |
 | `SaveSystem` | `saveGame(slot)`、`loadGame(slot)`、`getSaveInfo(slot)`、`exportSave(slot)`、`importSave(file, slot)` |
 | `UISystem` | `showToast(message, type)`、`showConfirm(title, message, callback)` |

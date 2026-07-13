@@ -60,15 +60,34 @@ test("领地等级永久开放固定分区，并由远征与建设共同升阶",
   territory.setOnPersist(() => {});
 
   assert.equal(territory.getProgressSummary().rank, 0);
+  assert.deepEqual(
+    {
+      kind: territory.getProgressSummary().nextGoal.kind,
+      buildingType: territory.getProgressSummary().nextGoal.buildingType,
+      title: territory.getProgressSummary().nextGoal.title,
+    },
+    { kind: "build", buildingType: "main_base", title: "修复主基地" }
+  );
   assert.equal(territory.getWorldWidth(), 1680);
   assert.equal(territory.buildBuilding("main_base", 0).success, true);
   assert.equal(territory.getProgressSummary().rank, 1);
+  assert.equal(territory.getProgressSummary().nextGoal.title, "建设训练场");
   assert.equal(territory.getWorldWidth(), 2180);
 
   assert.equal(territory.buildBuilding("training_ground", 1).success, true);
   assert.equal(territory.buildBuilding("temple", 2).success, true);
+  assert.equal(territory.buildBuilding("workshop", 3).success, true);
+  assert.deepEqual(
+    {
+      kind: territory.getProgressSummary().nextGoal.kind,
+      metric: territory.getProgressSummary().nextGoal.metric,
+      scene: territory.getProgressSummary().nextGoal.scene,
+    },
+    { kind: "requirement", metric: "extractions", scene: "dungeon" }
+  );
   assert.match(territory.canExpand().reason, /成功撤离/);
   territory.setProgressContext({ extractions: 1, bestDepth: 3, equippedPets: 2 });
+  assert.equal(territory.getProgressSummary().nextGoal.kind, "promote");
   assert.equal(territory.expandTerritory().success, true);
   assert.equal(territory.rank, 2);
   assert.equal(territory.getLoopUnlockedSlotCount(), 6);
@@ -80,6 +99,68 @@ test("领地等级永久开放固定分区，并由远征与建设共同升阶",
   assert.equal(territory.getBuildingUnlockState("barracks").unlocked, true);
   assert.equal(territory.buildBuilding("barracks", 4).success, true);
   assert.equal(territory.canBuild("barracks", 4).reason, "兵营只能建造一座");
+});
+
+test("下一目标优先推荐可执行动作，并明确显示建设资源缺口", () => {
+  const resource = createResourceStub({ coins: 0, crystals: 0 });
+  const territory = new TerritorySystem(resource, null);
+  territory.setOnPersist(() => {});
+  territory.debugBuildBuilding("main_base");
+
+  const expeditionGoal = territory.getProgressSummary().nextGoal;
+  assert.equal(expeditionGoal.metric, "extractions");
+  assert.equal(expeditionGoal.status, "in_progress");
+  assert.equal(expeditionGoal.ctaLabel, "前往远征");
+
+  territory.setProgressContext({ extractions: 1 });
+  const blockedGoal = territory.getProgressSummary().nextGoal;
+  assert.equal(blockedGoal.kind, "build");
+  assert.equal(blockedGoal.buildingType, "training_ground");
+  assert.equal(blockedGoal.status, "blocked");
+  assert.match(blockedGoal.detail, /还差 400 金币/);
+  assert.match(blockedGoal.detail, /还差 30 水晶/);
+  assert.equal(blockedGoal.blockers.length, 2);
+
+  const tinyProduction = territory.getNextProgressionGoal({
+    coins: 1,
+    crystals: 0,
+    buildings: [{ capped: false }],
+  });
+  assert.notEqual(tinyProduction.kind, "collect", "零散储备不应抢占被阻塞的核心目标");
+});
+
+test("旧领地槽位不会直接映射到 R5，v2 异常等级保留为资历记录", () => {
+  const legacy = new TerritorySystem(createResourceStub(), null);
+  legacy.setOnPersist(() => {});
+  legacy.loadSaveData({
+    buildings: [{ type: "main_base", level: 1 }],
+    unlockedSlots: 12,
+    expansionCount: 0,
+  });
+  assert.equal(legacy.rank, 1);
+  assert.equal(legacy.getSaveData().territoryVersion, 3);
+
+  const migratedV2 = new TerritorySystem(createResourceStub(), null);
+  migratedV2.setOnPersist(() => {});
+  migratedV2.loadSaveData({
+    territoryVersion: 2,
+    rank: 5,
+    buildings: [{ type: "main_base", level: 1 }],
+    preparedBonuses: { attack: 6 },
+  });
+  assert.equal(migratedV2.rank, 1);
+  assert.equal(migratedV2.legacyVeteranRank, 5);
+  assert.equal(migratedV2.getPreparedBonuses().attack, 6);
+
+  const current = new TerritorySystem(createResourceStub(), null);
+  current.setOnPersist(() => {});
+  current.loadSaveData({
+    territoryVersion: 3,
+    rank: 5,
+    legacyVeteranRank: 5,
+    buildings: [{ type: "main_base", level: 1 }],
+  });
+  assert.equal(current.rank, 5, "当前版本的永久等级不能在正常读档时倒退");
 });
 
 test("基地生产有离线容量上限，领取后不会重复结算", () => {
@@ -125,6 +206,28 @@ test("基地活动生成一次性远征战备并在出发时可被消费", () =>
     supplies: 0,
     expBonus: 0,
   });
+
+  const supportedTerritory = new TerritorySystem(createResourceStub(), null);
+  supportedTerritory.setOnPersist(() => {});
+  supportedTerritory.buildBuilding("main_base", 0);
+  supportedTerritory.buildBuilding("training_ground", 1);
+  const supported = supportedTerritory.performActivity(
+    "training_ground",
+    1_000_000,
+    {
+      petSupport: {
+        buildingType: "training_ground",
+        petName: "火焰犬",
+        roleLabel: "训练陪练",
+        tier: 3,
+        tierLabel: "挚友",
+      },
+    },
+  );
+  assert.equal(supported.success, true);
+  assert.equal(supported.preparedBonuses.attack, 9);
+  assert.equal(supported.petSupport.effect.detail, "攻击战备 +3");
+  assert.match(supported.message, /火焰犬以训练陪练协助（攻击战备 \+3）/);
 });
 
 test("实际基地世界支持横向移动、宠物跟随、邻近交互与活动过程", () => {

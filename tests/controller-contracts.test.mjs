@@ -14,7 +14,16 @@ const controllerContracts = [
   [
     "AchievementController",
     AchievementController,
-    ["open", "close", "render", "claimReward"],
+    [
+      "open",
+      "close",
+      "render",
+      "refreshProgress",
+      "handleSystemChange",
+      "updateBadge",
+      "claimReward",
+      "claimAllRewards",
+    ],
   ],
   [
     "BattleSceneController",

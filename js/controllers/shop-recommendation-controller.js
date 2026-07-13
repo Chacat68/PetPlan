@@ -29,6 +29,7 @@ export class ShopRecommendationController {
     progressionSystem,
     formatNumber = (value) => String(Math.floor(Number(value) || 0)),
     getProgressionContext = () => ({}),
+    onNavigate = null,
   } = {}) {
     this.fateCoinSystem = fateCoinSystem;
     this.playerSystem = playerSystem;
@@ -36,6 +37,7 @@ export class ShopRecommendationController {
     this.progressionSystem = progressionSystem;
     this.formatNumber = formatNumber;
     this.getProgressionContext = getProgressionContext;
+    this.onNavigate = typeof onNavigate === "function" ? onNavigate : null;
     this.filter = "recommended";
     this.listeners = [];
     this.latestRecommendation = null;
@@ -56,6 +58,16 @@ export class ShopRecommendationController {
       button.addEventListener("click", handler);
       this.listeners.push({ button, handler });
     });
+
+    const goalRoute = document.getElementById("fate-next-goal-route");
+    if (goalRoute) {
+      const handler = () => {
+        const scene = goalRoute.dataset.scene;
+        if (scene) this.onNavigate?.(scene);
+      };
+      goalRoute.addEventListener("click", handler);
+      this.listeners.push({ button: goalRoute, handler });
+    }
 
     this.updateFateShopFilter();
   }
@@ -467,7 +479,7 @@ export class ShopRecommendationController {
 
     const reasons = {
       assistant: "提升自动频率",
-      gold: "扩桌并加脉冲",
+      gold: "扩充桌面规模",
       assistantPower: "自动收益最高",
       manual: "强化手动收益",
       speed: "后期自动提速",
@@ -644,8 +656,11 @@ export class ShopRecommendationController {
         : goal.title;
     }
     if (routeEl) {
-      routeEl.textContent = goal.route || "命运路线";
+      routeEl.textContent = goal.ctaLabel || goal.route || "命运路线";
       routeEl.dataset.route = goal.routeType || "neutral";
+      routeEl.dataset.scene = goal.scene || "";
+      routeEl.disabled = !goal.scene;
+      routeEl.title = goal.scene ? `前往${goal.route || "目标场景"}` : "当前目标无需切换场景";
     }
     if (altEl) {
       altEl.textContent = goal.alt ? `备选：${goal.alt}` : "";
@@ -663,7 +678,7 @@ export class ShopRecommendationController {
       this.getFateUpgradeRecommendation(data, territorySummary);
     const primary = activeRecommendation?.primary;
     const secondary = activeRecommendation?.secondary;
-    const nextBuilding = territorySummary?.nextBuilding;
+    const territoryGoal = territorySummary?.nextGoal;
 
     const firstSessionGoal = this.getFirstSessionGoal(
       guide,
@@ -672,29 +687,19 @@ export class ShopRecommendationController {
     );
     if (firstSessionGoal) return firstSessionGoal;
 
-    if (nextBuilding?.state && !nextBuilding.state.unlocked) {
-      const missingPulse = Math.max(
-        0,
-        nextBuilding.state.requiredPulse - nextBuilding.state.pulse
-      );
-      const primaryPulseGain = primary?.pulseGain || 0;
-      if (
-        missingPulse <= 24 &&
-        primaryPulseGain >= missingPulse &&
-        primary?.gap?.affordable
-      ) {
-        const name =
-          nextBuilding.data?.name ||
-          nextBuilding.type ||
-          "下一座领地建筑";
-        return {
-          title: `开放${name}`,
-          detail: `还差 ${this.formatNumber(missingPulse)} 循环脉冲`,
-          route: "领地目标",
-          routeType: "territory",
-          alt: primary ? primary.title : "主角训练提升战斗",
-        };
-      }
+    if (territoryGoal?.title) {
+      return {
+        title: territoryGoal.title,
+        detail: territoryGoal.detail || "",
+        route: territoryGoal.route || "领地目标",
+        routeType: territoryGoal.routeType || "territory",
+        scene: territoryGoal.scene || "",
+        action: territoryGoal.action || "",
+        status: territoryGoal.status || "in_progress",
+        blockers: territoryGoal.blockers || [],
+        ctaLabel: territoryGoal.ctaLabel || "",
+        alt: primary?.title || secondary?.title || "",
+      };
     }
 
     if (primary) {
@@ -767,6 +772,11 @@ export class ShopRecommendationController {
         detail: "前往领地，控制角色走到主基地遗迹并完成修复",
         route: "首局教学",
         routeType: "territory",
+        scene: "territory",
+        action: "build",
+        status: "ready",
+        blockers: [],
+        ctaLabel: "前往领地",
         alt: "继续积累正面与反面",
       };
     }

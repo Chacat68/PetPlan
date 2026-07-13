@@ -4,7 +4,7 @@
  * ExpeditionRunSystem 负责路线和结算，本类负责战斗实体、主动技能与 Canvas 渲染。
  */
 
-import { ExpeditionRunSystem } from './expedition-run-system.js?v=extraction-rpg-20260711a';
+import { ExpeditionRunSystem } from './expedition-run-system.js?v=pet-loop-20260713a';
 import { ExpeditionWorldSystem } from './expedition-world-system.js?v=world-exploration-20260712b';
 import { CameraSystem } from './camera-system.js?v=world-exploration-20260712b';
 import { TargetingSystem } from './targeting-system.js?v=tower-defense-20260710b';
@@ -421,7 +421,8 @@ export class CombatSystem {
 
     searchArea(mode) {
         const result = this.runSystem.resolveSearch(mode, {
-            hasPet: Boolean(this.petSystem?.equippedPets?.length)
+            hasPet: Boolean(this.petSystem?.equippedPets?.length),
+            searchBonuses: this.petSystem?.getExplorationSearchBonuses?.(mode) || {}
         });
         if (result.success && result.encounter) this.beginEncounter(result.encounter);
         else if (result.success) {
@@ -1040,6 +1041,14 @@ export class CombatSystem {
             crystals: Math.floor(baseSettlement.crystals * (1 + (territoryBonuses.crystalBonus || 0) / 100)),
             exp: Math.floor(baseSettlement.exp * (1 + territoryExpBonus / 100))
         };
+        settlement.petBond = this.petSystem?.applyExpeditionBond?.(settlement) || {
+            plannedGain: 0,
+            totalGain: 0,
+            count: 0,
+            gainedCount: 0,
+            cappedCount: 0,
+            pets: []
+        };
 
         this.resourceSystem?.addCoins?.(settlement.coins);
         this.resourceSystem?.addCrystals?.(settlement.crystals);
@@ -1187,6 +1196,11 @@ export class CombatSystem {
             },
             interaction,
             petSkills: this.getPetSkillsState(),
+            searchBonuses: {
+                quick: this.petSystem?.getExplorationSearchBonuses?.('quick') || {},
+                thorough: this.petSystem?.getExplorationSearchBonuses?.('thorough') || {},
+                pet: this.petSystem?.getExplorationSearchBonuses?.('pet') || {}
+            },
             extraction: {
                 unlocked: run.depth >= run.minExtractionDepth,
                 canExtract: run.canExtract && nearExtraction,

@@ -11,7 +11,7 @@ export class SaveSystem {
         this.maxSlots = 5;
         
         // 存档版本
-        this.version = '1.2.0';
+        this.version = '1.3.0';
         
         // 存档前缀
         this.storagePrefix = 'petplan_save_';
@@ -63,7 +63,8 @@ export class SaveSystem {
                 pet: rawSaveData.pets ?? rawSaveData.pet,
                 territory: rawSaveData.territory,
                 fate: rawSaveData.fate,
-                progression: rawSaveData.progression
+                progression: rawSaveData.progression,
+                achievement: rawSaveData.achievement
             };
         const knownKeys = [
             'player',
@@ -72,7 +73,8 @@ export class SaveSystem {
             'pet',
             'territory',
             'fate',
-            'progression'
+            'progression',
+            'achievement'
         ];
 
         if (!knownKeys.some((key) => sourceData[key] !== undefined)) {
@@ -141,6 +143,12 @@ export class SaveSystem {
         if (this.gameSystems.progression) {
             this.gameSystems.progression.loadSaveData(data.progression ?? {});
         }
+        if (this.gameSystems.achievement) {
+            const achievementData = data.achievement ?? {
+                claimedAchievementIds: data.progression?.claimedAchievementIds ?? []
+            };
+            this.gameSystems.achievement.loadSaveData(achievementData);
+        }
     }
     
     /**
@@ -189,6 +197,10 @@ export class SaveSystem {
             if (this.gameSystems.progression) {
                 saveData.data.progression = this.gameSystems.progression.getSaveData();
             }
+
+            if (this.gameSystems.achievement) {
+                saveData.data.achievement = this.gameSystems.achievement.getSaveData();
+            }
             
             // 保存到 LocalStorage
             const key = this.getStorageKey(slot);
@@ -232,6 +244,9 @@ export class SaveSystem {
 
             const isMigratedShape = !rawSaveData.data || rawSaveData.version !== this.version;
             if (storedSave.legacyKey || isMigratedShape) {
+                if (this.gameSystems.achievement) {
+                    saveData.data.achievement = this.gameSystems.achievement.getSaveData();
+                }
                 const currentKey = this.getStorageKey(slot);
                 if (!storedSave.legacyKey && !localStorage.getItem(`${currentKey}_legacy_backup`)) {
                     localStorage.setItem(`${currentKey}_legacy_backup`, storedSave.serialized);
