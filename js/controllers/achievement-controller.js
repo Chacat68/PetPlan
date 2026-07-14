@@ -1,4 +1,4 @@
-import { ACHIEVEMENT_CATEGORIES } from "../modules/achievement-config.js?v=achievement-v2-20260714a";
+import { ACHIEVEMENT_CATEGORIES } from "../modules/achievement-config.js?v=achievement-ui-v3-20260714a";
 
 /**
  * Owns the milestone modal and HUD feedback. Achievement definitions,
@@ -61,20 +61,65 @@ export class AchievementController {
     modal.innerHTML = `
       <div class="achievement-modal" role="dialog" aria-modal="true" aria-labelledby="achievement-modal-title">
         <div class="achievement-header">
-          <div>
-            <h2 id="achievement-modal-title">里程碑</h2>
-            <p class="achievement-header-summary" id="achievement-header-summary"></p>
+          <div class="achievement-title-lockup">
+            <div class="achievement-hero-crest" aria-hidden="true">
+              <span>★</span>
+            </div>
+            <div>
+              <span class="achievement-eyebrow">PETPLAN CHRONICLE</span>
+              <h2 id="achievement-modal-title">里程碑档案</h2>
+              <p class="achievement-header-summary" id="achievement-header-summary">记录每一次成长与远行</p>
+            </div>
           </div>
           <button class="achievement-close-btn" type="button" aria-label="关闭里程碑页面" data-achievement-close>×</button>
         </div>
+        <section class="achievement-summary" aria-label="里程碑总览">
+          <div class="achievement-summary-ring" id="achievement-summary-ring" role="img" aria-label="总完成度 0%">
+            <div class="achievement-summary-ring-core">
+              <strong id="achievement-summary-percent">0%</strong>
+              <span>总完成度</span>
+            </div>
+          </div>
+          <div class="achievement-summary-copy">
+            <span class="achievement-summary-kicker">冒险者档案</span>
+            <strong id="achievement-summary-title">旅程才刚刚开始</strong>
+            <div class="achievement-summary-track" role="progressbar" aria-label="里程碑总进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <span id="achievement-summary-track-fill"></span>
+            </div>
+          </div>
+          <div class="achievement-summary-stat">
+            <strong id="achievement-summary-completed">0</strong>
+            <span>已达成</span>
+          </div>
+          <div class="achievement-summary-stat is-claimable">
+            <strong id="achievement-summary-claimable">0</strong>
+            <span>待领取</span>
+          </div>
+          <div class="achievement-summary-stat">
+            <strong id="achievement-summary-total">0</strong>
+            <span>总记录</span>
+          </div>
+        </section>
         <div class="achievement-tabs" role="tablist" aria-label="里程碑分类">
           ${ACHIEVEMENT_CATEGORIES.map((category) =>
-            this.renderTabButton(category.id, category.label)
+            this.renderTabButton(category)
           ).join("")}
         </div>
         <div class="achievement-toolbar">
-          <span id="achievement-overview" role="status" aria-live="polite"></span>
-          <button class="achievement-claim-all-btn" type="button" data-achievement-claim-all>全部领取</button>
+          <div class="achievement-section-heading">
+            <span class="achievement-section-icon" id="achievement-section-icon" aria-hidden="true">✦</span>
+            <div>
+              <strong id="achievement-section-title">全部记录</strong>
+              <span id="achievement-section-caption">收录旅途中所有值得铭记的时刻</span>
+            </div>
+          </div>
+          <div class="achievement-toolbar-actions">
+            <span id="achievement-overview" role="status" aria-live="polite"></span>
+            <button class="achievement-claim-all-btn" type="button" data-achievement-claim-all>
+              <span aria-hidden="true">✦</span>
+              <span data-achievement-claim-all-label>全部领取</span>
+            </button>
+          </div>
         </div>
         <div class="achievement-content" id="achievement-panel" role="tabpanel" aria-labelledby="achievement-tab-all"></div>
       </div>
@@ -130,13 +175,20 @@ export class AchievementController {
     return modal;
   }
 
-  renderTabButton(tab, label) {
+  renderTabButton(category) {
+    const tab = category.id;
     return `
       <button class="achievement-tab" id="achievement-tab-${this.escapeHTML(
         tab
       )}" type="button" role="tab" aria-controls="achievement-panel" aria-selected="false" tabindex="-1" data-achievement-tab="${this.escapeHTML(
         tab
-      )}">${this.escapeHTML(label)}</button>
+      )}">
+        <span class="achievement-tab-icon" aria-hidden="true">${this.escapeHTML(category.icon)}</span>
+        <span class="achievement-tab-copy">
+          <strong>${this.escapeHTML(category.label)}</strong>
+          <small data-achievement-tab-count>0 / 0</small>
+        </span>
+      </button>
     `;
   }
 
@@ -167,6 +219,11 @@ export class AchievementController {
       button.classList.toggle("active", selected);
       button.setAttribute("aria-selected", String(selected));
       button.setAttribute("tabindex", selected ? "0" : "-1");
+      const categorySummary = this.getCategorySummary(button.dataset.achievementTab);
+      const count = button.querySelector("[data-achievement-tab-count]");
+      if (count) {
+        count.textContent = `${categorySummary.completed} / ${categorySummary.total}`;
+      }
     });
 
     const panel = modal.querySelector("#achievement-panel");
@@ -177,10 +234,46 @@ export class AchievementController {
     }
 
     const summary = this.achievementSystem.getSummary();
+    const completionPercent = summary.total > 0
+      ? Math.round((summary.completed / summary.total) * 100)
+      : 0;
+    const ring = modal.querySelector("#achievement-summary-ring");
+    if (ring) {
+      ring.style.setProperty("--achievement-completion", `${completionPercent}%`);
+      ring.setAttribute("aria-label", `总完成度 ${completionPercent}%`);
+    }
+    const percent = modal.querySelector("#achievement-summary-percent");
+    if (percent) percent.textContent = `${completionPercent}%`;
+    const completed = modal.querySelector("#achievement-summary-completed");
+    if (completed) completed.textContent = this.formatNumber(summary.completed);
+    const claimable = modal.querySelector("#achievement-summary-claimable");
+    if (claimable) claimable.textContent = this.formatNumber(summary.claimable);
+    const total = modal.querySelector("#achievement-summary-total");
+    if (total) total.textContent = this.formatNumber(summary.total);
+    const summaryTitle = modal.querySelector("#achievement-summary-title");
+    if (summaryTitle) {
+      summaryTitle.textContent = summary.completed === summary.total
+        ? "所有篇章已经点亮"
+        : summary.completed > 0
+          ? `已点亮 ${summary.completed} 枚旅程印记`
+          : "旅程才刚刚开始";
+    }
+    const summaryTrack = modal.querySelector(".achievement-summary-track");
+    if (summaryTrack) summaryTrack.setAttribute("aria-valuenow", String(completionPercent));
+    const summaryTrackFill = modal.querySelector("#achievement-summary-track-fill");
+    if (summaryTrackFill) summaryTrackFill.style.width = `${completionPercent}%`;
     const summaryElement = modal.querySelector("#achievement-header-summary");
     if (summaryElement) {
-      summaryElement.textContent = `已完成 ${summary.completed} / ${summary.total}`;
+      summaryElement.textContent = `已完成 ${summary.completed} / ${summary.total} · 记录每一次成长与远行`;
     }
+    const activeCategory = this.getCategoryMeta(this.activeTab);
+    modal.dataset.activeCategory = activeCategory.id;
+    const sectionIcon = modal.querySelector("#achievement-section-icon");
+    if (sectionIcon) sectionIcon.textContent = activeCategory.icon;
+    const sectionTitle = modal.querySelector("#achievement-section-title");
+    if (sectionTitle) sectionTitle.textContent = `${activeCategory.label}记录`;
+    const sectionCaption = modal.querySelector("#achievement-section-caption");
+    if (sectionCaption) sectionCaption.textContent = activeCategory.caption;
     const overview = modal.querySelector("#achievement-overview");
     if (overview) {
       overview.textContent = summary.claimable > 0
@@ -190,7 +283,8 @@ export class AchievementController {
     const claimAllButton = modal.querySelector("[data-achievement-claim-all]");
     if (claimAllButton) {
       claimAllButton.disabled = summary.claimable === 0;
-      claimAllButton.textContent = summary.claimable > 0
+      const label = claimAllButton.querySelector("[data-achievement-claim-all-label]");
+      if (label) label.textContent = summary.claimable > 0
         ? `全部领取（${summary.claimable}）`
         : "全部领取";
     }
@@ -205,10 +299,10 @@ export class AchievementController {
   renderContent() {
     const items = this.achievementSystem?.getItems(this.activeTab) || [];
     if (items.length === 0) return `<div class="modal-empty">暂无里程碑</div>`;
-    return items.map((item) => this.renderItem(item)).join("");
+    return items.map((item, index) => this.renderItem(item, index)).join("");
   }
 
-  renderItem(item) {
+  renderItem(item, index = 0) {
     const current = Math.max(0, Number(item.current) || 0);
     const target = Math.max(1, Number(item.target) || 1);
     const displayedCurrent = Math.min(current, target);
@@ -221,45 +315,101 @@ export class AchievementController {
     const categoryLabel =
       ACHIEVEMENT_CATEGORIES.find((category) => category.id === item.category)
         ?.label || "里程碑";
+    const state = item.claimed
+      ? "claimed"
+      : item.claimable
+        ? "claimable"
+        : current > 0
+          ? "progress"
+          : "locked";
+    const actionLabel = item.claimed
+      ? "已领取"
+      : item.claimable
+        ? "领取奖励"
+        : "尚未达成";
 
     return `
-      <article class="achievement-item ${item.completed ? "completed" : ""} ${
+      <article class="achievement-item achievement-state-${state} ${item.completed ? "completed" : ""} ${
         item.claimed ? "claimed" : ""
-      }" data-achievement-id="${this.escapeHTML(item.id)}" data-achievement-category="${this.escapeHTML(
+      }" data-achievement-id="${this.escapeHTML(item.id)}" data-achievement-state="${state}" data-achievement-category="${this.escapeHTML(
         item.category
       )}">
-        <div class="achievement-icon" aria-hidden="true">${this.escapeHTML(item.icon)}</div>
+        <div class="achievement-card-shine" aria-hidden="true"></div>
+        <div class="achievement-medallion" aria-hidden="true">
+          <span class="achievement-medallion-rays"></span>
+          <span class="achievement-icon">${this.escapeHTML(item.icon)}</span>
+          <small>${String(index + 1).padStart(2, "0")}</small>
+        </div>
         <div class="achievement-info">
-          <div class="achievement-title-row">
-            <span class="achievement-title">${this.escapeHTML(item.title)}</span>
+          <div class="achievement-card-meta">
             <span class="achievement-category">${this.escapeHTML(categoryLabel)}</span>
+            <span class="achievement-status ${item.claimable ? "is-complete" : ""}">${this.escapeHTML(
+              status
+            )}</span>
           </div>
-          <div class="achievement-desc">${this.escapeHTML(item.desc)}</div>
-          <div class="achievement-progress" role="progressbar" aria-label="${this.escapeHTML(
-            item.title
-          )}进度" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${displayedCurrent}">
-            <div class="achievement-progress-bar ${item.completed ? "complete" : ""}" style="width: ${percent}%"></div>
-          </div>
-          <div class="achievement-progress-text">
-            ${this.formatNumber(displayedCurrent)} / ${this.formatNumber(target)}
-            ${
-              current > target
-                ? `<span class="achievement-overflow">累计 ${this.formatNumber(current)}</span>`
-                : ""
-            }
+          <h3 class="achievement-title">${this.escapeHTML(item.title)}</h3>
+          <p class="achievement-desc">${this.escapeHTML(item.desc)}</p>
+          <div class="achievement-progress-block">
+            <div class="achievement-progress" role="progressbar" aria-label="${this.escapeHTML(
+              item.title
+            )}进度" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${displayedCurrent}">
+              <div class="achievement-progress-bar ${item.completed ? "complete" : ""}" style="width: ${percent}%">
+                <span></span>
+              </div>
+            </div>
+            <div class="achievement-progress-text">
+              <strong>${this.formatNumber(displayedCurrent)} / ${this.formatNumber(target)}</strong>
+              <span>${percent}%</span>
+              ${
+                current > target
+                  ? `<span class="achievement-overflow">累计 ${this.formatNumber(current)}</span>`
+                  : ""
+              }
+            </div>
           </div>
         </div>
         <div class="achievement-reward">
-          <span>${this.escapeHTML(this.formatReward(item.reward))}</span>
-          <span class="achievement-status ${item.claimable ? "is-complete" : ""}">${this.escapeHTML(
-            status
-          )}</span>
+          <div class="achievement-reward-copy">
+            <span class="achievement-reward-label">里程碑奖励</span>
+            <div class="achievement-reward-tokens">${this.renderRewardTokens(item.reward)}</div>
+          </div>
           <button class="achievement-claim-btn" type="button" data-achievement-claim="${this.escapeHTML(
             item.id
-          )}" ${item.claimable ? "" : "disabled"}>${item.claimed ? "已领取" : "领取"}</button>
+          )}" ${item.claimable ? "" : "disabled"}>${this.escapeHTML(actionLabel)}</button>
         </div>
       </article>
     `;
+  }
+
+  renderRewardTokens(reward = {}) {
+    const tokens = [
+      ["coins", "G", "金币"],
+      ["rubies", "◆", "红宝石"],
+      ["crystals", "◇", "水晶"],
+    ];
+    const html = tokens
+      .filter(([key]) => (reward[key] || 0) > 0)
+      .map(([key, icon, label]) => `
+        <span class="achievement-reward-token is-${key}" title="${this.escapeHTML(label)}">
+          <span aria-hidden="true">${icon}</span>
+          <strong>${this.formatNumber(reward[key])}</strong>
+        </span>
+      `)
+      .join("");
+    return html || `<span class="achievement-reward-token">纪念奖励</span>`;
+  }
+
+  getCategoryMeta(category) {
+    return ACHIEVEMENT_CATEGORIES.find((entry) => entry.id === category)
+      || ACHIEVEMENT_CATEGORIES[0];
+  }
+
+  getCategorySummary(category) {
+    const items = this.achievementSystem?.getItems(category) || [];
+    return {
+      total: items.length,
+      completed: items.filter((item) => item.completed).length,
+    };
   }
 
   refreshProgress({ announce = true } = {}) {

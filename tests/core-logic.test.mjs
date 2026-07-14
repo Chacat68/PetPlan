@@ -708,9 +708,22 @@ test("里程碑完成会锁存，奖励只可领取一次且支持批量领取",
     },
   });
 
+  const claimableMarkup = controller.renderItem(
+    achievementSystem.getItem("fate_10"),
+    0,
+  );
+  assert.match(claimableMarkup, /achievement-state-claimable/);
+  assert.match(claimableMarkup, /achievement-medallion/);
+  assert.match(claimableMarkup, /achievement-reward-token is-coins/);
+  assert.match(claimableMarkup, />领取奖励<\/button>/);
+
   await controller.claimReward("fate_10");
   assert.equal(totals.coins, 80);
   assert.equal(achievementSystem.isClaimed("fate_10"), true);
+  assert.match(
+    controller.renderItem(achievementSystem.getItem("fate_10"), 0),
+    /achievement-state-claimed/,
+  );
   assert.deepEqual(calls, {
     fateDisplay: 1,
     territoryDisplay: 1,

@@ -513,6 +513,22 @@
                 () => doc.getElementById("achievement-modal"),
                 "成就弹窗打开",
               );
+              assert(
+                doc.getElementById("achievement-summary-percent")?.textContent === "4%",
+                "里程碑总完成度未正确展示",
+              );
+              assert(
+                doc.querySelector(
+                  '#achievement-modal [data-achievement-tab="all"] [data-achievement-tab-count]',
+                )?.textContent === "1 / 23",
+                "全部分类缺少分项完成进度",
+              );
+              assert(
+                doc.querySelector(
+                  '#achievement-modal [data-achievement-id="pet_first"].achievement-state-claimable .achievement-reward-token',
+                ),
+                "可领取里程碑缺少新版奖章卡与奖励筹码",
+              );
 
               const expeditionTab = doc.querySelector(
                 '#achievement-modal [data-achievement-tab="expedition"]',
@@ -543,7 +559,7 @@
               await waitFor(
                 () =>
                   doc.querySelector(
-                    '#achievement-modal [data-achievement-id="fate_10"] .achievement-status',
+                    '#achievement-modal [data-achievement-id="fate_10"].achievement-state-claimable .achievement-status',
                   )?.textContent === "可领取",
                 "打开弹窗时实时刷新里程碑",
               );

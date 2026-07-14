@@ -1,7 +1,7 @@
 import {
   ACHIEVEMENT_CATEGORIES,
   ACHIEVEMENT_DEFINITIONS,
-} from "./achievement-config.js?v=achievement-v2-20260714a";
+} from "./achievement-config.js?v=achievement-ui-v3-20260714a";
 
 const SAVE_SCHEMA_VERSION = 1;
 const REWARD_KEYS = Object.freeze(["coins", "rubies", "crystals"]);

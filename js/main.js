@@ -17,10 +17,10 @@ import { getTerritorySystemInstance } from "./modules/territory-system.js?v=pet-
 import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
 import { getProgressionSystemInstance } from "./modules/progression-system.js?v=phase-one-20260710b";
-import { getAchievementSystemInstance } from "./modules/achievement-system.js?v=achievement-v2-20260714a";
+import { getAchievementSystemInstance } from "./modules/achievement-system.js?v=achievement-ui-v3-20260714a";
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
-import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-v2-20260714a";
+import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-ui-v3-20260714a";
 import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=pet-loop-calibration-20260713a";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=controllers-phase-two-20260711b";
 import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-loop-calibration-20260713a";

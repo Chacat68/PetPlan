@@ -1,9 +1,34 @@
 export const ACHIEVEMENT_CATEGORIES = Object.freeze([
-  Object.freeze({ id: "all", label: "全部" }),
-  Object.freeze({ id: "fate", label: "命运" }),
-  Object.freeze({ id: "expedition", label: "远征" }),
-  Object.freeze({ id: "companion", label: "伙伴" }),
-  Object.freeze({ id: "territory", label: "领地" }),
+  Object.freeze({
+    id: "all",
+    label: "全部",
+    icon: "✦",
+    caption: "收录旅途中所有值得铭记的时刻",
+  }),
+  Object.freeze({
+    id: "fate",
+    label: "命运",
+    icon: "◎",
+    caption: "命运桌、自动结算与角色成长",
+  }),
+  Object.freeze({
+    id: "expedition",
+    label: "远征",
+    icon: "⚔",
+    caption: "探索深度、战斗经历与成功撤离",
+  }),
+  Object.freeze({
+    id: "companion",
+    label: "伙伴",
+    icon: "♥",
+    caption: "宠物收集、编队与羁绊见证",
+  }),
+  Object.freeze({
+    id: "territory",
+    label: "领地",
+    icon: "▦",
+    caption: "基地建设、设施协同与领地升阶",
+  }),
 ]);
 const defineAchievement = (definition) => Object.freeze({
   ...definition,
