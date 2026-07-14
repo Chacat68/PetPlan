@@ -97,7 +97,37 @@ export class PlayerModalController {
     }
 
     this.playerSystem.updateDisplay();
+    this.updateSummary();
     this.updateUpgradeControls();
+  }
+
+  updateSummary() {
+    const player = this.playerSystem?.player;
+    if (!player) return;
+
+    const setText = (id, value) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value;
+    };
+    const formatNumber = (value) =>
+      this.resourceSystem?.formatNumber?.(value) ?? String(value ?? 0);
+    const currentExp = Math.max(0, Number(player.exp) || 0);
+    const expToNext = Math.max(1, Number(player.expToNext) || 1);
+    const expPercent = Math.min(100, (currentExp / expToNext) * 100);
+
+    setText("player-modal-level", `Lv.${player.level || 1}`);
+    setText(
+      "player-modal-power",
+      formatNumber(this.playerSystem.calculateTotalPower?.() || 0)
+    );
+    setText("player-modal-coins", formatNumber(this.resourceSystem?.coins || 0));
+    setText(
+      "player-modal-exp",
+      `${formatNumber(currentExp)} / ${formatNumber(expToNext)}`
+    );
+
+    const expBar = document.getElementById("player-modal-exp-bar");
+    if (expBar) expBar.style.width = `${expPercent}%`;
   }
 
   handleUpgrade(attr) {
@@ -105,6 +135,7 @@ export class PlayerModalController {
     if (result.success) {
       this.uiSystem?.showToast?.(result.message, "success");
       this.onChanged({ attr, result });
+      this.updateSummary();
       this.updateUpgradeControls();
     } else {
       this.uiSystem?.showToast?.(result.message, "error");
@@ -131,6 +162,17 @@ export class PlayerModalController {
             : canAfford
               ? ""
               : "金币不足";
+
+          const card = button.closest(".player-upgrade-card");
+          if (card) {
+            const state = atLimit ? "max" : canAfford ? "ready" : "locked";
+            card.dataset.upgradeState = state;
+            const stateLabel = card.querySelector("[data-upgrade-state-label]");
+            if (stateLabel) {
+              stateLabel.textContent =
+                state === "max" ? "已满级" : state === "locked" ? "金币不足" : "可强化";
+            }
+          }
         });
     });
   }

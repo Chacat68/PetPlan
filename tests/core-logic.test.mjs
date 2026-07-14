@@ -4,6 +4,7 @@ import test from "node:test";
 import { AchievementController } from "../js/controllers/achievement-controller.js";
 import { AchievementSystem } from "../js/modules/achievement-system.js";
 import { FateSceneController } from "../js/controllers/fate-scene-controller.js";
+import { PlayerModalController } from "../js/controllers/player-modal-controller.js";
 import { SettingsController } from "../js/controllers/settings-controller.js";
 import { ShopRecommendationController } from "../js/controllers/shop-recommendation-controller.js";
 import { FateCoinSystem } from "../js/modules/fate-coin-system.js";
@@ -388,6 +389,73 @@ test("快速读档会先清理临时运行态，再应用存档并刷新界面",
 
   assert.equal(await controller.quickLoad(), true);
   assert.deepEqual(order, ["reset", "load", "refresh"]);
+});
+
+test("主角与设置控制台会同步新的概览状态", () => {
+  const originalDocument = globalThis.document;
+  const elementIds = [
+    "player-modal-level",
+    "player-modal-power",
+    "player-modal-coins",
+    "player-modal-exp",
+    "player-modal-exp-bar",
+    "settings-scene-label",
+    "settings-system-scene",
+    "settings-save-state",
+    "settings-save-time",
+    "settings-save-level",
+    "settings-save-version",
+  ];
+  const elements = new Map(
+    elementIds.map((id) => [id, { id, style: {}, textContent: "" }])
+  );
+  globalThis.document = {
+    getElementById: (id) => elements.get(id) || null,
+  };
+
+  try {
+    const playerController = new PlayerModalController({
+      playerSystem: {
+        player: { level: 7, exp: 25, expToNext: 100 },
+        calculateTotalPower: () => 4321,
+      },
+      resourceSystem: {
+        coins: 9876,
+        formatNumber: (value) => Number(value).toLocaleString("en-US"),
+      },
+    });
+    playerController.updateSummary();
+
+    assert.equal(elements.get("player-modal-level").textContent, "Lv.7");
+    assert.equal(elements.get("player-modal-power").textContent, "4,321");
+    assert.equal(elements.get("player-modal-coins").textContent, "9,876");
+    assert.equal(elements.get("player-modal-exp").textContent, "25 / 100");
+    assert.equal(elements.get("player-modal-exp-bar").style.width, "25%");
+
+    const settingsController = new SettingsController({
+      getCurrentScene: () => "territory",
+      saveSystem: {
+        getSaveInfo: () => ({
+          timestamp: new Date("2026-07-14T03:00:00Z").getTime(),
+          level: 7,
+          version: "v3",
+        }),
+      },
+    });
+    settingsController.updateStatus();
+
+    assert.equal(elements.get("settings-scene-label").textContent, "领地");
+    assert.equal(elements.get("settings-system-scene").textContent, "领地");
+    assert.equal(elements.get("settings-save-state").textContent, "存档同步完成");
+    assert.equal(elements.get("settings-save-level").textContent, "Lv.7");
+    assert.equal(elements.get("settings-save-version").textContent, "v3");
+  } finally {
+    if (originalDocument === undefined) {
+      delete globalThis.document;
+    } else {
+      globalThis.document = originalDocument;
+    }
+  }
 });
 
 test("首局目标严格按顺序推进并能识别成长倾向", () => {

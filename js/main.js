@@ -23,9 +23,9 @@ import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-2
 import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-ui-v3-20260714a";
 import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=pet-loop-calibration-20260713a";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=controllers-phase-two-20260711b";
-import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-loop-calibration-20260713a";
-import { PlayerModalController } from "./controllers/player-modal-controller.js?v=controllers-phase-two-20260711b";
-import { SettingsController } from "./controllers/settings-controller.js?v=fate-stability-20260711b";
+import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-command-ui-v1-20260714a";
+import { PlayerModalController } from "./controllers/player-modal-controller.js?v=command-modals-v1-20260714a";
+import { SettingsController } from "./controllers/settings-controller.js?v=command-modals-v1-20260714a";
 import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=pet-loop-calibration-20260713a";
 import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=pet-loop-calibration-20260713a";
 

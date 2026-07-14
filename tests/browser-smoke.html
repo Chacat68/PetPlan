@@ -457,6 +457,18 @@
               trigger.click();
               await waitFor(() => doc.getElementById("pet-modal"), "宠物弹窗打开");
 
+              assert(
+                doc.getElementById("pet-modal-title")?.textContent === "宠物中枢",
+                "宠物中枢标题未渲染",
+              );
+              const overviewText = doc.querySelector("#pet-modal .pet-roster-overview")?.textContent || "";
+              assert(overviewText.includes("已收集"), "宠物中枢未展示收集概览");
+              assert(overviewText.includes("已上阵"), "宠物中枢未展示编队概览");
+              assert(
+                doc.querySelectorAll("#pet-modal .formation-slots .pet-slot").length === 3,
+                "编队未展示三个固定席位",
+              );
+
               const formationText = doc.querySelector("#pet-modal .team-stats")?.textContent || "";
               assert(formationText.includes("编队效果"), "编队未展示实际效果区");
               assert(formationText.includes("灼热嗅觉"), "编队未展示探索天赋");
@@ -478,6 +490,10 @@
               assert(
                 doc.querySelector("#pet-modal .pet-bag-list"),
                 "宠物背包内容未渲染",
+              );
+              assert(
+                doc.querySelector("#pet-modal .pet-roster-card .pet-specialty-grid"),
+                "伙伴名册未展示职责分区",
               );
               const petBagText = doc.querySelector("#pet-modal .pet-bag-list").textContent;
               assert(petBagText.includes("灼热嗅觉"), "宠物探索天赋未展示");

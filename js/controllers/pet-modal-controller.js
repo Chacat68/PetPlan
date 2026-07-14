@@ -75,6 +75,43 @@ export class PetModalController {
     };
   }
 
+  getTabDefinition(tab) {
+    return {
+      formation: {
+        label: "远征编队",
+        detail: "部署与协同",
+        icon: "◈",
+      },
+      bag: {
+        label: "伙伴名册",
+        detail: "属性与羁绊",
+        icon: "▦",
+      },
+      collection: {
+        label: "伙伴图鉴",
+        detail: "发现与解锁",
+        icon: "✦",
+      },
+    }[tab] || null;
+  }
+
+  normalizeTab(tab) {
+    return this.getTabDefinition(tab) ? tab : "formation";
+  }
+
+  getPetTypeLabel(type) {
+    return {
+      fire: "火",
+      ice: "冰",
+      thunder: "雷",
+      earth: "地",
+      wind: "风",
+      light: "光",
+      dark: "暗",
+      phoenix: "焰",
+    }[type] || "灵";
+  }
+
   canUnlockPet(template) {
     if (!template) return { success: false, reason: "宠物不存在" };
 
@@ -108,7 +145,7 @@ export class PetModalController {
 
   open(activeTab = this.activeTab) {
     this.onBeforeOpen?.();
-    this.activeTab = activeTab || "formation";
+    this.activeTab = this.normalizeTab(activeTab);
     this.render();
   }
 
@@ -120,24 +157,67 @@ export class PetModalController {
     }
   }
 
-  render() {
-    document.getElementById("pet-modal")?.remove();
+  render({ focusTab = false } = {}) {
+    const previousModal = document.getElementById("pet-modal");
+    if (previousModal) {
+      this.modalFocusManager.release(previousModal);
+      previousModal.remove();
+    }
+
+    const templates = this.petSystem?.petTemplates || [];
+    const unlockedPets = this.petSystem?.unlockedPets || [];
+    const equippedPets = this.petSystem?.equippedPets || [];
+    const powerBonus = this.petSystem?.getTotalPowerBonus?.() || {
+      attack: 0,
+      defense: 0,
+    };
+    const activeTab = this.normalizeTab(this.activeTab);
+    this.activeTab = activeTab;
 
     const modal = document.createElement("div");
     modal.id = "pet-modal";
     modal.className = "pet-modal show";
     modal.innerHTML = `
-      <div class="pet-modal-content" role="dialog" aria-modal="true" aria-labelledby="pet-modal-title">
+      <div class="pet-modal-content" role="dialog" aria-modal="true" aria-labelledby="pet-modal-title" data-active-tab="${this.escapeHTML(
+        activeTab
+      )}">
         <div class="pet-modal-header">
-          <h2 class="pet-modal-title" id="pet-modal-title">宠物</h2>
+          <div class="pet-modal-heading">
+            <span class="pet-modal-eyebrow">COMPANION COMMAND</span>
+            <div class="pet-modal-title-row">
+              <span class="pet-modal-emblem" aria-hidden="true">✦</span>
+              <div>
+                <h2 class="pet-modal-title" id="pet-modal-title">宠物中枢</h2>
+                <p>编成远征队，协调探索天赋与基地岗位</p>
+              </div>
+            </div>
+          </div>
+          <div class="pet-roster-overview" aria-label="宠物队伍概览">
+            <div class="pet-overview-metric">
+              <span>已收集</span>
+              <b>${this.formatNumber(unlockedPets.length)}<small>/${this.formatNumber(
+        templates.length
+      )}</small></b>
+            </div>
+            <div class="pet-overview-metric">
+              <span>已上阵</span>
+              <b>${this.formatNumber(equippedPets.length)}<small>/3</small></b>
+            </div>
+            <div class="pet-overview-metric is-power">
+              <span>编队战备</span>
+              <b>+${this.formatNumber(powerBonus.attack + powerBonus.defense)}</b>
+            </div>
+          </div>
           <button class="pet-modal-close" type="button" aria-label="关闭宠物页面" data-pet-close>×</button>
         </div>
         <div class="pet-tabs" role="tablist" aria-label="宠物页面">
-          ${this.renderTabButton("formation", "编队")}
-          ${this.renderTabButton("bag", "背包")}
-          ${this.renderTabButton("collection", "图鉴")}
+          ${this.renderTabButton("formation")}
+          ${this.renderTabButton("bag")}
+          ${this.renderTabButton("collection")}
         </div>
-        <div class="pet-content">
+        <div class="pet-content" id="pet-panel-${this.escapeHTML(
+          activeTab
+        )}" role="tabpanel" tabindex="0" aria-labelledby="pet-tab-${this.escapeHTML(activeTab)}">
           ${this.renderTabContent()}
         </div>
       </div>
@@ -155,8 +235,15 @@ export class PetModalController {
 
       const tabButton = target.closest("[data-pet-tab]");
       if (tabButton) {
-        this.activeTab = tabButton.dataset.petTab || "formation";
-        this.render();
+        this.activeTab = this.normalizeTab(tabButton.dataset.petTab);
+        this.render({ focusTab: true });
+        return;
+      }
+
+      const routeButton = target.closest("[data-pet-route]");
+      if (routeButton) {
+        this.activeTab = this.normalizeTab(routeButton.dataset.petRoute);
+        this.render({ focusTab: true });
         return;
       }
 
@@ -168,16 +255,28 @@ export class PetModalController {
 
     document.body.appendChild(modal);
     this.modalFocusManager.activate(modal, ".pet-modal-close");
+    if (focusTab) {
+      modal.querySelector(`[data-pet-tab="${activeTab}"]`)?.focus();
+    }
   }
 
-  renderTabButton(tab, label) {
+  renderTabButton(tab) {
+    const definition = this.getTabDefinition(tab);
     const active = this.activeTab === tab ? "active" : "";
     const selected = this.activeTab === tab ? "true" : "false";
     return `
-      <button class="pet-tab ${active}" type="button" role="tab" aria-selected="${selected}" data-pet-tab="${this.escapeHTML(
+      <button class="pet-tab ${active}" id="pet-tab-${this.escapeHTML(
+        tab
+      )}" type="button" role="tab" aria-selected="${selected}" aria-controls="pet-panel-${this.escapeHTML(
+        tab
+      )}" data-pet-tab="${this.escapeHTML(
       tab
     )}">
-        ${this.escapeHTML(label)}
+        <span class="pet-tab-icon" aria-hidden="true">${this.escapeHTML(definition.icon)}</span>
+        <span class="pet-tab-copy">
+          <strong>${this.escapeHTML(definition.label)}</strong>
+          <small>${this.escapeHTML(definition.detail)}</small>
+        </span>
       </button>
     `;
   }
@@ -209,64 +308,126 @@ export class PetModalController {
       const pet = equippedPets[index];
       if (!pet) {
         return `
-          <div class="pet-slot empty">
-            <div class="pet-slot-empty">+</div>
-            <div class="pet-level">空槽位</div>
-          </div>
+          <article class="pet-slot empty">
+            <span class="pet-slot-index">席位 0${index + 1}</span>
+            <div class="pet-slot-empty" aria-hidden="true">＋</div>
+            <div class="pet-slot-empty-copy">
+              <strong>等待伙伴</strong>
+              <span>从伙伴名册中选择一只宠物加入远征队</span>
+            </div>
+            <button class="pet-empty-route" type="button" data-pet-route="bag">选择伙伴</button>
+          </article>
         `;
       }
 
       const template = this.getPetTemplateForInstance(pet);
+      const rarity = this.petSystem?.getRarityConfig?.(template?.rarity) || {
+        name: "普通",
+        color: "#9e9e9e",
+        stars: 1,
+      };
+      const effect = this.getPetEffectSummary(pet, template);
       return `
-        <div class="pet-slot">
-          <div class="pet-icon">${this.getPetImageMarkup(template)}</div>
-          <div class="pet-level">${this.escapeHTML(template?.name || "宠物")} Lv.${this.escapeHTML(
-        pet.level || 1
-      )}</div>
+        <article class="pet-slot is-filled" data-pet-type="${this.escapeHTML(
+          template?.type || "neutral"
+        )}" style="--pet-rarity: ${this.escapeHTML(rarity.color)}">
+          <span class="pet-slot-index">席位 0${index + 1}</span>
+          <div class="pet-slot-portrait">
+            <span class="pet-element-mark" aria-hidden="true">${this.escapeHTML(
+              this.getPetTypeLabel(template?.type)
+            )}</span>
+            <div class="pet-icon">${this.getPetImageMarkup(template)}</div>
+          </div>
+          <div class="pet-slot-identity">
+            <span>${this.escapeHTML(rarity.name)} · ${"★".repeat(rarity.stars)}</span>
+            <strong>${this.escapeHTML(template?.name || "宠物")}</strong>
+            <small>等级 ${this.escapeHTML(pet.level || 1)} · 羁绊 ${this.escapeHTML(
+        effect.tierLabel
+      )}</small>
+          </div>
+          <div class="pet-slot-specialties">
+            <span><b>探索</b>${this.escapeHTML(template?.explorationTalent?.label || "协同搜索")}</span>
+            <span><b>基地</b>${this.escapeHTML(template?.baseRole?.label || "驻地伙伴")}</span>
+          </div>
           <button class="pet-action-btn pet-slot-action" type="button" data-pet-action="unequip" data-instance-id="${this.escapeHTML(
             pet.instanceId
-          )}">卸下</button>
-        </div>
+          )}">移出编队</button>
+        </article>
       `;
     }).join("");
 
     const activeEffects = equippedPets.map((pet) => {
       const template = this.getPetTemplateForInstance(pet);
       const effect = this.getPetEffectSummary(pet, template);
+      const rarity = this.petSystem?.getRarityConfig?.(template?.rarity) || {
+        color: "#9e9e9e",
+      };
       return `
-        <div class="formation-effect">
-          <b>${this.escapeHTML(template?.name || "宠物")}</b>
-          <span>探索 · ${this.escapeHTML(template?.explorationTalent?.label || "协同搜索")}：${this.escapeHTML(effect.exploration)}</span>
-          <span>基地 · ${this.escapeHTML(effect.buildingName)} / ${this.escapeHTML(effect.tierLabel)}：${this.escapeHTML(effect.base)}</span>
-        </div>
+        <article class="formation-effect" style="--pet-rarity: ${this.escapeHTML(rarity.color)}">
+          <div class="formation-effect-pet">
+            <span class="formation-effect-thumb">${this.getPetImageMarkup(template)}</span>
+            <span><b>${this.escapeHTML(template?.name || "宠物")}</b><small>${this.escapeHTML(
+        effect.tierLabel
+      )}羁绊</small></span>
+          </div>
+          <p><b>探索 · ${this.escapeHTML(
+            template?.explorationTalent?.label || "协同搜索"
+          )}</b><span>${this.escapeHTML(effect.exploration)}</span></p>
+          <p><b>基地 · ${this.escapeHTML(effect.buildingName)}</b><span>${this.escapeHTML(
+        effect.base
+      )}</span></p>
+        </article>
       `;
     }).join("");
 
     return `
       <div class="pet-formation">
-        <section class="formation-section">
-          <h3>当前编队</h3>
-          <div class="formation-slots">${slots}</div>
+        <section class="pet-section-intro">
+          <div>
+            <span class="pet-section-kicker">ACTIVE SQUAD</span>
+            <h3>远征编队</h3>
+            <p>上阵伙伴会同时影响战斗属性、搜索方式与基地活动。</p>
+          </div>
+          <span class="pet-section-count">${this.formatNumber(equippedPets.length)} / 3 已部署</span>
         </section>
-        <section class="team-stats">
-          <h3>队伍属性</h3>
-          <div class="stat-item">
-            <span class="stat-label">上阵数量</span>
-            <span class="stat-value">${equippedPets.length}/3</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">攻击加成</span>
-            <span class="stat-value">+${this.formatNumber(powerBonus.attack)}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">防御加成</span>
-            <span class="stat-value">+${this.formatNumber(powerBonus.defense)}</span>
-          </div>
-          <div class="formation-effect-list">
-            <h4>编队效果</h4>
-            ${activeEffects || `<span class="formation-effect-empty">上阵宠物后显示探索与基地效果</span>`}
-          </div>
-        </section>
+        <div class="pet-formation-workspace">
+          <section class="formation-section" aria-label="宠物编队席位">
+            <div class="formation-slots">${slots}</div>
+          </section>
+          <section class="team-stats">
+            <div class="team-stats-heading">
+              <div>
+                <span class="pet-section-kicker">SQUAD SYNERGY</span>
+                <h3>编队总览</h3>
+              </div>
+              <span class="team-ready-state ${equippedPets.length > 0 ? "is-ready" : ""}">${
+                equippedPets.length > 0 ? "增益生效" : "等待部署"
+              }</span>
+            </div>
+            <div class="team-stat-grid">
+              <div class="stat-item">
+                <span class="stat-label">上阵数量</span>
+                <span class="stat-value">${equippedPets.length}/3</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">攻击加成</span>
+                <span class="stat-value">+${this.formatNumber(powerBonus.attack)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">防御加成</span>
+                <span class="stat-value">+${this.formatNumber(powerBonus.defense)}</span>
+              </div>
+            </div>
+            <div class="formation-effect-list">
+              <div class="formation-effect-heading">
+                <h4>编队效果</h4>
+                <span>实际生效</span>
+              </div>
+              ${activeEffects || `<span class="formation-effect-empty">上阵宠物后显示探索与基地效果</span>`}
+            </div>
+            <button class="pet-manage-route" type="button" data-pet-route="bag">管理全部伙伴 <span aria-hidden="true">→</span></button>
+          </section>
+        </div>
       </div>
     `;
   }
@@ -274,14 +435,33 @@ export class PetModalController {
   renderBag() {
     const unlockedPets = this.petSystem?.unlockedPets || [];
     if (unlockedPets.length === 0) {
-      return `<div class="modal-empty">还没有解锁宠物</div>`;
+      return `
+        <div class="pet-empty-state">
+          <span class="pet-empty-state-icon" aria-hidden="true">◇</span>
+          <h3>伙伴名册还是空的</h3>
+          <p>前往伙伴图鉴，解锁第一只宠物后即可编入远征队。</p>
+          <button type="button" class="pet-manage-route" data-pet-route="collection">打开伙伴图鉴 <span aria-hidden="true">→</span></button>
+        </div>
+      `;
     }
 
     const cards = unlockedPets
       .map((pet) => this.renderOwnedPetCard(pet))
       .join("");
 
-    return `<div class="pet-bag-list">${cards}</div>`;
+    return `
+      <div class="pet-roster-view">
+        <section class="pet-section-intro">
+          <div>
+            <span class="pet-section-kicker">YOUR COMPANIONS</span>
+            <h3>伙伴名册</h3>
+            <p>比较属性与专长，随时调整远征编队。</p>
+          </div>
+          <span class="pet-section-count">${this.formatNumber(unlockedPets.length)} 只伙伴</span>
+        </section>
+        <div class="pet-bag-list">${cards}</div>
+      </div>
+    `;
   }
 
   renderOwnedPetCard(pet) {
@@ -305,31 +485,48 @@ export class PetModalController {
     const effect = this.getPetEffectSummary(pet, template);
 
     return `
-      <article class="pet-card">
+      <article class="pet-card pet-roster-card ${pet.equipped ? "is-equipped" : ""}" data-pet-type="${this.escapeHTML(
+        template?.type || "neutral"
+      )}" style="--pet-rarity: ${this.escapeHTML(rarity.color)}">
         <div class="pet-card-header">
-          <div class="pet-card-icon">${this.getPetImageMarkup(template)}</div>
-          <div class="pet-card-rarity" style="color: ${this.escapeHTML(
-            rarity.color
-          )}">${this.escapeHTML(rarity.name)} ${"★".repeat(rarity.stars)}</div>
+          <div class="pet-card-icon-wrap">
+            <span class="pet-element-mark" aria-hidden="true">${this.escapeHTML(
+              this.getPetTypeLabel(template?.type)
+            )}</span>
+            <div class="pet-card-icon">${this.getPetImageMarkup(template)}</div>
+          </div>
+          <div class="pet-card-identity">
+            <span class="pet-card-rarity">${this.escapeHTML(rarity.name)} · ${"★".repeat(
+      rarity.stars
+    )}</span>
+            <h3 class="pet-card-name">${this.escapeHTML(template?.name || "未知宠物")}</h3>
+            <div class="pet-card-meta">
+              <span class="pet-card-level">等级 ${this.escapeHTML(level)}</span>
+              ${pet.equipped ? `<span class="pet-equipped-badge">已上阵</span>` : ""}
+            </div>
+          </div>
         </div>
         <div class="pet-card-body">
-          <h3 class="pet-card-name">${this.escapeHTML(template?.name || "未知宠物")}</h3>
-          <div class="pet-card-level">Lv.${this.escapeHTML(level)}</div>
-          ${pet.equipped ? `<div class="pet-equipped-badge">已上阵</div>` : ""}
           <div class="pet-card-stats">
-            <span class="stat-mini">攻击 ${this.formatNumber(attack)}</span>
-            <span class="stat-mini">生命 ${this.formatNumber(hp)}</span>
-            <span class="stat-mini">防御 ${this.formatNumber(defense)}</span>
+            <span class="stat-mini"><small>攻击</small><b>${this.formatNumber(attack)}</b></span>
+            <span class="stat-mini"><small>生命</small><b>${this.formatNumber(hp)}</b></span>
+            <span class="stat-mini"><small>防御</small><b>${this.formatNumber(defense)}</b></span>
           </div>
-          <p class="collection-card-desc">探索 · ${this.escapeHTML(
-            template?.explorationTalent?.label || "协同搜索"
-          )}：${this.escapeHTML(template?.explorationTalent?.detail || "参与远征搜索")}</p>
-          <p class="collection-card-desc">基地 · ${this.escapeHTML(
-            template?.baseRole?.label || "驻地伙伴"
-          )} / ${this.escapeHTML(effect.tierLabel)}：${this.escapeHTML(effect.base)}</p>
+          <div class="pet-specialty-grid">
+            <div class="pet-specialty">
+              <span>远征天赋</span>
+              <b>${this.escapeHTML(template?.explorationTalent?.label || "协同搜索")}</b>
+              <small>${this.escapeHTML(template?.explorationTalent?.detail || "参与远征搜索")}</small>
+            </div>
+            <div class="pet-specialty">
+              <span>基地岗位 · ${this.escapeHTML(effect.tierLabel)}</span>
+              <b>${this.escapeHTML(template?.baseRole?.label || "驻地伙伴")}</b>
+              <small>${this.escapeHTML(effect.base)}</small>
+            </div>
+          </div>
           <div class="pet-card-status">
-            ${this.renderStatusBar("经验", pet.exp || 0, 100)}
-            ${this.renderStatusBar("羁绊", pet.friendship || 0, 100)}
+            ${this.renderStatusBar("经验", pet.exp || 0, 100, "experience")}
+            ${this.renderStatusBar("羁绊", pet.friendship || 0, 100, "friendship")}
           </div>
         </div>
         <div class="pet-card-actions">
@@ -341,12 +538,14 @@ export class PetModalController {
     `;
   }
 
-  renderStatusBar(label, value, max) {
+  renderStatusBar(label, value, max, variant = "default") {
     const safeValue = Math.max(0, Number(value) || 0);
     const safeMax = Math.max(1, Number(max) || 1);
     const percent = Math.min(100, Math.round((safeValue / safeMax) * 100));
     return `
-      <div class="status-bar">
+      <div class="status-bar status-${this.escapeHTML(variant)}" aria-label="${this.escapeHTML(
+        label
+      )} ${this.formatNumber(safeValue)} / ${this.formatNumber(safeMax)}">
         <span class="status-label">${this.escapeHTML(label)}</span>
         <span class="status-progress">
           <span class="status-fill" style="width: ${percent}%"></span>
@@ -358,36 +557,50 @@ export class PetModalController {
 
   renderCollection() {
     const templates = this.petSystem?.petTemplates || [];
+    const ownedCount = this.petSystem?.unlockedPets?.length || 0;
     const cards = templates
       .map((template) => {
-        const owned = this.petSystem.unlockedPets.some(
+        const ownedPet = this.petSystem.unlockedPets.find(
           (pet) => pet.templateId === template.id
         );
+        const owned = Boolean(ownedPet);
         const rarity = this.petSystem.getRarityConfig(template.rarity);
         const unlockState = this.canUnlockPet(template);
         const disabled = owned || !unlockState.success;
         const buttonLabel = owned ? "已拥有" : unlockState.reason;
 
         return `
-          <article class="pet-card pet-collection-card ${owned ? "is-owned" : "is-locked"}">
+          <article class="pet-card pet-collection-card ${owned ? "is-owned" : "is-locked"}" data-pet-type="${this.escapeHTML(
+            template.type || "neutral"
+          )}" style="--pet-rarity: ${this.escapeHTML(rarity.color)}">
             <div class="pet-card-header">
-              <div class="pet-card-icon">${this.getPetImageMarkup(template)}</div>
-              <div class="pet-card-rarity" style="color: ${this.escapeHTML(
-                rarity.color
-              )}">${this.escapeHTML(rarity.name)} ${"★".repeat(rarity.stars)}</div>
+              <div class="pet-card-icon-wrap">
+                <span class="pet-element-mark" aria-hidden="true">${this.escapeHTML(
+                  this.getPetTypeLabel(template.type)
+                )}</span>
+                <div class="pet-card-icon">${this.getPetImageMarkup(template)}</div>
+              </div>
+              <div class="pet-card-identity">
+                <span class="pet-card-rarity">${this.escapeHTML(rarity.name)} · ${"★".repeat(
+          rarity.stars
+        )}</span>
+                <h3 class="pet-card-name">${this.escapeHTML(template.name)}</h3>
+                <span class="pet-collection-state ${owned ? "is-owned" : ""}">${owned ? "已缔结契约" : "等待解锁"}</span>
+              </div>
             </div>
             <div class="pet-card-body">
-              <h3 class="pet-card-name">${this.escapeHTML(template.name)}</h3>
-              <p class="collection-card-desc">战斗 · ${this.escapeHTML(template.skill?.name || "基础协战")}</p>
-              <p class="collection-card-desc">探索 · ${this.escapeHTML(
-                template.explorationTalent?.label || "协同搜索"
-              )}</p>
-              <p class="collection-card-desc">基地 · ${this.escapeHTML(
-                template.baseRole?.label || "驻地伙伴"
-              )}</p>
+              <div class="pet-collection-talents">
+                <span><small>战斗</small><b>${this.escapeHTML(template.skill?.name || "基础协战")}</b></span>
+                <span><small>探索</small><b>${this.escapeHTML(
+                  template.explorationTalent?.label || "协同搜索"
+                )}</b></span>
+                <span><small>基地</small><b>${this.escapeHTML(
+                  template.baseRole?.label || "驻地伙伴"
+                )}</b></span>
+              </div>
               <div class="collection-card-info">
                 <div class="info-row">
-                  <span>解锁等级</span>
+                  <span>等级要求</span>
                   <strong>Lv.${this.escapeHTML(template.requiredLevel)}</strong>
                 </div>
                 <div class="info-row">
@@ -395,8 +608,10 @@ export class PetModalController {
                   <strong>${this.escapeHTML(this.formatPetCost(template.cost))}</strong>
                 </div>
                 <div class="info-row">
-                  <span>基础攻击</span>
-                  <strong>${this.formatNumber(template.baseStats.attack)}</strong>
+                  <span>基础战备</span>
+                  <strong>攻 ${this.formatNumber(template.baseStats.attack)} · 防 ${this.formatNumber(
+          template.baseStats.defense
+        )}</strong>
                 </div>
               </div>
             </div>
@@ -410,7 +625,24 @@ export class PetModalController {
       })
       .join("");
 
-    return `<div class="pet-collection-list">${cards}</div>`;
+    const completion = templates.length > 0 ? Math.round((ownedCount / templates.length) * 100) : 0;
+    return `
+      <div class="pet-collection-view">
+        <section class="pet-section-intro pet-collection-intro">
+          <div>
+            <span class="pet-section-kicker">COMPANION ARCHIVE</span>
+            <h3>伙伴图鉴</h3>
+            <p>查看每只伙伴的定位与契约条件，规划下一次解锁。</p>
+          </div>
+          <div class="pet-collection-progress" aria-label="图鉴完成度 ${completion}%">
+            <span><b>${this.formatNumber(ownedCount)}</b> / ${this.formatNumber(templates.length)}</span>
+            <span class="pet-collection-progress-track"><span style="width: ${completion}%"></span></span>
+            <small>图鉴 ${completion}%</small>
+          </div>
+        </section>
+        <div class="pet-collection-list">${cards}</div>
+      </div>
+    `;
   }
 
   handleAction(button) {

@@ -31,6 +31,7 @@ const sourceFiles = [
 ];
 const testFiles = [
   "tests/controller-contracts.test.mjs",
+  "tests/pet-modal-ui.test.mjs",
   "tests/core-logic.test.mjs",
   "tests/phase-one-smoke.mjs",
   "tests/extraction-rpg-smoke.mjs",

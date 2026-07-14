@@ -151,16 +151,20 @@ export class SettingsController {
       if (element) element.textContent = value;
     };
 
-    setText("settings-scene-label", this.getSceneLabel());
+    const sceneLabel = this.getSceneLabel();
+    setText("settings-scene-label", sceneLabel);
+    setText("settings-system-scene", sceneLabel);
 
     const saveInfo = this.saveSystem?.getSaveInfo?.(SAVE_SLOT);
     if (!saveInfo) {
+      setText("settings-save-state", "等待首次保存");
       setText("settings-save-time", "未保存");
       setText("settings-save-level", "Lv.1");
       setText("settings-save-version", "-");
       return;
     }
 
+    setText("settings-save-state", "存档同步完成");
     setText("settings-save-time", this.formatSaveTime(saveInfo.timestamp));
     setText("settings-save-level", `Lv.${saveInfo.level || 1}`);
     setText("settings-save-version", saveInfo.version || "-");
