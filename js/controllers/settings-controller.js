@@ -10,6 +10,7 @@ export class SettingsController {
     canvas,
     gameCore = null,
     getGameCore = null,
+    combatSystem = null,
     saveSystem,
     uiSystem,
     modalFocusManager,
@@ -18,6 +19,7 @@ export class SettingsController {
     onGameLoaded,
   } = {}) {
     this.canvas = canvas;
+    this.combatSystem = combatSystem;
     this.saveSystem = saveSystem;
     this.uiSystem = uiSystem;
     this.modalFocusManager = modalFocusManager;
@@ -237,6 +239,14 @@ export class SettingsController {
   }
 
   async quickLoad() {
+    if (this.combatSystem?.runSystem?.active) {
+      this.uiSystem?.showToast?.(
+        "远征进行中不能读取旧存档；系统仍会自动保存当前远征用于意外恢复。",
+        "warning"
+      );
+      return false;
+    }
+
     await this.onBeforeGameLoad();
     const result = await this.saveSystem.loadGame(SAVE_SLOT);
     if (result) {

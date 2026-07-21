@@ -44,6 +44,21 @@ export class CameraSystem {
     const factor = 1 - Math.pow(1 - this.smoothing, frameScale);
     this.x += (desiredX - this.x) * factor;
     this.y += (desiredY - this.y) * factor;
+
+    // 平滑镜头不能以丢失角色为代价。掉帧、后台恢复或连续键盘输入都可能
+    // 让目标瞬间越过平滑追踪区，因此在插值后再把目标约束进安全框。
+    const safeMarginX = Math.min(140, Math.max(48, this.viewportWidth * 0.18));
+    const safeMarginY = Math.min(140, Math.max(48, this.viewportHeight * 0.18));
+    const screenX = targetX - this.x;
+    const screenY = targetY - this.y;
+    if (screenX < safeMarginX) this.x = targetX - safeMarginX;
+    else if (screenX > this.viewportWidth - safeMarginX) {
+      this.x = targetX - (this.viewportWidth - safeMarginX);
+    }
+    if (screenY < safeMarginY) this.y = targetY - safeMarginY;
+    else if (screenY > this.viewportHeight - safeMarginY) {
+      this.y = targetY - (this.viewportHeight - safeMarginY);
+    }
     this.clamp();
     return this.getState();
   }

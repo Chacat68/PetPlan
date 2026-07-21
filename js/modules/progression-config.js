@@ -35,6 +35,29 @@ export const TERRITORY_PROGRESSION_CONFIG = Object.freeze({
   ]),
 });
 
+// Ruby rewards are deliberately split across increasingly demanding expedition
+// contracts. The full route funds the collectible roster, while early rewards
+// only open the next companion instead of dumping the endgame currency at once.
+export const EXPEDITION_MILESTONE_REWARD_CONFIG = Object.freeze([
+  Object.freeze({ id: "extracted_depth_3", metric: "bestExtractedDepth", target: 3, title: "带回浅层情报", desc: "从区域 3 或更深处成功撤离", icon: "↩", rubies: 40 }),
+  Object.freeze({ id: "extracted_depth_5", metric: "bestExtractedDepth", target: 5, title: "穿越危险腹地", desc: "从区域 5 或更深处成功撤离", icon: "↩", rubies: 80 }),
+  Object.freeze({ id: "extracted_depth_8", metric: "bestExtractedDepth", target: 8, title: "核心区归还者", desc: "从区域 8 或更深处成功撤离", icon: "◆", rubies: 160 }),
+  Object.freeze({ id: "extraction_25", metric: "extractions", target: 25, title: "边境常客", desc: "累计成功撤离 25 次", icon: "↩", rubies: 180 }),
+  Object.freeze({ id: "extraction_50", metric: "extractions", target: 50, title: "可靠的领航员", desc: "累计成功撤离 50 次", icon: "↩", rubies: 300 }),
+  Object.freeze({ id: "extraction_100", metric: "extractions", target: 100, title: "百战归乡", desc: "累计成功撤离 100 次", icon: "↩", rubies: 450 }),
+  Object.freeze({ id: "boss_1", metric: "bossKills", target: 1, title: "首领猎手", desc: "击败 1 名远征首领", icon: "B", rubies: 60 }),
+  Object.freeze({ id: "boss_5", metric: "bossKills", target: 5, title: "破阵者", desc: "累计击败 5 名远征首领", icon: "B", rubies: 120 }),
+  Object.freeze({ id: "boss_15", metric: "bossKills", target: 15, title: "核心克星", desc: "累计击败 15 名远征首领", icon: "B", rubies: 220 }),
+  Object.freeze({ id: "boss_30", metric: "bossKills", target: 30, title: "荒野传说", desc: "累计击败 30 名远征首领", icon: "B", rubies: 350 }),
+  Object.freeze({ id: "flawless_1", metric: "flawlessExtractions", target: 1, title: "毫发无伤", desc: "首次完成无伤撤离", icon: "◇", rubies: 60 }),
+  Object.freeze({ id: "flawless_5", metric: "flawlessExtractions", target: 5, title: "完美行动", desc: "累计完成 5 次无伤撤离", icon: "◇", rubies: 140 }),
+  Object.freeze({ id: "flawless_15", metric: "flawlessExtractions", target: 15, title: "幽灵小队", desc: "累计完成 15 次无伤撤离", icon: "◇", rubies: 260 }),
+  Object.freeze({ id: "value_500", metric: "bestValue", target: 500, title: "满载而归", desc: "单次成功带回价值 500 的战利品", icon: "¤", rubies: 40 }),
+  Object.freeze({ id: "value_1500", metric: "bestValue", target: 1500, title: "珍宝路线", desc: "单次成功带回价值 1500 的战利品", icon: "¤", rubies: 90 }),
+  Object.freeze({ id: "value_4000", metric: "bestValue", target: 4000, title: "高价值目标", desc: "单次成功带回价值 4000 的战利品", icon: "¤", rubies: 180 }),
+  Object.freeze({ id: "value_8000", metric: "bestValue", target: 8000, title: "移动宝库", desc: "单次成功带回价值 8000 的战利品", icon: "¤", rubies: 300 }),
+]);
+
 // Territory v2 promotes the base through permanent milestones. The old pulse
 // configuration remains available for growth-direction hints and old-save
 // migration, but no longer controls whether a built district can disappear.
@@ -73,7 +96,7 @@ export const TERRITORY_RANK_CONFIG = Object.freeze([
     worldWidth: 3040,
     storageHours: 18,
     cost: Object.freeze({ coins: 3000, crystals: 280 }),
-    requirements: Object.freeze({ bestDepth: 5, extractions: 1, constructionScore: 6 }),
+    requirements: Object.freeze({ bestExtractedDepth: 5, extractions: 1, constructionScore: 6 }),
   }),
   Object.freeze({
     rank: 4,
@@ -82,7 +105,7 @@ export const TERRITORY_RANK_CONFIG = Object.freeze([
     worldWidth: 3340,
     storageHours: 24,
     cost: Object.freeze({ coins: 6500, crystals: 600 }),
-    requirements: Object.freeze({ bestDepth: 6, extractions: 3, constructionScore: 12 }),
+    requirements: Object.freeze({ bestExtractedDepth: 6, extractions: 3, constructionScore: 12 }),
   }),
   Object.freeze({
     rank: 5,
@@ -91,7 +114,7 @@ export const TERRITORY_RANK_CONFIG = Object.freeze([
     worldWidth: 3660,
     storageHours: 24,
     cost: Object.freeze({ coins: 12000, crystals: 1000 }),
-    requirements: Object.freeze({ bestDepth: 8, extractions: 5, constructionScore: 20 }),
+    requirements: Object.freeze({ bestExtractedDepth: 8, extractions: 5, constructionScore: 20 }),
   }),
 ]);
 

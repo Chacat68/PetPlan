@@ -11,7 +11,7 @@ export class SaveSystem {
         this.maxSlots = 5;
         
         // 存档版本
-        this.version = '1.3.0';
+        this.version = '1.5.0';
         
         // 存档前缀
         this.storagePrefix = 'petplan_save_';
@@ -64,7 +64,8 @@ export class SaveSystem {
                 territory: rawSaveData.territory,
                 fate: rawSaveData.fate,
                 progression: rawSaveData.progression,
-                achievement: rawSaveData.achievement
+                achievement: rawSaveData.achievement,
+                expeditionMeta: rawSaveData.expeditionMeta ?? rawSaveData.expedition
             };
         const knownKeys = [
             'player',
@@ -74,7 +75,8 @@ export class SaveSystem {
             'territory',
             'fate',
             'progression',
-            'achievement'
+            'achievement',
+            'expeditionMeta'
         ];
 
         if (!knownKeys.some((key) => sourceData[key] !== undefined)) {
@@ -131,11 +133,18 @@ export class SaveSystem {
         if (data.player && this.gameSystems.player) {
             this.gameSystems.player.loadSaveData(data.player);
         }
-        if (data.combat && this.gameSystems.combat) {
-            this.gameSystems.combat.loadSaveData(data.combat);
-        }
         if (data.pet && this.gameSystems.pet) {
             this.gameSystems.pet.loadSaveData(data.pet);
+        }
+        // 局外配装先于远征恢复，活动局可据此校验出发装备；宠物也已先恢复。
+        if (this.gameSystems.expeditionMeta) {
+            const expeditionMetaData = data.expeditionMeta
+                ? { ...data.expeditionMeta, combat: data.combat }
+                : { combat: data.combat };
+            this.gameSystems.expeditionMeta.loadSaveData(expeditionMetaData);
+        }
+        if (data.combat && this.gameSystems.combat) {
+            this.gameSystems.combat.loadSaveData(data.combat);
         }
         if (this.gameSystems.fate) {
             this.gameSystems.fate.loadSaveData(data.fate ?? {});
@@ -201,6 +210,10 @@ export class SaveSystem {
             if (this.gameSystems.achievement) {
                 saveData.data.achievement = this.gameSystems.achievement.getSaveData();
             }
+
+            if (this.gameSystems.expeditionMeta) {
+                saveData.data.expeditionMeta = this.gameSystems.expeditionMeta.getSaveData();
+            }
             
             // 保存到 LocalStorage
             const key = this.getStorageKey(slot);
@@ -246,6 +259,9 @@ export class SaveSystem {
             if (storedSave.legacyKey || isMigratedShape) {
                 if (this.gameSystems.achievement) {
                     saveData.data.achievement = this.gameSystems.achievement.getSaveData();
+                }
+                if (this.gameSystems.expeditionMeta) {
+                    saveData.data.expeditionMeta = this.gameSystems.expeditionMeta.getSaveData();
                 }
                 const currentKey = this.getStorageKey(slot);
                 if (!storedSave.legacyKey && !localStorage.getItem(`${currentKey}_legacy_backup`)) {

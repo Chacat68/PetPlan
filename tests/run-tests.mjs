@@ -16,12 +16,16 @@ const sourceFiles = [
   "js/modules/combat-system.js",
   "js/modules/camera-system.js",
   "js/modules/expedition-run-system.js",
+  "js/modules/expedition-meta-system.js",
   "js/modules/expedition-world-system.js",
   "js/modules/fate-coin-system.js",
   "js/modules/fate-shop-rules.js",
   "js/modules/game-core.js",
   "js/modules/modal-focus-manager.js",
+  "js/modules/pet-system.js",
   "js/modules/player-system.js",
+  "js/modules/progression-config.js",
+  "js/modules/resource-system.js",
   "js/modules/save-system.js",
   "js/modules/scene-router.js",
   "js/modules/territory-art-config.js",
@@ -29,15 +33,23 @@ const sourceFiles = [
   "js/modules/territory-world-system.js",
   ...controllerFiles,
 ];
-const testFiles = [
-  "tests/controller-contracts.test.mjs",
-  "tests/pet-modal-ui.test.mjs",
-  "tests/core-logic.test.mjs",
-  "tests/phase-one-smoke.mjs",
-  "tests/extraction-rpg-smoke.mjs",
-  "tests/world-exploration-smoke.mjs",
-  "tests/territory-world-smoke.mjs",
-];
+const excludedTests = new Map([
+  [
+    "tower-defense-smoke.mjs",
+    "旧版竖版塔防原型已由搜打撤远征取代，仅保留为历史诊断脚本",
+  ],
+]);
+const testFiles = readdirSync(new URL("./", import.meta.url))
+  .filter((fileName) => (
+    (fileName.endsWith(".test.mjs") || fileName.endsWith("-smoke.mjs"))
+    && !excludedTests.has(fileName)
+  ))
+  .sort()
+  .map((fileName) => `tests/${fileName}`);
+
+for (const [fileName, reason] of excludedTests) {
+  console.log(`\n> skip tests/${fileName}: ${reason}`);
+}
 
 for (const sourceFile of sourceFiles) {
   console.log(`\n> node --check ${sourceFile}`);

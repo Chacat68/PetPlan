@@ -92,3 +92,29 @@ for (const [name, Controller, methods] of controllerContracts) {
     }
   });
 }
+
+test("BattleSceneController 不会通过追踪栏泄露未知地点名称", () => {
+  const controller = Object.create(BattleSceneController.prototype);
+  assert.equal(
+    controller.getNavigationLabel({ kind: "route", name: "废弃补给站", known: false, discovered: false }),
+    "未知信号"
+  );
+  assert.equal(
+    controller.getNavigationLabel({ kind: "route", name: "废弃补给站", known: true, discovered: true }),
+    "废弃补给站"
+  );
+});
+
+test("BattleSceneController 撤离预估使用当前威胁和规则参数", () => {
+  const controller = Object.create(BattleSceneController.prototype);
+  const estimate = controller.getExtractionEstimate({
+    minDurationMs: 8000,
+    baseDurationMs: 9000,
+    threatDurationStepMs: 1500,
+    overpressureDurationStepMs: 90,
+    baseEnemyCount: 5,
+    threatPerEnemy: 12,
+    overpressurePerEnemy: 10,
+  }, { depth: 5, threat: 50, overpressure: 0 });
+  assert.deepEqual(estimate, { durationSeconds: 12, enemyCount: 14 });
+});

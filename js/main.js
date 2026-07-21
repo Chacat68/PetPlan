@@ -9,8 +9,8 @@
 import { getGameCoreInstance } from "./modules/game-core.js?v=world-exploration-20260712b";
 import { getResourceSystemInstance } from "./modules/resource-system.js";
 import { getPlayerSystemInstance } from "./modules/player-system.js?v=world-exploration-20260712b";
-import { getCombatSystemInstance } from "./modules/combat-system.js?v=pet-loop-calibration-20260713a";
-import { getSaveSystemInstance } from "./modules/save-system.js?v=achievement-v2-20260714a";
+import { getCombatSystemInstance } from "./modules/combat-system.js?v=duckov-phase1-20260721b";
+import { getSaveSystemInstance } from "./modules/save-system.js?v=duckov-phase1-20260721b";
 import { getUISystemInstance } from "./modules/ui-system.js";
 import { getPetSystemInstance } from "./modules/pet-system.js?v=pet-loop-calibration-20260713a";
 import { getTerritorySystemInstance } from "./modules/territory-system.js?v=pet-loop-calibration-20260713a";
@@ -18,14 +18,15 @@ import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
 import { getProgressionSystemInstance } from "./modules/progression-system.js?v=phase-one-20260710b";
 import { getAchievementSystemInstance } from "./modules/achievement-system.js?v=achievement-ui-v3-20260714a";
+import { ExpeditionMetaSystem } from "./modules/expedition-meta-system.js?v=duckov-phase1-20260721b";
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
 import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-ui-v3-20260714a";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=pet-loop-calibration-20260713a";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=duckov-phase1-20260721b";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=controllers-phase-two-20260711b";
-import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-command-ui-v1-20260714a";
-import { PlayerModalController } from "./controllers/player-modal-controller.js?v=command-modals-v1-20260714a";
-import { SettingsController } from "./controllers/settings-controller.js?v=command-modals-v1-20260714a";
+import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-loop-calibration-20260713a";
+import { PlayerModalController } from "./controllers/player-modal-controller.js?v=controllers-phase-two-20260711b";
+import { SettingsController } from "./controllers/settings-controller.js?v=duckov-phase1-20260721b";
 import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=pet-loop-calibration-20260713a";
 import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=pet-loop-calibration-20260713a";
 
@@ -72,18 +73,23 @@ export class Game {
       }
 
       this.combatSystem = getCombatSystemInstance();
+      this.expeditionMetaSystem = new ExpeditionMetaSystem({
+        creditSettlementCurrency: false,
+      });
       this.combatSystem.setPlayerSystem(this.playerSystem);
       this.combatSystem.setResourceSystem(this.resourceSystem);
       this.combatSystem.isPaused = true;
       this.playerSystem.setCombatSystem?.(this.combatSystem);
       this.petSystem.setCombatSystem(this.combatSystem);
       this.combatSystem.setPetSystem(this.petSystem);
+      this.combatSystem.setExpeditionMetaSystem?.(this.expeditionMetaSystem);
 
       this.territorySystem = getTerritorySystemInstance(
         this.resourceSystem,
         this.playerSystem
       );
       this.combatSystem.setTerritorySystem?.(this.territorySystem);
+      this.modalFocusManager.setOnChange?.(() => this.syncCombatPause());
 
       this.saveSystem = getSaveSystemInstance();
       this.saveSystem.setGameSystems({
@@ -95,6 +101,7 @@ export class Game {
         fate: this.fateCoinSystem,
         progression: this.progressionSystem,
         achievement: this.achievementSystem,
+        expeditionMeta: this.expeditionMetaSystem,
       });
 
       this.uiSystem = getUISystemInstance();
@@ -117,7 +124,10 @@ export class Game {
       this.fateSceneController.resetTransientRuntime();
       this.shopRecommendationController.resetRecommendationStability();
       const loadedSave = await this.saveSystem.loadGame(1);
+      const claimedMetaRewards = this.claimExpeditionMetaBalances();
       if (!loadedSave && this.territorySystem.loadFromLocalStorage()) {
+        await this.saveSystem.saveGame(1);
+      } else if (loadedSave && claimedMetaRewards) {
         await this.saveSystem.saveGame(1);
       }
       this.territorySceneController.syncProgress({ silent: true });
@@ -184,6 +194,7 @@ export class Game {
     this.battleSceneController = new BattleSceneController({
       canvas: this.canvas,
       combatSystem: this.combatSystem,
+      expeditionMetaSystem: this.expeditionMetaSystem,
       resourceSystem: this.resourceSystem,
       playerSystem: this.playerSystem,
       saveSystem: this.saveSystem,
@@ -202,6 +213,7 @@ export class Game {
     this.settingsController = new SettingsController({
       canvas: this.canvas,
       getGameCore: () => this.gameCore,
+      combatSystem: this.combatSystem,
       saveSystem: this.saveSystem,
       uiSystem: this.uiSystem,
       modalFocusManager: this.modalFocusManager,
@@ -210,7 +222,11 @@ export class Game {
         this.fateSceneController.resetTransientRuntime();
         this.shopRecommendationController.resetRecommendationStability();
       },
-      onGameLoaded: () => this.updateUI({ announceAchievements: false }),
+      onGameLoaded: () => {
+        const claimed = this.claimExpeditionMetaBalances();
+        this.updateUI({ announceAchievements: false });
+        if (claimed) void this.saveSystem.saveGame(1);
+      },
     });
 
     this.petModalController = new PetModalController({
@@ -283,6 +299,15 @@ export class Game {
         this.achievementController.close();
         this.settingsController.close();
         this.playerModalController.close();
+      },
+      { signal }
+    );
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.hidden && this.combatSystem?.runSystem?.active) {
+          void this.saveSystem?.saveGame?.(1);
+        }
       },
       { signal }
     );
@@ -391,7 +416,29 @@ export class Game {
       }
     }
 
+    this.syncCombatPause();
+
     console.log("[Game] 切换到:", this.currentScene);
+  }
+
+  claimExpeditionMetaBalances() {
+    const balances = this.expeditionMetaSystem?.claimBalances?.() || {};
+    const total = [balances.coins, balances.crystals, balances.rubies, balances.exp]
+      .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+    if (total <= 0) return false;
+    this.resourceSystem?.addCoins?.(balances.coins || 0);
+    this.resourceSystem?.addCrystals?.(balances.crystals || 0);
+    this.resourceSystem?.addRubies?.(balances.rubies || 0);
+    this.playerSystem?.addExperience?.(balances.exp || 0);
+    return true;
+  }
+
+  syncCombatPause() {
+    if (!this.combatSystem) return;
+    this.combatSystem.isPaused = Boolean(
+      this.currentScene !== "dungeon" || this.modalFocusManager?.activeModal
+    );
+    if (this.combatSystem.isPaused) this.battleSceneController?.clearControlInput?.();
   }
 
   updateUI({ announceAchievements = true } = {}) {
@@ -452,8 +499,15 @@ export class Game {
       buildings: this.territorySystem?.buildings?.length || 0,
       expansionCount: this.territorySystem?.expansionCount || 0,
       bestDepth: this.combatSystem?.meta?.bestDepth || 0,
+      bestExtractedDepth: this.combatSystem?.meta?.bestExtractedDepth || 0,
       extractions: this.combatSystem?.meta?.extractions || 0,
       losses: this.combatSystem?.meta?.losses || 0,
+      bossKills: this.combatSystem?.meta?.bossKills || 0,
+      flawlessExtractions: this.combatSystem?.meta?.flawlessExtractions || 0,
+      bestValue: this.combatSystem?.meta?.bestValue || 0,
+      maxExpeditionPetCount: this.combatSystem?.meta?.maxExpeditionPetCount || 0,
+      contractFragments: this.combatSystem?.meta?.contractFragments || 0,
+      deepMaterials: this.combatSystem?.meta?.deepMaterials || 0,
     };
   }
 
@@ -466,7 +520,12 @@ export class Game {
       assistants: progression.assistants,
       playerLevel: progression.playerLevel,
       bestDepth: progression.bestDepth,
+      bestExtractedDepth: progression.bestExtractedDepth,
       extractions: progression.extractions,
+      bossKills: progression.bossKills,
+      flawlessExtractions: progression.flawlessExtractions,
+      bestValue: progression.bestValue,
+      maxExpeditionPetCount: progression.maxExpeditionPetCount,
       unlockedPets: unlockedPets.length,
       equippedPets: progression.equippedPets,
       maxPetFriendship: unlockedPets.reduce(
