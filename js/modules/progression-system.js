@@ -1,14 +1,17 @@
 import {
   FIRST_SESSION_STEPS,
   GROWTH_PATHS,
+  ONBOARDING_VERSION,
   PATH_RECOMMENDATION_BOOST,
-} from "./progression-config.js?v=phase-one-20260710b";
+} from "./progression-config.js?v=growth-onboarding-20260720a";
 
 let instance = null;
 
 export class ProgressionSystem {
   constructor() {
     this.claimedAchievementIds = new Set();
+    this.onboardingVersion = ONBOARDING_VERSION;
+    this.onboardingStatus = "new";
   }
 
   getFirstSessionGuide(context = {}) {
@@ -78,9 +81,37 @@ export class ProgressionSystem {
     return true;
   }
 
+  getOnboardingState() {
+    return {
+      version: this.onboardingVersion,
+      status: this.onboardingStatus,
+      active: this.onboardingStatus === "active",
+    };
+  }
+
+  startOnboarding() {
+    this.onboardingVersion = ONBOARDING_VERSION;
+    this.onboardingStatus = "active";
+    return this.getOnboardingState();
+  }
+
+  dismissOnboarding() {
+    this.onboardingVersion = ONBOARDING_VERSION;
+    this.onboardingStatus = "dismissed";
+    return this.getOnboardingState();
+  }
+
+  completeOnboarding() {
+    this.onboardingVersion = ONBOARDING_VERSION;
+    this.onboardingStatus = "completed";
+    return this.getOnboardingState();
+  }
+
   getSaveData() {
     return {
       claimedAchievementIds: Array.from(this.claimedAchievementIds),
+      onboardingVersion: this.onboardingVersion,
+      onboardingStatus: this.onboardingStatus,
     };
   }
 
@@ -89,6 +120,14 @@ export class ProgressionSystem {
       ? data.claimedAchievementIds
       : [];
     this.claimedAchievementIds = new Set(ids.filter((id) => typeof id === "string"));
+    const validStatuses = new Set(["new", "active", "dismissed", "completed"]);
+    const savedVersion = Number(data?.onboardingVersion) || 0;
+    const savedStatus = validStatuses.has(data?.onboardingStatus)
+      ? data.onboardingStatus
+      : "new";
+    this.onboardingVersion = ONBOARDING_VERSION;
+    this.onboardingStatus =
+      savedVersion === ONBOARDING_VERSION ? savedStatus : "new";
   }
 }
 

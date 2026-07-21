@@ -485,6 +485,25 @@ test("首局目标严格按顺序推进并能识别成长倾向", () => {
       fateCoins: 2,
       assistants: 1,
     }).id,
+    "expedition"
+  );
+  assert.equal(
+    progression.getFirstSessionGuide({
+      totalFlips: 8,
+      fateCoins: 2,
+      assistants: 1,
+      expeditionDepth: 1,
+    }).id,
+    "extraction"
+  );
+  assert.equal(
+    progression.getFirstSessionGuide({
+      totalFlips: 8,
+      fateCoins: 2,
+      assistants: 1,
+      expeditionDepth: 1,
+      extractions: 1,
+    }).id,
     "territory"
   );
   assert.equal(
@@ -492,6 +511,8 @@ test("首局目标严格按顺序推进并能识别成长倾向", () => {
       totalFlips: 8,
       fateCoins: 2,
       assistants: 1,
+      expeditionDepth: 1,
+      extractions: 1,
       buildings: 1,
     }).complete,
     true
@@ -500,10 +521,12 @@ test("首局目标严格按顺序推进并能识别成长倾向", () => {
   const outOfOrder = progression.getFirstSessionGuide({
     fateCoins: 2,
     assistants: 1,
+    expeditionDepth: 1,
+    extractions: 1,
     buildings: 1,
   });
   assert.equal(outOfOrder.id, "flip");
-  assert.equal(outOfOrder.completedCount, 3);
+  assert.equal(outOfOrder.completedCount, 5);
 
   assert.equal(progression.getPathSummary({}).leadingPath, null);
   const companion = progression.getPathSummary({
@@ -516,6 +539,16 @@ test("首局目标严格按顺序推进并能识别成长倾向", () => {
   assert.equal(companion.highestScore, 11);
   assert.equal(progression.getRecommendationBoost("assistant", companion), 14);
   assert.equal(progression.getRecommendationBoost("gold", companion), 0);
+
+  assert.equal(progression.getOnboardingState().status, "new");
+  progression.startOnboarding();
+  assert.equal(progression.getOnboardingState().active, true);
+  const onboardingSave = progression.getSaveData();
+  const restoredProgression = new ProgressionSystem();
+  restoredProgression.loadSaveData(onboardingSave);
+  assert.equal(restoredProgression.getOnboardingState().status, "active");
+  restoredProgression.dismissOnboarding();
+  assert.equal(restoredProgression.getOnboardingState().status, "dismissed");
 });
 
 test("命运商店评分、主次推荐和分类顺序可独立回归", () => {

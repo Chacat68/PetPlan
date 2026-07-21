@@ -69,6 +69,18 @@ export class ShopRecommendationController {
       this.listeners.push({ button: goalRoute, handler });
     }
 
+    const goalToggle = document.getElementById("fate-next-goal-toggle");
+    if (goalToggle) {
+      const handler = () => {
+        this.setGoalDetailsExpanded(
+          goalToggle.getAttribute("aria-expanded") !== "true"
+        );
+      };
+      goalToggle.addEventListener("click", handler);
+      this.listeners.push({ button: goalToggle, handler });
+      this.setGoalDetailsExpanded(false);
+    }
+
     this.updateFateShopFilter();
   }
 
@@ -78,6 +90,25 @@ export class ShopRecommendationController {
       button.removeEventListener("click", handler);
     });
     this.listeners = [];
+  }
+
+  setGoalDetailsExpanded(expanded) {
+    const panel = document.getElementById("fate-next-goal");
+    const toggle = document.getElementById("fate-next-goal-toggle");
+    const details = document.getElementById("fate-next-goal-more");
+    if (!panel || !toggle || !details) return;
+
+    const isExpanded = Boolean(expanded);
+    panel.dataset.expanded = String(isExpanded);
+    details.hidden = !isExpanded;
+    toggle.setAttribute("aria-expanded", String(isExpanded));
+    toggle.setAttribute(
+      "aria-label",
+      isExpanded ? "收起目标详情" : "展开目标详情"
+    );
+    toggle.title = isExpanded ? "收起目标详情" : "展开目标详情";
+    const icon = toggle.querySelector("[aria-hidden='true']");
+    if (icon) icon.textContent = isExpanded ? "−" : "＋";
   }
 
   /**
@@ -763,6 +794,36 @@ export class ShopRecommendationController {
         route: "首局教学",
         routeType: "tails",
         alt: recommendation?.secondary?.title || "继续扩充桌面",
+      };
+    }
+
+    if (guide.id === "expedition") {
+      return {
+        title: "完成第一次远征探索",
+        detail: "进入远征，选择路线并完成第 1 个区域",
+        route: "首局教学",
+        routeType: "combat",
+        scene: "dungeon",
+        action: "progress",
+        status: "ready",
+        blockers: [],
+        ctaLabel: "前往远征",
+        alt: "继续积累命运资源",
+      };
+    }
+
+    if (guide.id === "extraction") {
+      return {
+        title: "成功撤离 1 次",
+        detail: "探索至少 3 个区域，返回西侧入口并守住撤离信标",
+        route: "首局教学",
+        routeType: "combat",
+        scene: "dungeon",
+        action: "progress",
+        status: "in_progress",
+        blockers: [{ metric: "extractions", gap: 1 }],
+        ctaLabel: "继续远征",
+        alt: "撤离后前往领地",
       };
     }
 

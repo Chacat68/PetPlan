@@ -4,9 +4,15 @@
  */
 
 import { MovementSystem } from "./movement-system.js?v=movement-20260702a";
+import {
+    CHARACTER_ART_VERSION,
+    CHARACTER_FRAME_COUNT,
+    CHARACTER_FRAME_SIZE,
+    HERO_CHARACTER_ART,
+} from "./character-art-config.js?v=stable-actions-20260721c";
 
 let instance = null;
-const PLAYER_ASSET_VERSION = 'anime-gunner-20260702a';
+const PLAYER_ASSET_VERSION = CHARACTER_ART_VERSION;
 
 export class PlayerSystem {
     constructor() {
@@ -78,6 +84,7 @@ export class PlayerSystem {
             attackSpeedBonus: 16
         };
         this.combatState = 'idle';
+        this.renderAnimationState = 'idle';
 
         // 角色贴图
         this.playerImage = new Image();
@@ -86,23 +93,27 @@ export class PlayerSystem {
             this.playerImageLoaded = true;
         };
         this.playerImage.onerror = () => {
-            console.warn('[PlayerSystem] 角色图片加载失败: images/player/table_hero.png');
+            console.warn(`[PlayerSystem] 角色图片加载失败: ${HERO_CHARACTER_ART.portrait}`);
         };
-        this.playerImage.src = `images/player/table_hero.png?v=${PLAYER_ASSET_VERSION}`;
+        this.playerImage.src = `${HERO_CHARACTER_ART.portrait}?v=${PLAYER_ASSET_VERSION}`;
 
-        this.spriteFrameSize = 512;
+        this.spriteFrameSize = CHARACTER_FRAME_SIZE;
+        this.spriteFrameCount = CHARACTER_FRAME_COUNT;
         this.playerSprites = {
-            idle: this.loadSpriteSheet('images/sprites/battle/hero/hero_idle_sheet.png', 4, 190),
-            move: this.loadSpriteSheet('images/sprites/battle/hero/hero_move_sheet.png', 4, 115),
-            attack: this.loadSpriteSheet('images/sprites/battle/hero/hero_attack_sheet.png', 4, 75)
+            idle: this.loadSpriteSheet(HERO_CHARACTER_ART.sprites.idle, this.spriteFrameCount, HERO_CHARACTER_ART.frameDurations.idle),
+            move: this.loadSpriteSheet(HERO_CHARACTER_ART.sprites.move, this.spriteFrameCount, HERO_CHARACTER_ART.frameDurations.move),
+            attack: this.loadSpriteSheet(HERO_CHARACTER_ART.sprites.attack, this.spriteFrameCount, HERO_CHARACTER_ART.frameDurations.attack)
         };
         this.attackAnimationTimer = 0;
-        this.attackAnimationDuration = 300;
+        this.attackAnimationDuration = (
+            this.playerSprites.attack.frameCount * this.playerSprites.attack.frameDuration
+        );
         
         // 动画
         this.animationFrame = 0;
         this.animationTimer = 0;
         this.animationTime = 0;
+        this.stateAnimationTime = 0;
         
         // 生命恢复计时器
         this.regenTimer = 0;
@@ -116,6 +127,7 @@ export class PlayerSystem {
             image,
             src,
             frameCount,
+            frameSize: this.spriteFrameSize,
             frameDuration,
             loaded: false
         };
@@ -267,10 +279,11 @@ export class PlayerSystem {
         
         // 动画帧更新
         this.animationTime += deltaTime;
+        this.stateAnimationTime += deltaTime;
         this.animationTimer += deltaTime;
         if (this.animationTimer >= 200) {
             this.animationTimer = 0;
-            this.animationFrame = (this.animationFrame + 1) % 4;
+            this.animationFrame = (this.animationFrame + 1) % this.spriteFrameCount;
         }
 
         if (this.attackAnimationTimer > 0) {
@@ -293,9 +306,9 @@ export class PlayerSystem {
             this.combatSystem.mode === 'extractionRpg' &&
             typeof this.combatSystem.updateHeroMovement === 'function'
         ) {
-            // 远征位移由 CombatSystem 在战斗帧中统一推进。这里不能再次移动，
-            // 否则 GameCore 同一帧依次更新 Player/Combat 时会产生双倍速度。
-            this.setCombatState('idle');
+            // 远征位移和动画状态都由 CombatSystem 在战斗帧中统一推进。
+            // 这里既不能再次移动，也不能先重置为 idle；否则 GameCore 随后
+            // 切回 move 时会让状态动画计时器每帧归零，移动序列永远停在首帧。
             return;
         }
 
@@ -374,6 +387,7 @@ export class PlayerSystem {
     setCombatState(state) {
         if (this.combatState === state) return;
         this.combatState = state;
+        this.stateAnimationTime = 0;
     }
 
     getAnimationState() {
@@ -424,6 +438,10 @@ export class PlayerSystem {
         );
 
         const animationState = this.getAnimationState();
+        if (this.renderAnimationState !== animationState) {
+            this.renderAnimationState = animationState;
+            this.stateAnimationTime = 0;
+        }
         const activeSprite = this.playerSprites[animationState] || this.playerSprites.idle;
         const spriteReady = activeSprite && (
             activeSprite.loaded ||
@@ -431,7 +449,7 @@ export class PlayerSystem {
         );
 
         if (spriteReady) {
-            let frameIndex = Math.floor(this.animationTime / activeSprite.frameDuration) % activeSprite.frameCount;
+            let frameIndex = Math.floor(this.stateAnimationTime / activeSprite.frameDuration) % activeSprite.frameCount;
             if (animationState === 'attack') {
                 const elapsed = this.attackAnimationDuration - this.attackAnimationTimer;
                 frameIndex = Math.min(

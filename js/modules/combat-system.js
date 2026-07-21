@@ -8,9 +8,17 @@ import { ExpeditionRunSystem } from './expedition-run-system.js?v=duckov-phase1-
 import { ExpeditionWorldSystem } from './expedition-world-system.js?v=duckov-phase1-20260721b';
 import { CameraSystem } from './camera-system.js?v=world-exploration-20260712b';
 import { TargetingSystem } from './targeting-system.js?v=tower-defense-20260710b';
+import {
+    CHARACTER_ART_VERSION,
+    CHARACTER_FRAME_COUNT,
+    CHARACTER_FRAME_SIZE,
+    MONSTER_CHARACTER_ART,
+} from './character-art-config.js?v=stable-actions-20260721c';
 
 let instance = null;
-const MONSTER_ASSET_VERSION = 'extraction-rpg-20260711a';
+const MONSTER_ASSET_VERSION = CHARACTER_ART_VERSION;
+const MONSTER_FRAME_SIZE = CHARACTER_FRAME_SIZE;
+const MONSTER_FRAME_COUNT = CHARACTER_FRAME_COUNT;
 
 const PET_ROLE_COLORS = Object.freeze({
     fire: '#ff7043',
@@ -160,35 +168,35 @@ export class CombatSystem {
 
         this.monsterTemplates = [
             {
-                id: 'slime', name: '史莱姆', image: 'images/monsters/slime_table.png',
+                id: 'slime', name: '史莱姆', image: MONSTER_CHARACTER_ART.slime.portrait,
                 baseHp: 34, baseAttack: 7, speed: 54, coinReward: 8,
                 crystalReward: 0, expReward: 5, size: 34, attackInterval: 1250
             },
             {
-                id: 'bat', name: '疾风蝙蝠', image: 'images/monsters/bat_table.png',
+                id: 'bat', name: '疾风蝙蝠', image: MONSTER_CHARACTER_ART.bat.portrait,
                 baseHp: 27, baseAttack: 8, speed: 82, coinReward: 11,
                 crystalReward: 0, expReward: 7, size: 31, attackInterval: 1250,
                 combatStyle: 'ranged', rangedRange: 280
             },
             {
-                id: 'goblin', name: '哥布林', image: 'images/monsters/goblin_table.png',
+                id: 'goblin', name: '哥布林', image: MONSTER_CHARACTER_ART.goblin.portrait,
                 baseHp: 46, baseAttack: 10, speed: 62, coinReward: 14,
                 crystalReward: 0, expReward: 9, size: 36, attackInterval: 1120,
                 combatStyle: 'charger'
             },
             {
-                id: 'skeleton', name: '重甲骷髅', image: 'images/monsters/skeleton_table.png',
+                id: 'skeleton', name: '重甲骷髅', image: MONSTER_CHARACTER_ART.skeleton.portrait,
                 baseHp: 78, baseAttack: 14, speed: 42, coinReward: 20,
                 crystalReward: 1, expReward: 14, size: 40, attackInterval: 1380
             },
             {
-                id: 'demon', name: '深渊恶魔', image: 'images/monsters/demon_table.png',
+                id: 'demon', name: '深渊恶魔', image: MONSTER_CHARACTER_ART.demon.portrait,
                 baseHp: 112, baseAttack: 19, speed: 48, coinReward: 32,
                 crystalReward: 2, expReward: 24, size: 46, attackInterval: 1420,
                 combatStyle: 'ranged', rangedRange: 330
             },
             {
-                id: 'dragon', name: '核心守卫', image: 'images/monsters/dragon_table.png',
+                id: 'dragon', name: '核心守卫', image: MONSTER_CHARACTER_ART.dragon.portrait,
                 baseHp: 560, baseAttack: 45, speed: 35, coinReward: 150,
                 crystalReward: 10, expReward: 120, size: 64, attackInterval: 1550,
                 isBoss: true, combatStyle: 'boss'
@@ -197,6 +205,8 @@ export class CombatSystem {
 
         this.monsterImages = {};
         this.monsterAnimationSheets = {};
+        this.monsterSpriteFrameSize = MONSTER_FRAME_SIZE;
+        this.monsterSpriteFrameCount = MONSTER_FRAME_COUNT;
         this.combatStates = ['idle', 'move', 'attack'];
         this.preloadImages();
 
@@ -287,7 +297,8 @@ export class CombatSystem {
     }
 
     getMonsterSpritePath(template, state) {
-        return `images/sprites/battle/monsters/${template.id}_${state}_sheet.png`;
+        return MONSTER_CHARACTER_ART[template.id]?.sprites?.[state]
+            || `images/sprites/battle/monsters/${template.id}_${state}_sheet.png`;
     }
 
     setPlayerSystem(playerSystem) {
@@ -1515,6 +1526,7 @@ export class CombatSystem {
             slowTimer: 0,
             stunTimer: 0,
             animationOffset: this.random() * 400,
+            animationStateTime: 0,
             combatState: 'move',
             progress: 0,
             rewardGranted: false
@@ -1803,11 +1815,12 @@ export class CombatSystem {
         const dt = deltaTime / 1000;
         const hero = this.getHeroCenter();
         this.monsters.slice().forEach(monster => {
+            monster.animationStateTime = Math.max(0, Number(monster.animationStateTime) || 0) + deltaTime;
             monster.slowTimer = Math.max(0, (monster.slowTimer || 0) - deltaTime);
             monster.stunTimer = Math.max(0, (monster.stunTimer || 0) - deltaTime);
             if (monster.slowTimer <= 0) monster.slowFactor = 1;
             if (monster.stunTimer > 0) {
-                monster.combatState = 'idle';
+                this.setMonsterCombatState(monster, 'idle');
                 return;
             }
 
@@ -1884,22 +1897,35 @@ export class CombatSystem {
             const engageRange = ranged ? monster.rangedRange : monster.engageRange;
             if (ranged && distance < 125) {
                 const safeDistance = distance || 1;
-                this.moveMonsterWithAvoidance(monster, -dx / safeDistance, -dy / safeDistance, monster.speed * dt);
-                monster.combatState = 'move';
-                return;
-            }
-            if (distance > engageRange || (ranged && !hasLineOfSight)) {
-                const safeDistance = distance || 1;
-                const desiredDistance = ranged && !hasLineOfSight
-                    ? monster.speed * (monster.slowFactor || 1) * dt
-                    : Math.max(0, distance - engageRange);
-                const travel = Math.min(desiredDistance, monster.speed * (monster.slowFactor || 1) * dt);
-                this.moveMonsterWithAvoidance(monster, dx / safeDistance, dy / safeDistance, travel);
-                monster.combatState = 'move';
+                const travel = monster.speed * (monster.slowFactor || 1) * dt;
+                this.moveMonsterWithAvoidance(
+                    monster,
+                    -dx / safeDistance,
+                    -dy / safeDistance,
+                    travel
+                );
+                this.setMonsterCombatState(monster, 'move');
                 return;
             }
 
-            monster.combatState = 'attack';
+            if (distance > engageRange || (ranged && !hasLineOfSight)) {
+                const safeDistance = distance || 1;
+                const maxTravel = monster.speed * (monster.slowFactor || 1) * dt;
+                const desiredDistance = ranged && !hasLineOfSight
+                    ? maxTravel
+                    : Math.max(0, distance - engageRange);
+                const travel = Math.min(desiredDistance, maxTravel);
+                this.moveMonsterWithAvoidance(
+                    monster,
+                    dx / safeDistance,
+                    dy / safeDistance,
+                    travel
+                );
+                this.setMonsterCombatState(monster, 'move');
+                return;
+            }
+
+            this.setMonsterCombatState(monster, 'attack');
             monster.attackCooldown -= deltaTime;
             if (monster.attackCooldown <= 0) {
                 monster.attackCooldown += monster.attackInterval;
@@ -1928,6 +1954,12 @@ export class CombatSystem {
         );
         if (!alternate.moved) monster.pathDirection = -side;
         return alternate;
+    }
+
+    setMonsterCombatState(monster, state) {
+        if (!monster || monster.combatState === state) return;
+        monster.combatState = state;
+        monster.animationStateTime = 0;
     }
 
     fireEnemyBullet(monster, targetPoint = this.getHeroCenter()) {
@@ -3206,15 +3238,27 @@ export class CombatSystem {
         const renderY = monster.y + monster.height / 2 - renderHeight / 2;
 
         if (sheet && sheet.complete && sheet.naturalWidth > 0) {
-            const frameSize = 512;
-            const frameIndex = Math.floor((Date.now() + monster.animationOffset) / this.getMonsterFrameDuration(animationState)) % 4;
+            const frameIndex = Math.floor(
+                Math.max(0, Number(monster.animationStateTime) || 0) /
+                this.getMonsterFrameDuration(animationState)
+            ) % this.monsterSpriteFrameCount;
             ctx.save();
             ctx.imageSmoothingEnabled = false;
             if (monster.isBoss || monster.isElite) {
                 ctx.shadowColor = monster.isBoss ? '#ff7043' : '#c38cff';
                 ctx.shadowBlur = monster.isBoss ? 20 : 11;
             }
-            ctx.drawImage(sheet, frameIndex * frameSize, 0, frameSize, frameSize, renderX, renderY, renderWidth, renderHeight);
+            ctx.drawImage(
+                sheet,
+                frameIndex * this.monsterSpriteFrameSize,
+                0,
+                this.monsterSpriteFrameSize,
+                this.monsterSpriteFrameSize,
+                renderX,
+                renderY,
+                renderWidth,
+                renderHeight
+            );
             ctx.restore();
         } else if (image && image.complete && image.naturalWidth > 0) {
             ctx.save();
@@ -3250,8 +3294,8 @@ export class CombatSystem {
     }
 
     getMonsterFrameDuration(state) {
-        if (state === 'attack') return 82;
-        return state === 'move' ? 115 : 175;
+        if (state === 'attack') return 27;
+        return state === 'move' ? 38 : 58;
     }
 
     renderBullet(ctx, bullet) {

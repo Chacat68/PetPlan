@@ -11,6 +11,7 @@ const controllerFiles = readdirSync(
   .map((fileName) => `js/controllers/${fileName}`);
 const sourceFiles = [
   "js/main.js",
+  "js/modules/character-art-config.js",
   "js/modules/achievement-config.js",
   "js/modules/achievement-system.js",
   "js/modules/combat-system.js",

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 globalThis.Image = class ImageStub {
@@ -23,8 +24,98 @@ const { ExpeditionRunSystem } = await import(
 );
 const { CombatSystem } = await import("../js/modules/combat-system.js");
 const { PetSystem } = await import("../js/modules/pet-system.js");
+const { PlayerSystem } = await import("../js/modules/player-system.js");
 
 const fixedRandom = () => 0.5;
+
+test("全部战斗动作表保持 12 帧和 256 像素单帧协议", () => {
+  const manifest = JSON.parse(readFileSync(
+    new URL("../images/sprites/battle/animation-manifest.json", import.meta.url),
+    "utf8",
+  ));
+
+  assert.equal(manifest.units.length, 45);
+  assert.equal(manifest.frameCount, 12);
+  assert.equal(manifest.frameSize, 256);
+  assert.deepEqual(manifest.states, ["idle", "move", "attack"]);
+  assert.equal(manifest.portraits.length, 15);
+
+  manifest.units.forEach((entry) => {
+    assert.equal(entry.frameCount, 12, entry.path);
+    assert.equal(entry.frameSize, 256, entry.path);
+    assert.equal(entry.frames.length, 12, entry.path);
+
+    const png = readFileSync(new URL(`../${entry.path}`, import.meta.url));
+    assert.equal(png.toString("ascii", 1, 4), "PNG", entry.path);
+    assert.equal(png.readUInt32BE(16), 3072, entry.path);
+    assert.equal(png.readUInt32BE(20), 256, entry.path);
+  });
+
+  manifest.portraits.forEach((entry) => {
+    const png = readFileSync(new URL(`../${entry.path}`, import.meta.url));
+    assert.equal(png.toString("ascii", 1, 4), "PNG", entry.path);
+    assert.equal(png.readUInt32BE(16), 256, entry.path);
+    assert.equal(png.readUInt32BE(20), 256, entry.path);
+  });
+
+  const heroMove = manifest.units.find((entry) => (
+    entry.category === "hero" && entry.unit === "hero" && entry.state === "move"
+  ));
+  assert.ok(heroMove, "动作清单应包含主角跑步序列");
+  const horizontalCenters = heroMove.frames.map((frame) => (
+    (frame.bodyBounds[0] + frame.bodyBounds[2]) / 2
+  ));
+  const headAnchors = heroMove.frames.map((frame) => frame.bodyBounds[1]);
+  assert.ok(
+    Math.max(...horizontalCenters) - Math.min(...horizontalCenters) <= 1,
+    "主角跑步水平中心漂移应控制在 1px 内",
+  );
+  assert.ok(
+    Math.max(...headAnchors) - Math.min(...headAnchors) <= 3,
+    "主角跑步头部锚点抖动应控制在 3px 内",
+  );
+
+  const movingUnits = manifest.units.filter((entry) => entry.state === "move");
+  movingUnits.forEach((entry) => {
+    const centers = entry.frames.map((frame) => (
+      (frame.bodyBounds[0] + frame.bodyBounds[2]) / 2
+    ));
+    const tops = entry.frames.map((frame) => frame.bodyBounds[1]);
+    assert.ok(
+      Math.max(...centers) - Math.min(...centers) <= 4,
+      `${entry.path} 跑动水平中心漂移应控制在 4px 内`,
+    );
+    assert.ok(
+      Math.max(...tops) - Math.min(...tops) <= 5,
+      `${entry.path} 跑动头部波动应控制在 5px 内`,
+    );
+  });
+
+  const heroAttack = manifest.units.find((entry) => (
+    entry.category === "hero" && entry.unit === "hero" && entry.state === "attack"
+  ));
+  const heroIdle = manifest.units.find((entry) => (
+    entry.category === "hero" && entry.unit === "hero" && entry.state === "idle"
+  ));
+  const attackAnchors = heroAttack.frames.map((frame) => ({
+    x: (frame.bodyBounds[0] + frame.bodyBounds[2]) / 2,
+    y: frame.bodyBounds[1],
+  }));
+  const attackSteps = attackAnchors.slice(1).map((anchor, index) => Math.hypot(
+    anchor.x - attackAnchors[index].x,
+    anchor.y - attackAnchors[index].y,
+  ));
+  const idleAnchor = {
+    x: (heroIdle.frames[0].bodyBounds[0] + heroIdle.frames[0].bodyBounds[2]) / 2,
+    y: heroIdle.frames[0].bodyBounds[1],
+  };
+  const attackEnd = attackAnchors.at(-1);
+  assert.ok(Math.max(...attackSteps) <= 12, "主角攻击单帧锚点跳动应控制在 12px 内");
+  assert.ok(
+    Math.hypot(attackEnd.x - idleAnchor.x, attackEnd.y - idleAnchor.y) <= 7,
+    "主角攻击收尾应平滑衔接待机动作",
+  );
+});
 
 function createLoot(id, score) {
   return {
@@ -131,6 +222,60 @@ function startCombatEncounter(combat) {
   assert.ok(combat.monsters.length > 0, "进入遭遇后应生成首个敌人");
   return combat.monsters[0];
 }
+
+test("角色、怪物和宠物统一使用 12 帧动作并让宠物攻击从首帧完整播放", () => {
+  const playerSystem = new PlayerSystem();
+  const petSystem = new PetSystem();
+  const combatSystem = new CombatSystem({ random: fixedRandom });
+  const attackState = {
+    phaseTime: 0,
+    attackDuration: 320,
+    animationOffset: 0,
+  };
+
+  assert.equal(playerSystem.spriteFrameCount, 12);
+  assert.equal(playerSystem.playerSprites.idle.frameCount, 12);
+  assert.equal(playerSystem.playerSprites.move.frameCount, 12);
+  assert.equal(playerSystem.playerSprites.attack.frameCount, 12);
+  assert.match(playerSystem.playerImage.src, /images\/portraits\/hero\/hero\.png/);
+  assert.match(playerSystem.playerImage.src, /stable-actions-20260721c/);
+  assert.match(playerSystem.playerSprites.move.image.src, /stable-actions-20260721c/);
+  assert.equal(playerSystem.playerSprites.idle.frameDuration, 96);
+  assert.equal(playerSystem.attackAnimationDuration, 384);
+  assert.equal(petSystem.spriteFrameCount, 12);
+  assert.equal(combatSystem.monsterSpriteFrameCount, 12);
+  assert.equal(combatSystem.monsterSpriteFrameSize, 256);
+  assert.ok(petSystem.petTemplates.every((template) => template.image.startsWith("images/portraits/pets/")));
+  assert.ok(combatSystem.monsterTemplates.every((template) => template.image.startsWith("images/portraits/monsters/")));
+  assert.equal(petSystem.getPetFrameIndex(attackState, "attack"), 0);
+
+  attackState.phaseTime = 160;
+  assert.equal(petSystem.getPetFrameIndex(attackState, "attack"), 6);
+
+  attackState.phaseTime = 319;
+  assert.equal(petSystem.getPetFrameIndex(attackState, "attack"), 11);
+
+  playerSystem.stateAnimationTime = 240;
+  playerSystem.setCombatState("move");
+  assert.equal(playerSystem.stateAnimationTime, 0);
+
+  petSystem.elapsedTime = 1000;
+  const movingPetState = {
+    renderAnimationState: "idle",
+    animationStartedAt: 0,
+    attackDuration: 0,
+  };
+  assert.equal(petSystem.getPetFrameIndex(movingPetState, "move"), 0);
+  petSystem.elapsedTime += 88;
+  assert.equal(petSystem.getPetFrameIndex(movingPetState, "move"), 2);
+
+  const animatedMonster = { combatState: "move", animationStateTime: 120 };
+  combatSystem.setMonsterCombatState(animatedMonster, "attack");
+  assert.equal(animatedMonster.animationStateTime, 0);
+  animatedMonster.animationStateTime = 40;
+  combatSystem.setMonsterCombatState(animatedMonster, "attack");
+  assert.equal(animatedMonster.animationStateTime, 40);
+});
 
 test("远征状态机完成路线、搜索、战斗节点和撤离幂等结算", () => {
   const run = new ExpeditionRunSystem({

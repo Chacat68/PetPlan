@@ -55,6 +55,20 @@ test("远征每帧只由 CombatSystem 推进一次玩家位移", () => {
 
   const expected = combat.config.heroMoveSpeed * 0.1;
   assert.ok(Math.abs(playerSystem.player.x - before - expected) < 0.01);
+  assert.equal(playerSystem.getAnimationState(), "move");
+
+  const moveFrameDuration = playerSystem.playerSprites.move.frameDuration;
+  playerSystem.update(moveFrameDuration + 1);
+  assert.equal(
+    playerSystem.getAnimationState(),
+    "move",
+    "PlayerSystem 更新属性时不得重置 CombatSystem 管理的远征动画状态",
+  );
+  assert.equal(playerSystem.stateAnimationTime, moveFrameDuration + 1);
+
+  combat.clearMovementInput();
+  combat.update(16);
+  assert.equal(playerSystem.getAnimationState(), "idle");
 });
 
 test("移动射击受惩罚且障碍会阻断视线和弹道", () => {
@@ -127,6 +141,52 @@ test("敌人包含远程、冲锋和 Boss 范围前摇差异", () => {
   assert.ok(charger.chargeTelegraph > 0, "冲锋怪应先显示冲锋前摇");
   assert.ok(boss.bossTelegraphTimer > 0, "Boss 范围技能应先显示危险区域");
   assert.ok(boss.bossTarget, "Boss 前摇需锁存落点供玩家躲避");
+});
+
+test("怪物只在攻击距离内造成伤害，远程怪过近时会后撤", () => {
+  const { combat } = createHarness();
+  assert.equal(combat.startRun().success, true);
+  combat.runSystem.phase = "combat";
+  combat.worldSystem.obstacles = [];
+  const hero = combat.getHeroCenter();
+
+  const melee = combat.spawnMonster({ templateId: "slime", depth: 1 }, 1);
+  melee.x = hero.x + 500;
+  melee.y = hero.y;
+  melee.attackCooldown = 0;
+  const hpBefore = combat.runHp;
+  const meleeDistanceBefore = Math.hypot(
+    combat.getEntityCenter(melee).x - hero.x,
+    combat.getEntityCenter(melee).y - hero.y,
+  );
+
+  combat.updateMonsters(100);
+
+  const meleeDistanceAfter = Math.hypot(
+    combat.getEntityCenter(melee).x - hero.x,
+    combat.getEntityCenter(melee).y - hero.y,
+  );
+  assert.equal(combat.runHp, hpBefore, "远距离近战怪不得隔空造成伤害");
+  assert.ok(meleeDistanceAfter < meleeDistanceBefore, "距离外怪物应向玩家追击");
+  assert.equal(melee.combatState, "move");
+
+  const ranged = combat.spawnMonster({ templateId: "bat", depth: 1 }, 1);
+  ranged.x = hero.x + 80;
+  ranged.y = hero.y;
+  const rangedDistanceBefore = Math.hypot(
+    combat.getEntityCenter(ranged).x - hero.x,
+    combat.getEntityCenter(ranged).y - hero.y,
+  );
+
+  combat.monsters = [ranged];
+  combat.updateMonsters(100);
+
+  const rangedDistanceAfter = Math.hypot(
+    combat.getEntityCenter(ranged).x - hero.x,
+    combat.getEntityCenter(ranged).y - hero.y,
+  );
+  assert.ok(rangedDistanceAfter > rangedDistanceBefore, "远程怪过近时应远离玩家");
+  assert.equal(ranged.combatState, "move");
 });
 
 test("远征开始后玩家与领地属性使用局内快照", () => {

@@ -85,6 +85,8 @@ function testProgressionGuide() {
       totalFlips: 8,
       fateCoins: 2,
       assistants: 1,
+      expeditionDepth: 1,
+      extractions: 1,
       buildings: 1,
     }).complete,
     true
@@ -93,11 +95,13 @@ function testProgressionGuide() {
   const outOfOrder = progression.getFirstSessionGuide({
     fateCoins: 2,
     assistants: 1,
+    expeditionDepth: 1,
+    extractions: 1,
     buildings: 1,
   });
   assert.equal(outOfOrder.id, "flip");
   assert.equal(outOfOrder.current, 1);
-  assert.equal(outOfOrder.completedCount, 3);
+  assert.equal(outOfOrder.completedCount, 5);
 
   const path = progression.getPathSummary({ assistants: 2 });
   assert.equal(path.leadingPath?.id, "companion");

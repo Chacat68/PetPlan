@@ -354,7 +354,7 @@
             await step("同源 iframe 加载并初始化游戏", async () => {
               frame = document.createElement("iframe");
               frame.title = "PetPlan 被测游戏";
-              frame.src = "../index.html?browser-smoke=pet-loop-calibration-20260713a";
+              frame.src = "../index.html?browser-smoke=territory-hint-cleanup-20260715a";
               frameHost.appendChild(frame);
 
               const game = await waitFor(
@@ -374,12 +374,123 @@
               return `${frame.contentWindow.location.pathname} · scene=${game.currentScene}`;
             });
 
-            await step("第二阶段的 8 个控制器均已接线", () => {
+            await step("横竖屏限制已关闭且游戏保持可见可操作", () => {
+              const doc = frame.contentDocument;
+              const gameContainer = doc.querySelector(".game-container");
+              const style = frame.contentWindow.getComputedStyle(gameContainer);
+
+              assert(!doc.querySelector(".orientation-lock"), "页面仍存在横屏限制遮罩");
+              assert(style.visibility !== "hidden", "游戏容器仍被方向样式隐藏");
+              assert(style.pointerEvents !== "none", "游戏容器仍被方向样式禁用交互");
+              return `visibility=${style.visibility} · pointer-events=${style.pointerEvents}`;
+            });
+
+            await step("命运桌不显示累计次数和银色点击快捷提示", () => {
+              const doc = frame.contentDocument;
+              assert(!doc.getElementById("fate-total-flips-display"), "累计次数仍显示在桌面顶部");
+              assert(!doc.getElementById("fate-skill-tree-btn"), "银色点击快捷提示仍显示在桌面底部");
+              return "顶部累计次数与底部快捷提示均已移除";
+            });
+
+            await step("下一目标默认紧凑并可按需展开详情", () => {
+              const doc = frame.contentDocument;
+              const panel = doc.getElementById("fate-next-goal");
+              const toggle = doc.getElementById("fate-next-goal-toggle");
+              const details = doc.getElementById("fate-next-goal-more");
+              assert(panel && toggle && details, "目标 HUD 缺少紧凑详情结构");
+
+              const compactHeight = panel.getBoundingClientRect().height;
+              assert(compactHeight <= 56, `目标 HUD 默认高度过大：${compactHeight}px`);
+              assert(details.hidden, "目标详情默认没有收起");
+              assert(toggle.getAttribute("aria-expanded") === "false", "目标详情初始状态错误");
+
+              toggle.click();
+              const expandedHeight = panel.getBoundingClientRect().height;
+              assert(!details.hidden, "点击后目标详情没有展开");
+              assert(toggle.getAttribute("aria-expanded") === "true", "展开按钮状态没有同步");
+              assert(expandedHeight > compactHeight, "展开详情后面板高度没有变化");
+
+              toggle.click();
+              assert(details.hidden, "再次点击后目标详情没有收起");
+              return `${Math.round(compactHeight)}px → ${Math.round(expandedHeight)}px → 收起`;
+            });
+
+            await step("角色与宠物 12 帧序列在浏览器中完成加载", async () => {
+              const game = frame.contentWindow.game;
+              const frameSize = 256;
+              const sheetWidth = frameSize * 12;
+              const heroSheet = await waitFor(() => {
+                const sprite = game.playerSystem.playerSprites.move;
+                return sprite?.image?.naturalWidth === sheetWidth ? sprite : null;
+              }, "角色 12 帧序列加载");
+              const idleSheet = await waitFor(() => {
+                const sprite = game.playerSystem.playerSprites.idle;
+                return sprite?.image?.naturalWidth === sheetWidth ? sprite : null;
+              }, "角色待机序列加载");
+              const petSheet = await waitFor(() => {
+                const sheet = game.petSystem.petAnimationSheets?.[1]?.idle;
+                return sheet?.naturalWidth === sheetWidth ? sheet : null;
+              }, "宠物 12 帧序列加载");
+              const monsterSheet = await waitFor(() => {
+                const sheet = game.combatSystem.monsterAnimationSheets?.slime?.idle;
+                return sheet?.naturalWidth === sheetWidth ? sheet : null;
+              }, "怪物 12 帧序列加载");
+
+              assert(heroSheet.frameCount === 12, "角色帧数协议不是 12");
+              assert(idleSheet.frameDuration === 96, "角色待机动画速度异常");
+              assert(game.petSystem.spriteFrameCount === 12, "宠物帧数协议不是 12");
+              assert(game.combatSystem.monsterSpriteFrameCount === 12, "怪物帧数协议不是 12");
+              assert(heroSheet.image.naturalHeight === frameSize, "角色单帧高度异常");
+              assert(
+                heroSheet.image.src.includes("stable-actions-20260721c"),
+                `角色移动序列仍在使用旧缓存版本：${heroSheet.image.src}`,
+              );
+              assert(petSheet.naturalHeight === frameSize, "宠物单帧高度异常");
+              assert(monsterSheet.naturalHeight === frameSize, "怪物单帧高度异常");
+
+              const sample = frame.contentDocument.createElement("canvas");
+              sample.width = frameSize;
+              sample.height = frameSize;
+              const sampleContext = sample.getContext("2d", { willReadFrequently: true });
+              const footCenters = [];
+              for (let index = 0; index < idleSheet.frameCount; index += 1) {
+                sampleContext.clearRect(0, 0, frameSize, frameSize);
+                sampleContext.drawImage(
+                  idleSheet.image,
+                  index * frameSize,
+                  0,
+                  frameSize,
+                  frameSize,
+                  0,
+                  0,
+                  frameSize,
+                  frameSize,
+                );
+                const bandTop = Math.floor(frameSize * 0.74);
+                const pixels = sampleContext.getImageData(0, bandTop, frameSize, frameSize - bandTop).data;
+                let minX = frameSize;
+                let maxX = -1;
+                for (let pixel = 0; pixel < pixels.length; pixel += 4) {
+                  if (pixels[pixel + 3] === 0) continue;
+                  const x = (pixel / 4) % frameSize;
+                  minX = Math.min(minX, x);
+                  maxX = Math.max(maxX, x);
+                }
+                assert(maxX >= minX, `角色待机第 ${index + 1} 帧没有脚部像素`);
+                footCenters.push((minX + maxX + 1) / 2);
+              }
+              const footSpread = Math.max(...footCenters) - Math.min(...footCenters);
+              assert(footSpread <= 1, `角色待机落脚点仍有 ${footSpread}px 漂移`);
+              return `hero move=3072x256 / 12 · idle foot spread=${footSpread}px · fire_dog/slime=3072x256 / 12 · cache=stable-actions-20260721c`;
+            });
+
+            await step("第二阶段的 9 个控制器均已接线", () => {
               const game = frame.contentWindow.game;
               const controllerNames = [
                 "achievementController",
                 "battleSceneController",
                 "fateSceneController",
+                "onboardingController",
                 "petModalController",
                 "playerModalController",
                 "settingsController",
@@ -394,7 +505,48 @@
                 missing.length === 0,
                 `缺少控制器：${missing.join("、")}`,
               );
+              const progressionContext = game.getProgressionContext();
+              assert(
+                Object.prototype.hasOwnProperty.call(
+                  progressionContext,
+                  "bestExtractedDepth",
+                ),
+                "成长上下文缺少成功撤离深度",
+              );
+              assert(
+                Object.prototype.hasOwnProperty.call(
+                  progressionContext,
+                  "expeditionDepth",
+                ),
+                "成长上下文缺少当前探索深度",
+              );
               return controllerNames.join(" · ");
+            });
+
+            await step("成长引导可跳过、重播且不阻断真实操作", async () => {
+              const doc = frame.contentDocument;
+              const layer = doc.getElementById("onboarding-layer");
+              const skip = doc.getElementById("onboarding-skip-btn");
+              const replay = doc.getElementById("onboarding-replay-btn");
+              assert(layer && !layer.hidden, "新存档没有自动开启成长引导");
+              assert(skip && replay, "成长引导缺少跳过或重播入口");
+              skip.click();
+              assert(layer.hidden, "跳过后成长引导仍然可见");
+              replay.click();
+              assert(!layer.hidden, "重播后成长引导没有恢复");
+              const coin = doc.querySelector(".fate-table-coin");
+              const before = frame.contentWindow.game.fateCoinSystem.totalFlips;
+              coin.click();
+              await waitFor(
+                () => frame.contentWindow.game.fateCoinSystem.totalFlips > before,
+                "引导开启时硬币仍可点击",
+              );
+              await waitFor(
+                () => coin.dataset.settled !== "true",
+                "引导点击后的硬币重新翻面",
+              );
+              skip.click();
+              return "auto → skip → replay → coin click → skip";
             });
 
             await step("玩家按钮可打开并关闭玩家弹窗", async () => {
@@ -529,14 +681,22 @@
                 () => doc.getElementById("achievement-modal"),
                 "成就弹窗打开",
               );
+              const achievementSummary = game.achievementSystem.getSummary();
+              const expectedCompletionPercent = achievementSummary.total > 0
+                ? Math.round(
+                    (achievementSummary.completed / achievementSummary.total) * 100,
+                  )
+                : 0;
               assert(
-                doc.getElementById("achievement-summary-percent")?.textContent === "4%",
+                doc.getElementById("achievement-summary-percent")?.textContent ===
+                  `${expectedCompletionPercent}%`,
                 "里程碑总完成度未正确展示",
               );
               assert(
                 doc.querySelector(
                   '#achievement-modal [data-achievement-tab="all"] [data-achievement-tab-count]',
-                )?.textContent === "1 / 23",
+                )?.textContent ===
+                  `${achievementSummary.completed} / ${achievementSummary.total}`,
                 "全部分类缺少分项完成进度",
               );
               assert(
@@ -622,6 +782,29 @@
                 "点击未增加正面或反面资源",
               );
               assert(coin.classList.contains("clicked"), "桌面硬币未触发点击反馈");
+              const feed = frame.contentDocument.getElementById("fate-result-feed");
+              const resultItem = feed?.firstElementChild;
+              assert(resultItem, "点击后没有生成结算提示");
+              const feedStyle = frame.contentWindow.getComputedStyle(feed);
+              assert(feedStyle.top !== "auto", "结算提示没有定位到顶部");
+              assert(feedStyle.right !== "auto", "结算提示没有定位到右侧");
+              const surfaceRect = frame.contentDocument
+                .querySelector(".fate-table-surface")
+                .getBoundingClientRect();
+              const feedRect = feed.getBoundingClientRect();
+              assert(
+                feedRect.top - surfaceRect.top < 60,
+                "结算提示距离桌面顶部过远",
+              );
+              assert(
+                surfaceRect.right - feedRect.right < 60,
+                "结算提示距离桌面右侧过远",
+              );
+              await waitFor(
+                () => feed.childElementCount === 0,
+                "结算提示 3 秒后消失",
+                4000,
+              );
               return `翻转 ${before.totalFlips} → ${fate.totalFlips}`;
             });
 
@@ -836,17 +1019,41 @@
                 game.combatSystem.movementInput.x > 0,
                 "D 键输入未传递到远征移动系统",
               );
-              // 后台 iframe 的 requestAnimationFrame 可能被浏览器节流；显式推进
-              // 一帧可稳定验证输入到世界坐标的完整链路。
+              // 后台 iframe 的 requestAnimationFrame 可能被浏览器节流；按 GameCore
+              // 的真实顺序显式推进角色动画和战斗帧，验证输入到世界坐标的完整链路。
+              const moveSprite = game.playerSystem.playerSprites.move;
+              game.playerSystem.update(moveSprite.frameDuration + 1);
               game.combatSystem.update(100);
+              const firstMoveFrame = Math.floor(
+                game.playerSystem.stateAnimationTime / moveSprite.frameDuration,
+              ) % moveSprite.frameCount;
+              assert(
+                game.playerSystem.getAnimationState() === "move",
+                `角色移动时没有切到 move 序列：${game.playerSystem.getAnimationState()}`,
+              );
+              game.playerSystem.update(moveSprite.frameDuration + 1);
+              game.combatSystem.update(moveSprite.frameDuration + 1);
+              const secondMoveFrame = Math.floor(
+                game.playerSystem.stateAnimationTime / moveSprite.frameDuration,
+              ) % moveSprite.frameCount;
+              assert(
+                secondMoveFrame !== firstMoveFrame,
+                `角色移动序列没有推进：${firstMoveFrame} → ${secondMoveFrame}`,
+              );
               frame.contentDocument.dispatchEvent(new frame.contentWindow.KeyboardEvent("keyup", {
                 key: "d",
                 code: "KeyD",
                 bubbles: true,
                 cancelable: true,
               }));
+              game.playerSystem.update(16);
+              game.combatSystem.update(16);
               const movedState = game.combatSystem.getBattleState();
               assert(movedState.world.player.x > playerXBefore, "按下 D 后角色没有向右行进");
+              assert(
+                game.playerSystem.getAnimationState() === "idle",
+                "松开 D 后角色没有回到 idle 序列",
+              );
 
               const firstRoute = frame.contentDocument.querySelector(
                 "#battle-route-list [data-route-id]",
@@ -878,25 +1085,52 @@
                 "进入搜索地点",
               );
 
+              const containers = game.combatSystem.worldSystem
+                .getContainersForLocation(targetLocation.nodeId, { includeFinished: false });
+              assert(containers.length > 0, "搜索地点没有生成实体容器");
               game.combatSystem.runSystem.random = () => 0.5;
-              const quickSearch = frame.contentDocument.querySelector(
-                '[data-search-mode="quick"]',
-              );
-              assert(quickSearch, "未找到快速搜索按钮");
-              assert(quickSearch.textContent.includes("品质 +1"), "搜索按钮未展示宠物实际加成");
-              assert(quickSearch.dataset.talentActive === "true", "搜索按钮未标记天赋生效");
-              quickSearch.click();
+              for (const [index, container] of containers.entries()) {
+                actor.x = container.x - actor.width / 2;
+                actor.y = container.y - actor.height / 2;
+                game.combatSystem.updateWorldAwareness();
+                game.battleSceneController.updateBattleDisplay();
+                assert(
+                  game.combatSystem.worldSystem.nearbyContainerId === container.id,
+                  `角色靠近后没有识别第 ${index + 1} 个搜索容器`,
+                );
 
-              const after = await waitFor(() => {
-                const state = game.combatSystem.getBattleState();
-                return state.depth === 1 && state.backpackCount === 1 ? state : null;
-              }, "首个搜索区域结算");
+                const quickSearch = frame.contentDocument.querySelector(
+                  '[data-search-mode="quick"]',
+                );
+                assert(quickSearch, "未找到快速搜索按钮");
+                assert(quickSearch.textContent.includes("品质 +1"), "搜索按钮未展示宠物实际加成");
+                assert(quickSearch.dataset.talentActive === "true", "搜索按钮未标记天赋生效");
+                quickSearch.click();
+                // 后台 iframe 可能暂停 requestAnimationFrame；显式推进搜索倒计时，
+                // 避免浏览器节流把正常的 3 秒搜索误报为超时。
+                for (let elapsed = 0; elapsed < 3200; elapsed += 100) {
+                  game.combatSystem.update(100);
+                }
+                game.battleSceneController.updateBattleDisplay();
+
+                await waitFor(() => {
+                  const state = game.combatSystem.getBattleState();
+                  return !state.activeSearch && state.backpackCount === index + 1;
+                }, `第 ${index + 1} 个搜索容器结算`);
+                assert(
+                  game.combatSystem.worldSystem.getContainer(container.id)?.state === "searched",
+                  `第 ${index + 1} 个搜索容器没有标记为已搜索`,
+                );
+              }
+
+              const after = game.combatSystem.getBattleState();
+              assert(after.depth === 1, `搜索地点完成后深度异常：${after.depth}`);
               assert(
-                frame.contentDocument.getElementById("battle-threat-display")?.textContent === "5%",
+                frame.contentDocument.getElementById("battle-threat-display")?.textContent === `${after.threat}%`,
                 "威胁 HUD 未更新",
               );
               assert(
-                frame.contentDocument.getElementById("battle-bag-display")?.textContent === "1/8",
+                frame.contentDocument.getElementById("battle-bag-display")?.textContent === `${after.backpackCount}/${after.backpackCapacity}`,
                 "背包 HUD 未更新",
               );
               return `world=${routeState.world.width}x${routeState.world.height} · moved=${Math.round(movedState.world.player.x - playerXBefore)} · depth=${after.depth} · bag=${after.backpackCount}`;
@@ -921,6 +1155,64 @@
               return url.search;
             });
 
+            await step("领地资源信息位于标题栏且不遮挡标题等级", () => {
+              const doc = frame.contentDocument;
+              const scorebar = doc.querySelector(".territory-scorebar");
+              const title = doc.querySelector(".territory-scorebar-title");
+              const resources = doc.querySelector(".territory-resource-strip");
+              const rank = doc.querySelector(".territory-scorebar-rank");
+              assert(scorebar && title && resources && rank, "领地标题栏缺少资源布局节点");
+              assert(scorebar.contains(resources), "领地资源信息仍在场景画布内");
+
+              const scorebarRect = scorebar.getBoundingClientRect();
+              const titleRect = title.getBoundingClientRect();
+              const resourceRect = resources.getBoundingClientRect();
+              const rankRect = rank.getBoundingClientRect();
+              assert(resourceRect.top >= scorebarRect.top, "资源信息超出标题栏顶部");
+              assert(resourceRect.bottom <= scorebarRect.bottom, "资源信息超出标题栏底部");
+              assert(resourceRect.left >= titleRect.right, "资源信息与标题重叠");
+              assert(resourceRect.right <= rankRect.left, "资源信息与领地等级重叠");
+              return `titlebar=${Math.round(scorebarRect.height)}px · resources=${Math.round(resourceRect.width)}px`;
+            });
+
+            await step("领地小地图位于右上角目标区域", () => {
+              const controller = frame.contentWindow.game.territorySceneController;
+              const layout = controller.getMinimapLayout();
+              const canvas = frame.contentDocument.getElementById("territoryCanvas");
+              assert(layout.rightInset >= 24, `小地图右侧仅留 ${layout.rightInset}px`);
+              assert(layout.topInset >= 12, `小地图顶部仅留 ${layout.topInset}px`);
+              assert(layout.topInset <= 24, `小地图没有上移到目标区域：${layout.topInset}px`);
+              assert(layout.frameX >= 0 && layout.frameY >= 0, "小地图越出画布左侧或顶部");
+              assert(
+                layout.frameX + layout.frameWidth <= canvas.width - layout.rightInset + 0.5,
+                "小地图越出右侧安全区",
+              );
+              return `top=${layout.topInset}px · right=${layout.rightInset}px`;
+            });
+
+            await step("领地目标默认紧凑并可按需展开详情", () => {
+              const doc = frame.contentDocument;
+              const panel = doc.getElementById("territory-objective-hud");
+              const toggle = doc.getElementById("territory-objective-toggle");
+              const details = doc.getElementById("territory-objective-more");
+              assert(panel && toggle && details, "领地目标 HUD 缺少紧凑详情结构");
+
+              const compactHeight = panel.getBoundingClientRect().height;
+              assert(compactHeight <= 50, `领地目标 HUD 默认高度过大：${compactHeight}px`);
+              assert(details.hidden, "领地目标详情默认没有收起");
+              assert(toggle.getAttribute("aria-expanded") === "false", "领地目标初始状态错误");
+
+              toggle.click();
+              const expandedHeight = panel.getBoundingClientRect().height;
+              assert(!details.hidden, "点击后领地目标详情没有展开");
+              assert(toggle.getAttribute("aria-expanded") === "true", "领地展开按钮状态没有同步");
+              assert(expandedHeight > compactHeight, "展开领地目标后面板高度没有变化");
+
+              toggle.click();
+              assert(details.hidden, "再次点击后领地目标详情没有收起");
+              return `${Math.round(compactHeight)}px → ${Math.round(expandedHeight)}px → 收起`;
+            });
+
             await step("在实际基地世界中靠近遗迹并修复主基地", async () => {
               const game = frame.contentWindow.game;
               const doc = frame.contentDocument;
@@ -931,6 +1223,11 @@
               );
 
               game.fateCoinSystem.totalFlips = 8;
+              game.combatSystem.meta.extractions = 1;
+              game.combatSystem.meta.bestExtractedDepth = Math.max(
+                1,
+                game.combatSystem.meta.bestExtractedDepth || 0,
+              );
               game.updateUI();
               const goalRoute = doc.getElementById("fate-next-goal-route");
               assert(goalRoute?.tagName === "BUTTON", "下一目标入口不是可操作按钮");
@@ -945,23 +1242,24 @@
                 () => game.territorySceneController.world.getNearbySite()?.type === "main_base",
                 "角色抵达主基地遗迹",
               );
-              const nearbyPrompt = doc.getElementById("territory-nearby-prompt");
-              assert(nearbyPrompt && !nearbyPrompt.hidden, "主基地附近没有显示交互提示");
-              const canvasRect = canvas.getBoundingClientRect();
-              const promptRect = nearbyPrompt.getBoundingClientRect();
-              const eventRect = doc
-                .getElementById("territory-event-feed")
-                .getBoundingClientRect();
               assert(
-                promptRect.top < canvasRect.top + canvasRect.height * 0.25,
-                "交互提示未固定在场景顶部安全区",
+                !doc.getElementById("territory-nearby-prompt"),
+                "领地仍显示靠近建筑时的浮动标签",
               );
               assert(
-                promptRect.bottom + 20 < eventRect.top,
-                "交互提示与底部建筑铭牌/操作说明区域过近",
+                !doc.getElementById("territory-event-feed"),
+                "领地仍显示常驻操作提示栏",
               );
               const interact = doc.getElementById("territory-interact-btn");
               assert(interact && !interact.disabled, "主基地遗迹附近没有可用交互");
+              assert(
+                doc.getElementById("territory-interact-label")?.textContent.includes("主基地"),
+                "右下角交互按钮没有保留建筑名称",
+              );
+              assert(
+                doc.getElementById("territory-interact-detail")?.textContent.includes("按 E"),
+                "右下角交互按钮没有保留键盘提示",
+              );
               interact.click();
 
               const panel = await waitFor(() => {
@@ -1047,13 +1345,25 @@
               game.battleSceneController.saveSystem = activeSaveSystem;
               const toast = await waitFor(() => {
                 return Array.from(doc.querySelectorAll("#toast-container .toast")).find(
-                  (candidate) => candidate.textContent?.includes("火焰犬羁绊已满"),
+                  (candidate) => (
+                    candidate.textContent?.includes("火焰犬") &&
+                    candidate.textContent?.includes("羁绊已满")
+                  ),
                 ) || null;
               }, "满羁绊结算提示");
-              assert(toast.textContent.includes("冰霜猫羁绊 +2"), "结算未显示实际羁绊增长");
+              assert(
+                toast.textContent.includes("冰霜猫") && toast.textContent.includes("羁绊 +2"),
+                "结算未显示实际羁绊增长",
+              );
               const tip = game.battleSceneController.getTip({ settlement });
-              assert(tip.includes("火焰犬羁绊已满"), "结算说明未显示满值反馈");
-              assert(tip.includes("冰霜猫羁绊 +2"), "结算说明未显示实际增长");
+              assert(
+                tip.includes("火焰犬") && tip.includes("羁绊已满"),
+                "结算说明未显示满值反馈",
+              );
+              assert(
+                tip.includes("冰霜猫") && tip.includes("羁绊 +2"),
+                "结算说明未显示实际增长",
+              );
               return "火焰犬羁绊已满 · 冰霜猫羁绊 +2";
             });
 

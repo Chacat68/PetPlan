@@ -4,16 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=duckov-phase1-20260721b" />
+    <link rel="stylesheet" href="css/style.css?v=review-fixes-20260722a" />
   </head>
   <body>
-    <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
-      <div class="orientation-lock-card">
-        <span class="orientation-lock-icon" aria-hidden="true">↻</span>
-        <h1 id="orientation-lock-title">请横屏继续</h1>
-        <p>PetPlan 为横屏游戏。旋转设备后即可进入命运桌、远征和领地。</p>
-      </div>
-    </section>
     <div class="game-container">
       <!-- 游戏画布区域 -->
       <main class="game-area">
@@ -229,11 +222,6 @@
         <!-- 命运硬币首页 -->
         <div class="scene-container" id="fate-scene">
           <section class="fate-board-panel">
-            <div class="fate-scorebar">
-              <span id="fate-total-flips-display">0</span>
-              <span class="score-dollar">次</span>
-            </div>
-
             <div class="fate-table-surface">
               <div class="fate-table-ground" aria-hidden="true"></div>
               <div
@@ -260,15 +248,18 @@
               </div>
 
               <div class="fate-next-goal" id="fate-next-goal">
-                <span class="goal-label">下一目标</span>
+                <span class="goal-label">目标</span>
                 <span class="goal-text" id="fate-next-goal-text">
                   <span class="goal-title" id="fate-next-goal-title">购买第 1 个助手</span>
                   <span class="goal-detail" id="fate-next-goal-detail">还差 25 反面</span>
                 </span>
                 <button type="button" class="goal-route" id="fate-next-goal-route" disabled>反面路线</button>
-                <span class="goal-alt" id="fate-next-goal-alt">备选：金色硬币</span>
-                <span class="goal-guide" id="fate-first-session-guide" data-route="mixed">首局 1/4 · 熟悉翻转 0/8</span>
-                <span class="goal-path" id="fate-path-summary" data-path="neutral">倾向：自由探索</span>
+                <button type="button" class="goal-toggle" id="fate-next-goal-toggle" aria-expanded="false" aria-controls="fate-next-goal-more" aria-label="展开目标详情" title="展开目标详情"><span aria-hidden="true">＋</span></button>
+                <div class="goal-more" id="fate-next-goal-more" hidden>
+                  <span class="goal-alt" id="fate-next-goal-alt">备选：金色硬币</span>
+                  <span class="goal-guide" id="fate-first-session-guide" data-route="mixed">首局 1/6 · 熟悉翻转 0/8</span>
+                  <span class="goal-path" id="fate-path-summary" data-path="neutral">倾向：自由探索</span>
+                </div>
               </div>
 
               <div class="fate-runner">
@@ -283,11 +274,6 @@
               </div>
             </div>
 
-            <div class="fate-bottom-dock">
-              <button class="skill-tree-btn" id="fate-skill-tree-btn" type="button">
-                查看银色点击 · 当前 +<span id="fate-manual-power-display">1</span>
-              </button>
-            </div>
           </section>
 
           <aside class="fate-shop-panel">
@@ -363,32 +349,29 @@
         <div class="scene-container territory-world-scene" id="territory-scene" style="display: none">
           <section class="territory-world-panel">
             <div class="territory-scorebar">
-              <span>BASE TERRITORY</span>
-              <span class="score-dollar" id="territory-rank-badge">R0 · 未建营地</span>
+              <span class="territory-scorebar-title">BASE TERRITORY</span>
+              <div class="territory-resource-strip" aria-label="领地状态">
+                <span><span class="territory-resource-name" data-short="金">金币</span> <b id="territory-gold">0</b></span>
+                <span><span class="territory-resource-name" data-short="晶">水晶</span> <b id="territory-crystal">0</b></span>
+                <span><span class="territory-resource-name" data-short="建">建设度</span> <b id="territory-construction-score">0</b></span>
+                <span><span class="territory-resource-name" data-short="鸣">成长共鸣</span> <b id="territory-resonance">0</b></span>
+              </div>
+              <span class="score-dollar territory-scorebar-rank" id="territory-rank-badge">R0 · 未建营地</span>
             </div>
 
             <div class="territory-world-surface">
-              <div class="territory-resource-strip" aria-label="领地状态">
-                <span>金币 <b id="territory-gold">0</b></span>
-                <span>水晶 <b id="territory-crystal">0</b></span>
-                <span>建设度 <b id="territory-construction-score">0</b></span>
-                <span>成长共鸣 <b id="territory-resonance">0</b></span>
-              </div>
-
-              <div class="territory-objective-hud">
-                <span class="territory-objective-label">基地目标</span>
+              <div class="territory-objective-hud" id="territory-objective-hud">
+                <span class="territory-objective-label">目标</span>
                 <strong id="territory-objective-title">修复主基地</strong>
-                <span id="territory-objective-detail">前往主基地遗迹并进行交互</span>
+                <button type="button" class="territory-objective-toggle" id="territory-objective-toggle" aria-expanded="false" aria-controls="territory-objective-more" aria-label="展开领地目标详情" title="展开领地目标详情"><span aria-hidden="true">＋</span></button>
+                <div class="territory-objective-more" id="territory-objective-more" hidden>
+                  <span id="territory-objective-detail">前往主基地遗迹并进行交互</span>
+                </div>
               </div>
 
               <div class="territory-canvas-frame">
                 <canvas id="territoryCanvas" width="1280" height="720" aria-label="可游走领地基地"></canvas>
               </div>
-
-              <div class="territory-event-feed" id="territory-event-feed" aria-live="polite">
-                使用 A/D、方向键或点击地面移动，靠近建筑后进行交互。
-              </div>
-              <output class="territory-nearby-prompt" id="territory-nearby-prompt" aria-live="polite" hidden></output>
 
               <div class="territory-world-controls" aria-label="基地移动与交互">
                 <button type="button" class="territory-move-btn" data-territory-direction="left" aria-label="向左移动" aria-pressed="false">◀</button>
@@ -459,6 +442,10 @@
               </span>
               <span class="hud-entry-label">设置</span>
             </button>
+            <button class="hud-entry-btn hud-pixel-btn onboarding-replay-btn" id="onboarding-replay-btn" type="button" aria-label="打开成长指引" title="成长指引">
+              <span class="hud-entry-icon onboarding-replay-icon" aria-hidden="true">?</span>
+              <span class="hud-entry-label">指引</span>
+            </button>
           </div>
 
           <div class="hud-scene-cluster" aria-label="场景切换">
@@ -475,6 +462,24 @@
               <span class="scene-label">领地</span>
             </button>
           </div>
+        </div>
+
+        <div class="onboarding-layer" id="onboarding-layer" data-placement="bottom" hidden>
+          <div class="onboarding-focus-ring" id="onboarding-focus-ring" aria-hidden="true"></div>
+          <section class="onboarding-coach" role="region" aria-labelledby="onboarding-title" aria-describedby="onboarding-body">
+            <header class="onboarding-header">
+              <span class="onboarding-kicker" id="onboarding-kicker">新手引导 · 1/6</span>
+              <button class="onboarding-skip" id="onboarding-skip-btn" type="button">暂时跳过</button>
+            </header>
+            <div class="onboarding-stepper" id="onboarding-stepper" aria-label="成长引导进度"></div>
+            <h2 id="onboarding-title">先掌握一个核心动作：翻转</h2>
+            <p id="onboarding-body">点击桌面硬币，把当前显示的面结算为资源。</p>
+            <p class="onboarding-insight" id="onboarding-insight">正面与反面会通向不同成长方向。</p>
+            <footer class="onboarding-footer">
+              <span id="onboarding-hint">高亮目标仍可直接操作。</span>
+              <button class="onboarding-primary" id="onboarding-primary-btn" type="button">定位硬币</button>
+            </footer>
+          </section>
         </div>
       </main>
 
@@ -508,7 +513,7 @@
           <div class="modal-content player-command-body">
             <aside class="player-profile-panel" aria-label="主角档案">
               <div class="player-profile-art">
-                <img src="images/player/table_hero.png?v=anime-gunner-20260702a" alt="" aria-hidden="true">
+                <img src="images/portraits/hero/hero.png?v=stable-actions-20260721c" alt="" aria-hidden="true">
                 <span class="player-profile-status">READY</span>
               </div>
               <div class="player-profile-identity">
@@ -757,7 +762,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=duckov-phase1-20260721b";
+        var moduleSrc = "js/main.js?v=review-fixes-20260722a";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

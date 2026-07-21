@@ -48,6 +48,7 @@ index.html
 | `pet-modal-controller.js` | 宠物编队、背包、图鉴以及解锁/上阵操作 |
 | `territory-scene-controller.js` | 实际基地 Canvas、角色移动、设施交互、升阶与战备反馈 |
 | `shop-recommendation-controller.js` | 命运商店推荐、筛选、下一目标和成长提示 |
+| `onboarding-controller.js` | 首轮成长闭环教练层、高亮定位、跨场景说明与跳过/重播 |
 | `fate-scene-controller.js` | 命运桌翻面与购买、界面刷新、硬币反馈和助手动画 |
 
 长驻控制器通过 `bind()` 或 `bindEvents()` 绑定一次监听；重绑或销毁前调用 `destroy()`，统一移除监听并清理命运场景的助手波次、硬币翻面等计时器。动态模态的监听随模态节点在 `close()` 时一并释放，避免重复绑定和后台动画残留。

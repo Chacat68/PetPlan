@@ -8,27 +8,28 @@
 
 import { getGameCoreInstance } from "./modules/game-core.js?v=world-exploration-20260712b";
 import { getResourceSystemInstance } from "./modules/resource-system.js";
-import { getPlayerSystemInstance } from "./modules/player-system.js?v=world-exploration-20260712b";
-import { getCombatSystemInstance } from "./modules/combat-system.js?v=duckov-phase1-20260721b";
-import { getSaveSystemInstance } from "./modules/save-system.js?v=duckov-phase1-20260721b";
+import { getPlayerSystemInstance } from "./modules/player-system.js?v=review-fixes-20260722a";
+import { getCombatSystemInstance } from "./modules/combat-system.js?v=review-fixes-20260722a";
+import { getSaveSystemInstance } from "./modules/save-system.js?v=review-fixes-20260722a";
 import { getUISystemInstance } from "./modules/ui-system.js";
-import { getPetSystemInstance } from "./modules/pet-system.js?v=pet-loop-calibration-20260713a";
+import { getPetSystemInstance } from "./modules/pet-system.js?v=review-fixes-20260722a";
 import { getTerritorySystemInstance } from "./modules/territory-system.js?v=pet-loop-calibration-20260713a";
 import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
-import { getProgressionSystemInstance } from "./modules/progression-system.js?v=phase-one-20260710b";
+import { getProgressionSystemInstance } from "./modules/progression-system.js?v=growth-onboarding-20260720a";
 import { getAchievementSystemInstance } from "./modules/achievement-system.js?v=achievement-ui-v3-20260714a";
 import { ExpeditionMetaSystem } from "./modules/expedition-meta-system.js?v=duckov-phase1-20260721b";
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
 import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-ui-v3-20260714a";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=duckov-phase1-20260721b";
-import { FateSceneController } from "./controllers/fate-scene-controller.js?v=controllers-phase-two-20260711b";
-import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-loop-calibration-20260713a";
-import { PlayerModalController } from "./controllers/player-modal-controller.js?v=controllers-phase-two-20260711b";
-import { SettingsController } from "./controllers/settings-controller.js?v=duckov-phase1-20260721b";
-import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=pet-loop-calibration-20260713a";
-import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=pet-loop-calibration-20260713a";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=review-fixes-20260722a";
+import { FateSceneController } from "./controllers/fate-scene-controller.js?v=fate-toast-top-right-20260715a";
+import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-command-ui-v1-20260714a";
+import { OnboardingController } from "./controllers/onboarding-controller.js?v=growth-onboarding-20260720a";
+import { PlayerModalController } from "./controllers/player-modal-controller.js?v=command-modals-v1-20260714a";
+import { SettingsController } from "./controllers/settings-controller.js?v=command-modals-v1-20260714a";
+import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=goal-hud-compact-20260715a";
+import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=stable-actions-20260721c";
 
 export class Game {
   constructor() {
@@ -137,6 +138,7 @@ export class Game {
         this.sceneRouter.getRequestedScene("fate", { normalize: true }),
         true
       );
+      this.onboardingController.initialize();
 
       this.gameCore.start();
       this.isInitialized = true;
@@ -256,6 +258,15 @@ export class Game {
         this.territorySceneController.updateDisplay();
       },
     });
+
+    this.onboardingController = new OnboardingController({
+      progressionSystem: this.progressionSystem,
+      saveSystem: this.saveSystem,
+      getProgressionContext,
+      getCurrentScene: () => this.currentScene,
+      getBattleState: () => this.combatSystem?.getBattleState?.() || null,
+      onNavigate: (scene) => this.handleNavigation(scene),
+    });
   }
 
   connectSystemCallbacks() {
@@ -265,6 +276,7 @@ export class Game {
     this.fateCoinSystem.setOnChange(() => {
       this.fateSceneController.updateDisplay();
       this.refreshAchievements();
+      this.onboardingController?.update();
     });
     this.fateCoinSystem.setOnAutoFlip((request) =>
       this.fateSceneController.handleAutoFlip(request)
@@ -272,9 +284,11 @@ export class Game {
     this.combatSystem.setOnStateChange((state) => {
       this.battleSceneController.updateBattleDisplay(state);
       this.refreshAchievements();
+      this.onboardingController?.update();
     });
     this.territorySystem.setOnPersist(() => {
       this.refreshAchievements();
+      this.onboardingController?.update();
       void this.saveSystem.saveGame(1);
     });
   }
@@ -318,6 +332,7 @@ export class Game {
     this.fateSceneController.bind();
     this.battleSceneController.bind();
     this.territorySceneController.bind();
+    this.onboardingController.bind();
     this.sceneRouter.bindHistory((scene) => {
       this.handleNavigation(scene, true);
     });
@@ -340,6 +355,7 @@ export class Game {
       this.shopRecommendationController,
       this.settingsController,
       this.playerModalController,
+      this.onboardingController,
     ].forEach((controller) => controller?.destroy?.());
 
     this.fateCoinSystem?.setOnChange(null);
@@ -417,6 +433,7 @@ export class Game {
     }
 
     this.syncCombatPause();
+    this.onboardingController?.update();
 
     console.log("[Game] 切换到:", this.currentScene);
   }
@@ -460,6 +477,7 @@ export class Game {
     this.fateSceneController.updateDisplay();
     this.battleSceneController.updateBattleDisplay();
     this.refreshAchievements({ announce: announceAchievements });
+    this.onboardingController?.update();
   }
 
   refreshAchievements({ announce = true } = {}) {
@@ -500,6 +518,10 @@ export class Game {
       expansionCount: this.territorySystem?.expansionCount || 0,
       bestDepth: this.combatSystem?.meta?.bestDepth || 0,
       bestExtractedDepth: this.combatSystem?.meta?.bestExtractedDepth || 0,
+      expeditionDepth: Math.max(
+        this.combatSystem?.meta?.bestDepth || 0,
+        this.combatSystem?.getBattleState?.().depth || 0
+      ),
       extractions: this.combatSystem?.meta?.extractions || 0,
       losses: this.combatSystem?.meta?.losses || 0,
       bossKills: this.combatSystem?.meta?.bossKills || 0,

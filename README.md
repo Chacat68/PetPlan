@@ -22,7 +22,7 @@ python3 -m http.server 4174 --directory .
 
 访问 [http://localhost:4174](http://localhost:4174)。直接双击 `index.html` 时，页面会显示本地服务提示。
 
-游戏采用横屏 16:9 舞台。移动设备请旋转为横屏后进入。
+游戏采用 16:9 舞台，横屏体验最佳；移动设备在竖屏状态下也可以直接进入和操作。
 
 ## 操作
 

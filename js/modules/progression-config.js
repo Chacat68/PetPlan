@@ -128,6 +128,8 @@ export const TERRITORY_BUILDING_SITES = Object.freeze({
   crystal_mine: Object.freeze({ slotIndex: 6, x: 2820, requiredRank: 3, path: "territory" }),
 });
 
+export const ONBOARDING_VERSION = 2;
+
 export const FIRST_SESSION_STEPS = Object.freeze([
   {
     id: "flip",
@@ -152,6 +154,22 @@ export const FIRST_SESSION_STEPS = Object.freeze([
     title: "招募助手",
     detail: "招募第 1 个小助手",
     routeType: "tails",
+  },
+  {
+    id: "expedition",
+    metric: "expeditionDepth",
+    target: 1,
+    title: "完成首次探索",
+    detail: "进入远征并完成第 1 个区域",
+    routeType: "combat",
+  },
+  {
+    id: "extraction",
+    metric: "extractions",
+    target: 1,
+    title: "带回首次收益",
+    detail: "探索至少 3 个区域并成功撤离 1 次",
+    routeType: "combat",
   },
   {
     id: "territory",

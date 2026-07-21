@@ -2,6 +2,8 @@
  * Owns fate-table purchases, display refreshes, coin feedback, and helper motion.
  * Recommendation and territory rules remain delegated to their scene controllers.
  */
+const FATE_RESULT_TTL_MS = 3000;
+
 export class FateSceneController {
   constructor({
     fateCoinSystem,
@@ -30,6 +32,7 @@ export class FateSceneController {
     this.helperWave = 0;
     this.abortController = null;
     this.waveTimers = new Set();
+    this.resultTimers = new Map();
     this.resizeObserver = null;
     this.layoutFrame = 0;
     this.layoutSize = { width: 0, height: 0 };
@@ -58,12 +61,6 @@ export class FateSceneController {
         { signal }
       );
     });
-    document.getElementById("fate-skill-tree-btn")?.addEventListener(
-      "click",
-      () => this.openManualUpgradeCard(),
-      { signal }
-    );
-
     document.querySelectorAll(".fate-table-coin").forEach((coin) => {
       this.bindTableCoin(coin);
       if (!coin._fateFaceTimer) {
@@ -97,6 +94,7 @@ export class FateSceneController {
 
     this.waveTimers.forEach((timer) => window.clearTimeout(timer));
     this.waveTimers.clear();
+    this.clearFateResultFeed();
 
     const layer = document.getElementById("fate-coin-drop-layer");
     layer?.querySelectorAll(".fate-helper").forEach((helper) => {
@@ -149,7 +147,7 @@ export class FateSceneController {
         item.remove();
       });
 
-    document.getElementById("fate-result-feed")?.replaceChildren();
+    this.clearFateResultFeed();
     const status = document.getElementById("fate-result-status");
     if (status) status.textContent = "";
     this.dropSerial = 0;
@@ -325,12 +323,6 @@ export class FateSceneController {
     return result;
   }
 
-  openManualUpgradeCard() {
-    this.shopController?.setFateShopFilter?.("fate");
-    const card = document.getElementById("fate-upgrade-manual-btn");
-    card?.focus?.({ preventScroll: true });
-  }
-
   handleFateUpgrade(action) {
     return this.handleUpgrade(action);
   }
@@ -462,8 +454,6 @@ export class FateSceneController {
     setText("fate-coins-display", format(data.fateCoins));
     setText("heads-display", format(data.heads));
     setText("tails-display", format(data.tails));
-    setText("fate-total-flips-display", format(data.totalFlips));
-    setText("fate-manual-power-display", format(data.manualPower));
     setText(
       "fate-auto-rate-display",
       `${data.autoFlipsPerSecond.toFixed(1)} / 秒`
@@ -565,7 +555,6 @@ export class FateSceneController {
       "fate-upgrade-manual-btn",
       !this.fateCoinSystem.canAfford(data.costs.manual)
     );
-    setDisabled("fate-skill-tree-btn", false);
     setDisabled(
       "fate-upgrade-speed-btn",
       data.assistants <= 0 ||
@@ -634,14 +623,34 @@ export class FateSceneController {
     }
     feed.prepend(item);
 
+    const removalTimer = window.setTimeout(() => {
+      this.resultTimers.delete(item);
+      item.remove();
+    }, FATE_RESULT_TTL_MS);
+    this.resultTimers.set(item, removalTimer);
+
     while (feed.children.length > 4) {
-      feed.removeChild(feed.lastElementChild);
+      this.removeFateResultItem(feed.lastElementChild);
     }
 
     if (announce) {
       const status = document.getElementById("fate-result-status");
       if (status) status.textContent = item.textContent;
     }
+  }
+
+  removeFateResultItem(item) {
+    if (!item) return;
+    const timer = this.resultTimers.get(item);
+    if (timer) window.clearTimeout(timer);
+    this.resultTimers.delete(item);
+    item.remove();
+  }
+
+  clearFateResultFeed() {
+    this.resultTimers.forEach((timer) => window.clearTimeout(timer));
+    this.resultTimers.clear();
+    document.getElementById("fate-result-feed")?.replaceChildren();
   }
 
   addFateCoinDrops(result, options = {}) {

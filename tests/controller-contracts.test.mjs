@@ -4,6 +4,7 @@ import test from "node:test";
 import { AchievementController } from "../js/controllers/achievement-controller.js";
 import { BattleSceneController } from "../js/controllers/battle-scene-controller.js";
 import { FateSceneController } from "../js/controllers/fate-scene-controller.js";
+import { OnboardingController } from "../js/controllers/onboarding-controller.js";
 import { PetModalController } from "../js/controllers/pet-modal-controller.js";
 import { PlayerModalController } from "../js/controllers/player-modal-controller.js";
 import { SettingsController } from "../js/controllers/settings-controller.js";
@@ -43,6 +44,11 @@ const controllerContracts = [
       "handleUpgrade",
       "updateDisplay",
     ],
+  ],
+  [
+    "OnboardingController",
+    OnboardingController,
+    ["bind", "destroy", "initialize", "update", "start", "dismiss", "complete"],
   ],
   [
     "PetModalController",

@@ -4,9 +4,15 @@
  */
 
 import { MovementSystem } from "./movement-system.js?v=movement-20260702a";
+import {
+    CHARACTER_ART_VERSION,
+    CHARACTER_FRAME_COUNT,
+    CHARACTER_FRAME_SIZE,
+    PET_CHARACTER_ART,
+} from "./character-art-config.js?v=stable-actions-20260721c";
 
 let instance = null;
-const PET_ASSET_VERSION = 'pet-actions-20260702a';
+const PET_ASSET_VERSION = CHARACTER_ART_VERSION;
 const PET_SAVE_SCHEMA_VERSION = 2;
 const MAX_PET_LEVEL = 50;
 
@@ -20,8 +26,9 @@ export class PetSystem {
                 emoji: '🔥',
                 type: 'fire',
                 rarity: 'common',
-                image: 'images/pets/fire_dog_table.png',
-                idleSheet: 'images/sprites/pets/fire_dog_idle_sheet.png',
+                spriteKey: 'fire_dog',
+                image: PET_CHARACTER_ART.fire_dog.portrait,
+                idleSheet: PET_CHARACTER_ART.fire_dog.sprites.idle,
                 requiredLevel: 1,
                 cost: { coins: 500, rubies: 0 },
                 baseStats: { attack: 15, hp: 80, defense: 5, attackSpeed: 1.0 },
@@ -46,7 +53,8 @@ export class PetSystem {
                 emoji: '❄️',
                 type: 'ice',
                 rarity: 'common',
-                image: 'images/pets/ice_cat_table.png',
+                spriteKey: 'ice_cat',
+                image: PET_CHARACTER_ART.ice_cat.portrait,
                 requiredLevel: 1,
                 cost: { coins: 500, rubies: 0 },
                 baseStats: { attack: 12, hp: 70, defense: 8, attackSpeed: 1.2 },
@@ -71,7 +79,8 @@ export class PetSystem {
                 emoji: '⚡',
                 type: 'thunder',
                 rarity: 'uncommon',
-                image: 'images/pets/thunder_bird_table.png',
+                spriteKey: 'thunder_bird',
+                image: PET_CHARACTER_ART.thunder_bird.portrait,
                 requiredLevel: 5,
                 cost: { coins: 2000, rubies: 50 },
                 baseStats: { attack: 20, hp: 60, defense: 3, attackSpeed: 1.5 },
@@ -96,7 +105,8 @@ export class PetSystem {
                 emoji: '🌍',
                 type: 'earth',
                 rarity: 'uncommon',
-                image: 'images/pets/earth_bear_table.png',
+                spriteKey: 'earth_bear',
+                image: PET_CHARACTER_ART.earth_bear.portrait,
                 requiredLevel: 8,
                 cost: { coins: 3000, rubies: 100 },
                 baseStats: { attack: 18, hp: 150, defense: 15, attackSpeed: 0.8 },
@@ -121,7 +131,8 @@ export class PetSystem {
                 emoji: '🌪️',
                 type: 'wind',
                 rarity: 'rare',
-                image: 'images/pets/storm_dragon_table.png',
+                spriteKey: 'storm_dragon',
+                image: PET_CHARACTER_ART.storm_dragon.portrait,
                 requiredLevel: 15,
                 cost: { coins: 10000, rubies: 300 },
                 baseStats: { attack: 35, hp: 120, defense: 10, attackSpeed: 1.3 },
@@ -146,7 +157,8 @@ export class PetSystem {
                 emoji: '✨',
                 type: 'light',
                 rarity: 'epic',
-                image: 'images/pets/unicorn_table.png',
+                spriteKey: 'unicorn',
+                image: PET_CHARACTER_ART.unicorn.portrait,
                 requiredLevel: 20,
                 cost: { coins: 20000, rubies: 500 },
                 baseStats: { attack: 25, hp: 100, defense: 12, attackSpeed: 1.0 },
@@ -171,7 +183,8 @@ export class PetSystem {
                 emoji: '🌑',
                 type: 'dark',
                 rarity: 'epic',
-                image: 'images/pets/shadow_wolf_table.png',
+                spriteKey: 'shadow_wolf',
+                image: PET_CHARACTER_ART.shadow_wolf.portrait,
                 requiredLevel: 25,
                 cost: { coins: 25000, rubies: 600 },
                 baseStats: { attack: 45, hp: 90, defense: 8, attackSpeed: 1.4 },
@@ -196,7 +209,8 @@ export class PetSystem {
                 emoji: '🔥',
                 type: 'phoenix',
                 rarity: 'legendary',
-                image: 'images/pets/phoenix_table.png',
+                spriteKey: 'phoenix',
+                image: PET_CHARACTER_ART.phoenix.portrait,
                 requiredLevel: 30,
                 cost: { coins: 50000, rubies: 1000 },
                 baseStats: { attack: 50, hp: 200, defense: 15, attackSpeed: 1.2 },
@@ -241,6 +255,8 @@ export class PetSystem {
         // 宠物图片缓存
         this.petImages = {};
         this.petAnimationSheets = {};
+        this.spriteFrameSize = CHARACTER_FRAME_SIZE;
+        this.spriteFrameCount = CHARACTER_FRAME_COUNT;
         this.petBattleStates = new Map();
         this.elapsedTime = 0;
         this.movementSystem = new MovementSystem();
@@ -293,11 +309,14 @@ export class PetSystem {
     }
 
     getPetSpritePath(pet, state) {
-        return `images/sprites/battle/pets/${this.getPetSpriteKey(pet)}_${state}_sheet.png`;
+        const key = this.getPetSpriteKey(pet);
+        return PET_CHARACTER_ART[key]?.sprites?.[state]
+            || `images/sprites/battle/pets/${key}_${state}_sheet.png`;
     }
 
     getPetSpriteKey(pet) {
-        const match = pet.image.match(/\/([^/]+)_table\.png$/);
+        if (pet?.spriteKey) return pet.spriteKey;
+        const match = pet.image.match(/\/([^/]+)(?:_table)?\.png$/);
         return match ? match[1] : `pet_${pet.id}`;
     }
     
@@ -769,6 +788,8 @@ export class PetSystem {
                 attackTimer: 0,
                 attackDuration: 260,
                 animationOffset: Math.random() * 400,
+                renderAnimationState: 'idle',
+                animationStartedAt: this.elapsedTime,
                 x: 0,
                 y: 0,
                 startX: 0,
@@ -925,9 +946,33 @@ export class PetSystem {
     }
 
     getPetFrameDuration(state) {
-        if (state === 'attack') return 80;
-        if (state === 'move') return 110;
-        return 170;
+        if (state === 'attack') return 30;
+        if (state === 'move') return 44;
+        return 68;
+    }
+
+    getPetFrameIndex(state, animationState, index = 0) {
+        if (state.renderAnimationState !== animationState) {
+            state.renderAnimationState = animationState;
+            state.animationStartedAt = this.elapsedTime;
+        }
+
+        if (animationState === 'attack' && state.attackDuration > 0) {
+            const progress = Math.max(0, Math.min(0.999, state.phaseTime / state.attackDuration));
+            return Math.min(
+                this.spriteFrameCount - 1,
+                Math.floor(progress * this.spriteFrameCount)
+            );
+        }
+
+        const stateElapsed = Math.max(
+            0,
+            this.elapsedTime - (Number(state.animationStartedAt) || 0)
+        );
+        const phaseOffset = animationState === 'idle' ? index : 0;
+        return (
+            Math.floor(stateElapsed / this.getPetFrameDuration(animationState)) + phaseOffset
+        ) % this.spriteFrameCount;
     }
 
     renderTowerDefense(ctx) {
@@ -951,9 +996,11 @@ export class PetSystem {
             }
 
             if (sheet && sheet.complete && sheet.naturalWidth > 0) {
-                const frameSize = 512;
+                const frameSize = this.spriteFrameSize;
                 const frameDuration = this.getPetFrameDuration(animationState);
-                const frameIndex = (Math.floor((this.elapsedTime + index * 83) / frameDuration) + index) % 4;
+                const frameIndex = (
+                    Math.floor((this.elapsedTime + index * 83) / frameDuration) + index
+                ) % this.spriteFrameCount;
                 ctx.drawImage(
                     sheet,
                     frameIndex * frameSize,
@@ -1002,8 +1049,8 @@ export class PetSystem {
             
             const size = animationState === 'attack' ? 72 : animationState === 'move' ? 60 : 52;
             if (activeSheet && activeSheet.complete && activeSheet.naturalWidth > 0) {
-                const frameSize = 512;
-                const frameIndex = (Math.floor((this.elapsedTime + state.animationOffset) / this.getPetFrameDuration(animationState)) + index) % 4;
+                const frameSize = this.spriteFrameSize;
+                const frameIndex = this.getPetFrameIndex(state, animationState, index);
 
                 ctx.save();
                 ctx.imageSmoothingEnabled = false;

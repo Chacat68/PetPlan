@@ -136,6 +136,17 @@ export class TerritorySceneController {
       () => this.openNearbyContext(),
       { signal }
     );
+    document.getElementById("territory-objective-toggle")?.addEventListener(
+      "click",
+      () => {
+        const toggle = document.getElementById("territory-objective-toggle");
+        this.setObjectiveDetailsExpanded(
+          toggle?.getAttribute("aria-expanded") !== "true"
+        );
+      },
+      { signal }
+    );
+    this.setObjectiveDetailsExpanded(false);
     document.getElementById("territory-context-panel")?.addEventListener("click", (event) => {
       const button = event.target.closest("[data-territory-action]");
       if (!button) return;
@@ -161,6 +172,25 @@ export class TerritorySceneController {
     this.closeContextPanel();
   }
 
+  setObjectiveDetailsExpanded(expanded) {
+    const panel = document.getElementById("territory-objective-hud");
+    const toggle = document.getElementById("territory-objective-toggle");
+    const details = document.getElementById("territory-objective-more");
+    if (!panel || !toggle || !details) return;
+
+    const isExpanded = Boolean(expanded);
+    panel.dataset.expanded = String(isExpanded);
+    details.hidden = !isExpanded;
+    toggle.setAttribute("aria-expanded", String(isExpanded));
+    toggle.setAttribute(
+      "aria-label",
+      isExpanded ? "收起领地目标详情" : "展开领地目标详情"
+    );
+    toggle.title = isExpanded ? "收起领地目标详情" : "展开领地目标详情";
+    const icon = toggle.querySelector("[aria-hidden='true']");
+    if (icon) icon.textContent = isExpanded ? "−" : "＋";
+  }
+
   setSceneActive(active) {
     this.isSceneActive = Boolean(active);
     if (!this.isSceneActive) {
@@ -181,10 +211,10 @@ export class TerritorySceneController {
     const returning = Boolean(settlementKey && settlementKey !== this.lastSettlementKey);
     if (returning) {
       this.lastSettlementKey = settlementKey;
-      this.setEventFeed(settlement.extracted
+      const message = settlement.extracted
         ? `远征队已返航：带回 ${this.formatNumber(settlement.coins)} 金币与 ${this.formatNumber(settlement.crystals)} 水晶。`
-        : "远征队返回基地休整，本次只保留了部分收益。"
-      );
+        : "远征队返回基地休整，本次只保留了部分收益。";
+      this.uiSystem?.showToast(message, "info");
     }
     this.world.resetPosition({ fromExpedition: returning });
     this.resizeCanvas();
@@ -331,12 +361,10 @@ export class TerritorySceneController {
     const interact = document.getElementById("territory-interact-btn");
     const label = document.getElementById("territory-interact-label");
     const detail = document.getElementById("territory-interact-detail");
-    const prompt = document.getElementById("territory-nearby-prompt");
     if (!site) {
       if (interact) interact.disabled = true;
       if (label) label.textContent = "靠近建筑后交互";
       if (detail) detail.textContent = "A/D、方向键或点击地面移动";
-      if (prompt) prompt.hidden = true;
       return;
     }
     const name = site.type === "expedition_gate"
@@ -345,16 +373,12 @@ export class TerritorySceneController {
     if (interact) interact.disabled = false;
     if (label) label.textContent = `与${name}交互`;
     if (detail) detail.textContent = "按 E 或点击此按钮";
-    if (prompt) {
-      prompt.hidden = false;
-      prompt.textContent = `E · ${name}`;
-    }
   }
 
   openNearbyContext() {
     const site = this.world.getNearbySite();
     if (!site) {
-      this.setEventFeed("继续靠近建筑或远征入口后再进行交互。");
+      this.uiSystem?.showToast("继续靠近建筑或远征入口后再进行交互。", "info");
       return;
     }
     this.clearMovementInput();
@@ -526,15 +550,9 @@ export class TerritorySceneController {
   handleActionResult(result) {
     if (!result) return;
     if (result.message) {
-      this.setEventFeed(result.message);
       this.uiSystem?.showToast(result.message, result.success ? "success" : "info");
     }
     this.resourceSystem?.updateDisplay?.();
-  }
-
-  setEventFeed(message) {
-    const feed = document.getElementById("territory-event-feed");
-    if (feed && message) feed.textContent = message;
   }
 
   updateDisplay() {
@@ -847,7 +865,9 @@ export class TerritorySceneController {
     const state = this.world.activity ? "attack" : player.moving ? "move" : "idle";
     const sprite = this.playerSystem?.playerSprites?.[state] || this.playerSystem?.playerSprites?.idle;
     const image = sprite?.image;
-    const frameIndex = Math.floor(performance.now() / (sprite?.frameDuration || 150)) % (sprite?.frameCount || 4);
+    const frameCount = sprite?.frameCount || this.playerSystem?.spriteFrameCount || 12;
+    const frameSize = sprite?.frameSize || this.playerSystem?.spriteFrameSize || 256;
+    const frameIndex = Math.floor(performance.now() / (sprite?.frameDuration || 150)) % frameCount;
     const renderWidth = 88;
     const renderHeight = 88;
     ctx.save();
@@ -861,7 +881,17 @@ export class TerritorySceneController {
       ctx.imageSmoothingEnabled = false;
       ctx.shadowColor = "rgba(35, 143, 154, 0.2)";
       ctx.shadowBlur = 5;
-      ctx.drawImage(image, frameIndex * 512, 0, 512, 512, -renderWidth / 2, -renderHeight / 2 - 10, renderWidth, renderHeight);
+      ctx.drawImage(
+        image,
+        frameIndex * frameSize,
+        0,
+        frameSize,
+        frameSize,
+        -renderWidth / 2,
+        -renderHeight / 2 - 10,
+        renderWidth,
+        renderHeight
+      );
       ctx.shadowBlur = 0;
     } else {
       ctx.fillStyle = "#ffd167";
@@ -875,7 +905,12 @@ export class TerritorySceneController {
       const state = this.world.player.moving ? "move" : "idle";
       const sheet = this.petSystem?.petAnimationSheets?.[follower.templateId]?.[state]
         || this.petSystem?.petAnimationSheets?.[follower.templateId]?.idle;
-      const frameIndex = Math.floor((performance.now() + follower.phase * 240) / 150) % 4;
+      const frameDuration = this.petSystem?.getPetFrameDuration?.(state) || 100;
+      const frameCount = this.petSystem?.spriteFrameCount || 12;
+      const frameSize = this.petSystem?.spriteFrameSize || 256;
+      const frameIndex = Math.floor(
+        (performance.now() + follower.phase * frameDuration * 1.6) / frameDuration
+      ) % frameCount;
       ctx.save();
       ctx.translate(follower.x + follower.width / 2, follower.y + follower.height / 2);
       ctx.fillStyle = "rgba(4, 9, 12, 0.4)";
@@ -885,12 +920,18 @@ export class TerritorySceneController {
       if (follower.facing < 0) ctx.scale(-1, 1);
       if (sheet?.complete && sheet.naturalWidth > 0) {
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(sheet, frameIndex * 512, 0, 512, 512, -30, -34, 60, 60);
+        ctx.drawImage(sheet, frameIndex * frameSize, 0, frameSize, frameSize, -30, -34, 60, 60);
       } else {
-        const template = this.petSystem?.getTemplate?.(follower.templateId);
-        ctx.font = "30px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText(template?.emoji || "●", 0, 8);
+        const fallbackImage = this.petSystem?.petImages?.[follower.templateId];
+        if (fallbackImage?.complete && fallbackImage.naturalWidth > 0) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(fallbackImage, -30, -34, 60, 60);
+        } else {
+          const template = this.petSystem?.getTemplate?.(follower.templateId);
+          ctx.font = "30px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText(template?.emoji || "●", 0, 8);
+        }
       }
       ctx.restore();
     }
@@ -918,17 +959,15 @@ export class TerritorySceneController {
   }
 
   renderMinimap(ctx) {
-    const width = Math.min(220, this.canvas.width * 0.19);
-    const height = 42;
-    const x = this.canvas.width - width - 16;
-    const y = 70;
+    const layout = this.getMinimapLayout();
+    const { x, y, width, height, frameX, frameY, frameWidth, frameHeight } = layout;
     const scale = width / this.world.width;
     ctx.save();
     ctx.fillStyle = "rgba(5, 8, 12, 0.84)";
-    ctx.fillRect(x - 8, y - 20, width + 16, height + 30);
+    ctx.fillRect(frameX, frameY, frameWidth, frameHeight);
     ctx.strokeStyle = "#ffd167";
     ctx.lineWidth = 2;
-    ctx.strokeRect(x - 8, y - 20, width + 16, height + 30);
+    ctx.strokeRect(frameX, frameY, frameWidth, frameHeight);
     ctx.fillStyle = "#dfe9ef";
     ctx.font = "bold 10px Arial";
     ctx.textAlign = "left";
@@ -948,6 +987,30 @@ export class TerritorySceneController {
     ctx.arc(x + center.x * scale, y + height / 2, 4, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+  }
+
+  getMinimapLayout() {
+    const width = Math.min(220, this.canvas.width * 0.19);
+    const height = 42;
+    const framePaddingX = 8;
+    const frameHeaderHeight = 20;
+    const frameFooterPadding = 10;
+    const rightInset = Math.max(24, Math.round(this.canvas.width * 0.025));
+    const topInset = Math.max(12, Math.round(this.canvas.height * 0.015));
+    const x = this.canvas.width - width - framePaddingX - rightInset;
+    const y = topInset + frameHeaderHeight;
+    return {
+      x,
+      y,
+      width,
+      height,
+      frameX: x - framePaddingX,
+      frameY: y - frameHeaderHeight,
+      frameWidth: width + framePaddingX * 2,
+      frameHeight: height + frameHeaderHeight + frameFooterPadding,
+      rightInset,
+      topInset,
+    };
   }
 
   // Compatibility entry points retained for controller-contract and legacy calls.
