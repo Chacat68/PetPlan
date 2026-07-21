@@ -3462,6 +3462,17 @@ body {
   background: linear-gradient(135deg, rgba(255, 209, 103, 0.08), transparent), #111218;
 }
 
+.expedition-loadout-panel[data-raid-active="true"] {
+  border-color: #315268;
+  background: linear-gradient(135deg, rgba(114, 215, 255, 0.1), transparent), #111218;
+}
+
+.expedition-loadout-panel[data-raid-active="true"] #battle-stash-summary,
+.expedition-loadout-panel[data-raid-active="true"] .expedition-stash-list,
+.expedition-loadout-panel[data-raid-active="true"] .expedition-contract-list {
+  display: none;
+}
+
 #battle-stash-summary {
   color: #ffd167;
   font-size: clamp(9px, 0.68vw, 13px);
@@ -3475,6 +3486,11 @@ body {
 }
 
 .expedition-weapon-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   min-height: 44px;
   padding: 5px;
   border: 2px solid #343744;
@@ -3483,6 +3499,16 @@ body {
   color: #dfe2e8;
   font-size: clamp(8px, 0.62vw, 11px);
   font-weight: 900;
+}
+
+.expedition-weapon-slot small {
+  color: #8f96a2;
+  font-size: 0.88em;
+  font-weight: 700;
+}
+
+.expedition-weapon-slot[aria-pressed="true"] small {
+  color: #ffd167;
 }
 
 .expedition-weapon-slot[aria-pressed="true"] {
@@ -3609,6 +3635,17 @@ body {
 .expedition-contract-item small {
   grid-column: 1 / -1;
   color: #8f96a2;
+}
+
+.expedition-contract-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.expedition-contract-actions [data-contract-abandon] {
+  border-color: #70434b;
+  background: #321d23;
+  color: #ffc2ca;
 }
 
 .expedition-risk-preview {
@@ -3796,6 +3833,11 @@ body {
   color: #fff1a7;
 }
 
+.expedition-loot-insure:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
 .expedition-loot-choice {
   margin-top: 8px;
   padding: 8px;
@@ -3924,6 +3966,11 @@ body {
   cursor: not-allowed;
   transform: none;
   filter: grayscale(0.4);
+}
+
+.expedition-action-btn.danger[data-armed="true"] {
+  background: #a12f3f;
+  box-shadow: inset 0 0 0 2px #ff98a6, 0 0 16px rgba(255, 102, 125, 0.38);
 }
 
 .expedition-search-progress {

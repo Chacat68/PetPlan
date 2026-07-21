@@ -124,7 +124,7 @@
 
             <section class="expedition-loadout-panel" id="battle-loadout-panel">
               <div class="expedition-section-row">
-                <span class="expedition-section-title">出发配装</span>
+                <span class="expedition-section-title" id="battle-loadout-title">出发配装与委托</span>
                 <b id="battle-stash-summary">仓库 0 件</b>
               </div>
               <div class="expedition-weapon-slots" id="battle-weapon-slots" aria-label="主武器选择"></div>
@@ -145,7 +145,7 @@
                 <span>下档威胁 <b id="battle-threat-next">25（还差 25）</b></span>
                 <span>返程压力 <b id="battle-return-pressure">未启动</b></span>
                 <span>成功撤离 <b id="battle-success-preview">0 金币 / 0 水晶</b></span>
-                <span>失败保留 <b id="battle-failure-preview">0 金币 / 保险 0 件</b></span>
+                <span>主动撤退 <b id="battle-failure-preview">0 金币 / 安全袋 0 件</b></span>
               </div>
             </section>
 
@@ -157,7 +157,7 @@
             <section class="expedition-loot-panel">
               <div class="expedition-section-row">
                 <span class="expedition-section-title">远征背包</span>
-                <span><b id="battle-insurance-display">保险 0/1</b> · <b id="battle-supplies-display">补给 0</b></span>
+                <span><b id="battle-insurance-display">安全袋 0/1</b> · <b id="battle-supplies-display">补给 0</b></span>
               </div>
               <div class="expedition-loot-list" id="battle-loot-list" aria-live="polite">
                 <span class="expedition-empty-loot">暂无战利品</span>
@@ -165,7 +165,7 @@
               <div class="expedition-loot-choice" id="battle-loot-choice-panel" hidden>
                 <span class="expedition-section-title">背包已满 · 请选择取舍</span>
                 <strong id="battle-loot-choice-name">新战利品</strong>
-                <small id="battle-loot-choice-detail">选择一件未保险物品替换，或放弃新战利品。</small>
+                <small id="battle-loot-choice-detail">选择一件未装入安全袋的物品替换，或放弃新战利品。</small>
                 <div class="expedition-loot-replace-list" id="battle-loot-replace-list"></div>
                 <button type="button" class="expedition-loot-discard" data-loot-action="discard">放弃新战利品</button>
               </div>
@@ -216,7 +216,7 @@
                 放弃本局
               </button>
               <button type="button" class="expedition-action-btn primary" id="battle-restart-btn" hidden>
-                再次远征
+                返回整备
               </button>
             </div>
 

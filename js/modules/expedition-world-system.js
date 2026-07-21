@@ -92,9 +92,9 @@ const WORLD_EVENT_LIBRARY = Object.freeze([
     type: "insured-stash",
     name: "密封安全袋",
     icon: "▤",
-    danger: "保险",
-    description: "还能使用一次的密封袋，可以保护一件战利品不因失败遗失。",
-    effect: Object.freeze({ insurance: 1 }),
+    danger: "保险 · 定位脉冲",
+    description: "还能使用一次的密封袋，可以保护一件战利品；启用时会发出定位脉冲并提高警戒。",
+    effect: Object.freeze({ insurance: 1, threatDelta: 5 }),
   }),
   Object.freeze({
     type: "lost-cargo",
@@ -203,7 +203,7 @@ export class ExpeditionWorldSystem {
   }
 
   buildRunObstacles() {
-    return DEFAULT_OBSTACLES.map((obstacle, index) => {
+    const obstacles = DEFAULT_OBSTACLES.map((obstacle, index) => {
       const jitterX = (this.seededValue(100 + index * 2) - 0.5) * 70;
       const jitterY = (this.seededValue(101 + index * 2) - 0.5) * 90;
       return {
@@ -212,15 +212,127 @@ export class ExpeditionWorldSystem {
         y: Math.max(90, Math.min(this.height - obstacle.height - 90, Math.round(obstacle.y + jitterY))),
       };
     });
+    return this.ensureNavigableObstacles(obstacles);
+  }
+
+  /**
+   * 西侧废墟过去可能正好压在出生点的水平出口上，首屏体验会像被墙封住。
+   * 先为出生点留出一段明确的东向出口；若未来障碍配置变密，再用寻路检查和
+   * 水平通道兜底，保证任何种子都至少存在一条能抵达地图东侧的路线。
+   */
+  ensureNavigableObstacles(obstacles = []) {
+    const normalized = obstacles.map((obstacle) => ({ ...obstacle }));
+    const westRuin = normalized.find((obstacle) => obstacle.id === "ruin-west");
+    if (westRuin) {
+      const egressHalfHeight = 72;
+      const blocksInitialEgress = (
+        westRuin.x <= this.spawnPoint.x + 430
+        && westRuin.x + westRuin.width >= this.spawnPoint.x + 30
+        && westRuin.y < this.spawnPoint.y + egressHalfHeight
+        && westRuin.y + westRuin.height > this.spawnPoint.y - egressHalfHeight
+      );
+      if (blocksInitialEgress) {
+        const gap = 28;
+        const upperY = this.spawnPoint.y - egressHalfHeight - westRuin.height - gap;
+        const lowerY = this.spawnPoint.y + egressHalfHeight + gap;
+        const candidates = [upperY, lowerY]
+          .filter((y) => y >= 90 && y <= this.height - westRuin.height - 90);
+        const candidateIndex = Math.floor(this.seededValue(1901) * Math.max(1, candidates.length));
+        westRuin.y = Math.round(candidates[candidateIndex] ?? Math.max(90, upperY));
+      }
+    }
+
+    if (this.hasNavigableChannelToEast(normalized)) return normalized;
+
+    // 极端或未来新增障碍导致寻路失败时，清出一条以出生点为中心的保底通道。
+    const corridorHalfHeight = 86;
+    normalized.forEach((obstacle, index) => {
+      const overlapsCorridor = (
+        obstacle.y < this.spawnPoint.y + corridorHalfHeight
+        && obstacle.y + obstacle.height > this.spawnPoint.y - corridorHalfHeight
+      );
+      if (!overlapsCorridor) return;
+      const gap = 24;
+      const upperY = this.spawnPoint.y - corridorHalfHeight - obstacle.height - gap;
+      const lowerY = this.spawnPoint.y + corridorHalfHeight + gap;
+      const candidates = [upperY, lowerY]
+        .filter((y) => y >= 90 && y <= this.height - obstacle.height - 90);
+      if (candidates.length === 0) return;
+      const pick = Math.floor(this.seededValue(2000 + index) * candidates.length);
+      obstacle.y = Math.round(candidates[pick]);
+    });
+    return normalized;
+  }
+
+  /**
+   * 使用保守的 40px 角色占地进行网格寻路。该方法也用于确定性测试，避免只检查
+   * 某一个种子的障碍位置而漏掉偶发封路。
+   */
+  hasNavigableChannelToEast(obstacles = this.obstacles, {
+    entitySize = 40,
+    gridSize = 40,
+  } = {}) {
+    const halfSize = Math.max(8, Number(entitySize) / 2 || 20);
+    const step = Math.max(24, Math.floor(Number(gridSize) || 40));
+    const padding = 18;
+    const minX = padding + halfSize;
+    const minY = padding + halfSize;
+    const maxX = this.width - padding - halfSize;
+    const maxY = this.height - padding - halfSize;
+    const columns = Math.max(1, Math.floor((maxX - minX) / step) + 1);
+    const rows = Math.max(1, Math.floor((maxY - minY) / step) + 1);
+    const toColumn = (x) => Math.max(0, Math.min(columns - 1, Math.round((x - minX) / step)));
+    const toRow = (y) => Math.max(0, Math.min(rows - 1, Math.round((y - minY) / step)));
+    const centerAt = (column, row) => ({ x: minX + column * step, y: minY + row * step });
+    const collisionReach = Math.max(8, halfSize - 5 + 6);
+    const isPassable = (column, row) => {
+      const center = centerAt(column, row);
+      return !(obstacles || []).some((obstacle) => (
+        center.x + collisionReach > obstacle.x
+        && center.x - collisionReach < obstacle.x + obstacle.width
+        && center.y + collisionReach > obstacle.y
+        && center.y - collisionReach < obstacle.y + obstacle.height
+      ));
+    };
+
+    const startColumn = toColumn(this.spawnPoint.x);
+    const startRow = toRow(this.spawnPoint.y);
+    if (!isPassable(startColumn, startRow)) return false;
+    const queue = [[startColumn, startRow]];
+    const visited = new Set([`${startColumn},${startRow}`]);
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const [column, row] = queue[cursor];
+      if (centerAt(column, row).x >= maxX - step) return true;
+      for (const [nextColumn, nextRow] of [
+        [column + 1, row],
+        [column - 1, row],
+        [column, row + 1],
+        [column, row - 1],
+      ]) {
+        if (nextColumn < 0 || nextColumn >= columns || nextRow < 0 || nextRow >= rows) continue;
+        const key = `${nextColumn},${nextRow}`;
+        if (visited.has(key) || !isPassable(nextColumn, nextRow)) continue;
+        visited.add(key);
+        queue.push([nextColumn, nextRow]);
+      }
+    }
+    return false;
   }
 
   createWorldEvents() {
     const eventCount = Math.min(6, EVENT_ANCHORS.length);
+    let insuredStashCount = 0;
     for (let index = 0; index < eventCount; index += 1) {
       const anchorIndex = (index + Math.floor(this.seededValue(300) * EVENT_ANCHORS.length)) % EVENT_ANCHORS.length;
       const [anchorX, anchorY] = EVENT_ANCHORS[anchorIndex];
       const templateIndex = Math.floor(this.seededValue(320 + index) * WORLD_EVENT_LIBRARY.length);
-      const template = WORLD_EVENT_LIBRARY[templateIndex] || WORLD_EVENT_LIBRARY[0];
+      let template = WORLD_EVENT_LIBRARY[templateIndex] || WORLD_EVENT_LIBRARY[0];
+      if (template.type === "insured-stash" && insuredStashCount >= 1) {
+        const alternatives = WORLD_EVENT_LIBRARY.filter((entry) => entry.type !== "insured-stash");
+        const alternativeIndex = Math.floor(this.seededValue(380 + index) * alternatives.length);
+        template = alternatives[alternativeIndex] || alternatives[0];
+      }
+      if (template.type === "insured-stash") insuredStashCount += 1;
       const x = Math.max(100, Math.min(this.width - 100, anchorX + Math.round((this.seededValue(340 + index) - 0.5) * 150)));
       const y = Math.max(100, Math.min(this.height - 100, anchorY + Math.round((this.seededValue(360 + index) - 0.5) * 160)));
       const id = `world-event-${index + 1}`;
@@ -482,6 +594,36 @@ export class ExpeditionWorldSystem {
     };
   }
 
+  isLocationKnown(location) {
+    return Boolean(
+      location
+      && (location.kind === "extraction" || location.known === true || location.discovered === true)
+    );
+  }
+
+  getNavigationTargetSnapshot(location, playerPosition = this.lastPlayerPosition || this.spawnPoint) {
+    if (!location) return null;
+    const known = this.isLocationKnown(location);
+    const snapshot = {
+      ...location,
+      known: location.kind === "extraction" ? true : Boolean(location.known),
+      discovered: Boolean(location.discovered),
+      distance: Math.round(this.getDistanceToLocation(
+        location.id,
+        Number(playerPosition?.x) || 0,
+        Number(playerPosition?.y) || 0,
+      )),
+    };
+    if (!known) {
+      snapshot.name = "未知信号";
+      snapshot.description = "尚未进入侦察范围，只能确认信号方向。";
+      snapshot.icon = "?";
+      snapshot.danger = "风险待侦察";
+      snapshot.color = "#ffd167";
+    }
+    return snapshot;
+  }
+
   findNearbyContainer(x, y, { locationId = this.activeLocationId } = {}) {
     return Array.from(this.containers.values())
       .filter((container) => !locationId || container.locationId === locationId)
@@ -556,10 +698,14 @@ export class ExpeditionWorldSystem {
       return { success: false, message: "该地点当前不可追踪" };
     }
     this.navigationTargetId = location.id;
-    const displayName = location.discovered || location.kind === "extraction"
-      ? location.name
-      : "未知信号";
-    return { success: true, message: `已追踪：${displayName}`, location: { ...location } };
+    const navigationTarget = this.getNavigationTargetSnapshot(location);
+    return {
+      success: true,
+      message: `已追踪：${navigationTarget.name}`,
+      location: { ...navigationTarget },
+      navigationTarget: { ...navigationTarget },
+      navigationTargetId: location.id,
+    };
   }
 
   consumeWorldEvent(locationId = this.nearbyLocationId) {
@@ -620,6 +766,7 @@ export class ExpeditionWorldSystem {
     }
     location.state = "engaged";
     location.discovered = true;
+    location.known = true;
     this.activeLocationId = location.id;
     this.navigationTargetId = location.id;
     const containers = this.createContainersForLocation(location);
@@ -641,6 +788,7 @@ export class ExpeditionWorldSystem {
     }
     location.state = "cleared";
     location.discovered = true;
+    location.known = true;
     this.activeLocationId = null;
     if (this.activeExtractionLocationId === location.id) this.activeExtractionLocationId = null;
     if (this.navigationTargetId === location.id) this.navigationTargetId = null;
@@ -876,10 +1024,7 @@ export class ExpeditionWorldSystem {
         ...activeContainerSearch,
         context: this.getContainerSearchContext(activeContainerSearch.id),
       } : null,
-      navigationTarget: navigationTarget ? {
-        ...navigationTarget,
-        distance: Math.round(this.getDistanceToLocation(navigationTarget.id, playerPosition.x, playerPosition.y)),
-      } : null,
+      navigationTarget: this.getNavigationTargetSnapshot(navigationTarget, playerPosition),
     };
   }
 
@@ -921,6 +1066,10 @@ export class ExpeditionWorldSystem {
       .filter((location) => location && typeof location.id === "string")
       .map((location) => [location.id, {
         ...location,
+        discovered: Boolean(location.discovered),
+        known: location.kind === "extraction"
+          ? true
+          : (typeof location.known === "boolean" ? location.known : Boolean(location.discovered)),
         effect: location.effect ? { ...location.effect } : undefined,
       }]));
     this.containers = new Map((Array.isArray(data.containers) ? data.containers : [])
@@ -952,9 +1101,15 @@ export class ExpeditionWorldSystem {
       : (this.locations.get(data.activeLocationId)?.kind === "extraction" ? data.activeLocationId : null);
     this.consumedWorldEvents = Math.max(0, Math.floor(Number(data.consumedWorldEvents) || 0));
     this.discoveryMilestones = new Set(Array.isArray(data.discoveryMilestones) ? data.discoveryMilestones : []);
-    this.obstacles = Array.isArray(data.obstacles) && data.obstacles.length > 0
-      ? data.obstacles.map((obstacle) => ({ ...obstacle }))
-      : this.buildRunObstacles();
+    if (Array.isArray(data.obstacles) && data.obstacles.length > 0) {
+      const savedObstacles = data.obstacles.map((obstacle) => ({ ...obstacle }));
+      // 合法旧存档保持原有地形，只有真正不存在东向通路时才使用安全兜底。
+      this.obstacles = this.hasNavigableChannelToEast(savedObstacles)
+        ? savedObstacles
+        : this.ensureNavigableObstacles(savedObstacles);
+    } else {
+      this.obstacles = this.buildRunObstacles();
+    }
     return { success: true, message: "远征世界已恢复" };
   }
 }

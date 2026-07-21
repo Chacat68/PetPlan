@@ -23,7 +23,7 @@ function loot(id, score) {
 
 function forceNode(run, type, depth = 1) {
   run.active = true;
-  run.phase = type === "camp" ? "camp" : type === "search" ? "search" : "combat";
+  run.phase = type === "camp" ? "camp" : ["search", "cache"].includes(type) ? "search" : "combat";
   run.currentNode = run.createNode(type, depth, 0);
   run.routeChoices = [];
 }
@@ -35,6 +35,9 @@ test("三种搜索方式分别服务速度、产量和品质", () => {
   assert.equal(quick.supplyCost, 0);
   assert.ok(thorough.lootMax > pet.lootMax);
   assert.equal(thorough.supplyCost, 1);
+  assert.equal(thorough.durationSeconds, 8);
+  assert.equal(thorough.threat, 10);
+  assert.equal(thorough.ambushChance, 0.2);
   assert.ok(pet.quality > quick.quality);
   assert.equal(pet.requiresPet, true);
 
@@ -47,6 +50,40 @@ test("三种搜索方式分别服务速度、产量和品质", () => {
   assert.equal(run.resolveSearch("quick").success, true, "快速搜索应是无补给时的低风险选项");
   assert.equal(run.getState().searchMetrics.timeSeconds, quick.durationSeconds);
   assert.equal(run.getState().searchProfiles.pet.role, pet.role);
+});
+
+test("多容器搜索按地点预算控制总产量，仔细搜刮价值高于宠物侦察", () => {
+  function searchContainers(type, mode, count, random = () => 0.99) {
+    const run = new ExpeditionRunSystem({ random, backpackCapacity: 8 });
+    run.startRun({ supplies: 8, backpackCapacity: 8 });
+    forceNode(run, type, 1);
+    for (let index = 0; index < count; index += 1) {
+      const started = run.beginSearch(mode, {
+        hasPet: true,
+        containerId: `${type}-${index + 1}`,
+        isLastContainer: index === count - 1,
+      });
+      assert.equal(started.success, true);
+      const completed = run.updateSearch(started.search.durationMs);
+      assert.equal(completed.success, true);
+      assert.equal(completed.ambushed, false);
+    }
+    return run;
+  }
+
+  const thoroughSearch = searchContainers("search", "thorough", 2);
+  const petSearch = searchContainers("search", "pet", 2);
+  const thoroughCache = searchContainers("cache", "thorough", 3);
+  const petCache = searchContainers("cache", "pet", 3);
+
+  assert.equal(thoroughSearch.backpack.length, 4, "普通点仔细搜刮最多产出 4 件");
+  assert.equal(petSearch.backpack.length, 2, "普通点宠物侦察稳定产出 2 件");
+  assert.equal(thoroughCache.backpack.length, 5, "密封仓库仔细搜刮最多产出 5 件");
+  assert.equal(petCache.backpack.length, 3, "密封仓库宠物侦察稳定产出 3 件");
+  assert.ok(
+    thoroughSearch.getBackpackRewards().score > petSearch.getBackpackRewards().score,
+    "相同品质下，仔细搜刮应以更多物品换取更高期望价值",
+  );
 });
 
 test("营地休整支付补给，直接离开保留资源并给予先手", () => {
@@ -156,7 +193,7 @@ test("活动局可保存恢复随机序列、世界事件与待选战利品", ()
   assert.deepEqual(restored.generateLoot(1), source.generateLoot(1), "恢复后随机序列应连续一致");
 });
 
-test("主动放弃的保底低于战败且保险物仍可带回", () => {
+test("主动止损的保底高于战败且保险物仍可带回", () => {
   function settle(reason) {
     const run = new ExpeditionRunSystem();
     run.startRun();
@@ -167,8 +204,12 @@ test("主动放弃的保底低于战败且保险物仍可带回", () => {
   }
   const abandoned = settle("abandoned");
   const defeated = settle("defeated");
-  assert.ok(abandoned.coins < defeated.coins);
-  assert.ok(abandoned.exp < defeated.exp);
+  assert.equal(abandoned.coins, 30);
+  assert.equal(abandoned.exp, 40);
+  assert.equal(defeated.coins, 10);
+  assert.equal(defeated.exp, 20);
+  assert.ok(abandoned.coins > defeated.coins);
+  assert.ok(abandoned.exp > defeated.exp);
   assert.equal(abandoned.abandonmentPenalty, true);
   assert.equal(abandoned.insuredLootRecovered, 1);
 });

@@ -22,22 +22,23 @@ export const SEARCH_PROFILES = Object.freeze({
   thorough: {
     id: "thorough",
     name: "仔细搜刮",
-    lootMin: 2,
-    lootMax: 3,
+    // 多容器地点按单个容器结算；普通点总计 2-4 件，密封仓库总计 3-5 件。
+    lootMin: 1,
+    lootMax: 2,
     quality: 2,
-    threat: 14,
-    ambushChance: 0.3,
-    supplyChance: 0.28,
-    durationSeconds: 12,
-    exposure: 4,
+    threat: 10,
+    ambushChance: 0.2,
+    supplyChance: 0.24,
+    durationSeconds: 8,
+    exposure: 3,
     supplyCost: 1,
     role: "消耗补给换取最大产量",
   },
   pet: {
     id: "pet",
     name: "宠物侦察",
-    lootMin: 2,
-    lootMax: 2,
+    lootMin: 1,
+    lootMax: 1,
     quality: 2,
     threat: 8,
     ambushChance: 0.1,
@@ -148,15 +149,15 @@ export const EXTRACTION_RULES = Object.freeze({
     id: "emergency",
     locationId: "emergency-extraction",
     name: "深区应急撤离点",
-    description: "无需折返入口，但至少深入 5 层、消耗 1 份补给，并承受更久更密集的守点。",
+    description: "无需折返入口，但至少深入 5 层、消耗 1 份补给，并承受略久且增援更密集的守点。",
     minDepth: 5,
     supplyCost: 1,
     threatCost: 12,
-    minDurationMs: 9000,
-    baseDurationMs: 11000,
-    threatDurationStepMs: 1800,
-    overpressureDurationStepMs: 100,
-    baseEnemyCount: 6,
+    minDurationMs: 8000,
+    baseDurationMs: 9000,
+    threatDurationStepMs: 1500,
+    overpressureDurationStepMs: 90,
+    baseEnemyCount: 5,
     threatPerEnemy: 12,
     overpressurePerEnemy: 10,
     reinforcementBaseMs: 3500,
@@ -492,9 +493,24 @@ export class ExpeditionRunSystem {
 
     const appliedBonuses = this.normalizeSearchBonuses(search.searchBonuses);
     const cacheBonus = this.currentNode.type === "cache" ? 1 : 0;
-    const lootCount = this.randomInt(profile.lootMin, profile.lootMax)
-      + cacheBonus
-      + appliedBonuses.lootCountBonus;
+    const isContainerSearch = Boolean(search.containerId);
+    const expectedContainerCount = cacheBonus ? 3 : 2;
+    let lootCount;
+    if (isContainerSearch) {
+      const requestedLoot = this.randomInt(profile.lootMin, profile.lootMax)
+        + appliedBonuses.lootCountBonus;
+      // 密封仓库最后一个容器最多给 1 件，避免三个容器叠加到 6 件以上；
+      // 其余容器最多 2 件，使普通搜索点稳定落在 2-4 件、仓库落在 3-5 件。
+      const contextualMax = cacheBonus && search.completeNodeOnFinish ? 1 : 2;
+      lootCount = Math.min(contextualMax, requestedLoot);
+    } else {
+      // 旧同步入口没有容器上下文，按整个地点一次性发放，保持旧调用仍可完成节点。
+      const requestedLoot = this.randomInt(
+        profile.lootMin * expectedContainerCount,
+        profile.lootMax * expectedContainerCount,
+      ) + appliedBonuses.lootCountBonus;
+      lootCount = Math.min(cacheBonus ? 5 : 4, requestedLoot);
+    }
     this.supplies -= profile.supplyCost;
     this.searchMetrics.timeSeconds += profile.durationSeconds;
     this.searchMetrics.exposure += profile.exposure;
@@ -811,8 +827,7 @@ export class ExpeditionRunSystem {
         overpressure: this.overpressure,
         enemyCount,
         eliteCount: Math.floor(this.threat / 35)
-          + Math.floor(this.overpressure / 25)
-          + (extractionType === "emergency" ? 1 : 0),
+          + Math.floor(this.overpressure / 25),
         reinforcementIntervalMs: Math.max(
           1200,
           rule.reinforcementBaseMs
@@ -832,7 +847,8 @@ export class ExpeditionRunSystem {
     const abandoned = !successful && ["abandoned", "retreated", "manual-abandon"].includes(reason);
     const protectedLoot = successful ? [] : this.getProtectedLoot();
     const protectedRewards = this.getBackpackRewards(protectedLoot);
-    const pendingRate = abandoned ? { coins: 0.12, exp: 0.2 } : { coins: 0.3, exp: 0.4 };
+    // 主动止损应优于被击败，避免玩家为了更高保底故意送死。
+    const pendingRate = abandoned ? { coins: 0.3, exp: 0.4 } : { coins: 0.1, exp: 0.2 };
     const extractedContractFragments = successful
       ? this.backpack.reduce((sum, item) => sum + (item.contractFragments || 0), 0)
       : protectedLoot.reduce((sum, item) => sum + (item.contractFragments || 0), 0);

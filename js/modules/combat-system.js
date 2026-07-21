@@ -149,7 +149,10 @@ export class CombatSystem {
         this.aimDirection = { x: 1, y: 0 };
         this.aimWorldPoint = null;
         this.firingHeld = false;
+        // shotCooldownTimer 作为旧存档/旧调用的活动武器镜像保留；
+        // 真正的射速约束记录在各 weaponState 上，切枪不能再清掉上一把枪的冷却。
         this.shotCooldownTimer = 0;
+        this.weaponSwapLockTimer = 0;
         this.manualAimEnabled = true;
         this.legacyAutoAimEnabled = false;
         this.firstStrikePending = false;
@@ -214,7 +217,11 @@ export class CombatSystem {
             extractionDecayMultiplier: 1.4,
             extractionReinforcementIntervalMs: 2600,
             supplyCooldownMs: 5000,
-            supplyCombatSafeWindowMs: 1100
+            supplyCombatSafeWindowMs: 1100,
+            weaponSwapLockMs: 350,
+            bossDamageRadius: 145,
+            bossWarningRadius: 150,
+            monsterHitboxVisualCoverage: 0.75
         };
 
         this.mapWidth = 750;
@@ -376,13 +383,45 @@ export class CombatSystem {
         if (result.moved && this.runSystem.activeSearch) {
             this.interruptSearch('movement');
         }
-        // 撤离在最小深度解锁后，玩家从任意路线节点返程都应承担移动暴露压力；
-        // 不能只在清完整张图后的 extraction-ready 阶段才开始计数。
-        if (result.moved && this.runSystem.canExtract?.()) {
+        // 返程压力只统计真正朝已解锁撤离点靠近的路程。
+        // 解锁判断刻意忽略 pendingLootChoice 等临时操作门槛，避免带着待选物品返程时绕过压力；
+        // 反向继续深入或尚未解锁任何撤离点时则不应被误算为返程。
+        if (result.moved && this.isMovementTowardUnlockedExtraction(
+            previousX,
+            previousY,
+            player.x,
+            player.y,
+            player
+        )) {
             this.updateReturnPressure(Math.hypot(player.x - previousX, player.y - previousY));
         }
         this.updateWorldAwareness();
         return result;
+    }
+
+    getUnlockedExtractionLocationsForReturnPressure() {
+        if (!this.runSystem.active) return [];
+        return ['entry', 'emergency'].flatMap(extractionType => {
+            const rule = this.runSystem.getExtractionRule?.(extractionType);
+            if (!rule || this.runSystem.depth < rule.minDepth) return [];
+            if ((Number(this.runSystem.supplies) || 0) < (Number(rule.supplyCost) || 0)) return [];
+            const location = this.worldSystem.getLocation?.(rule.locationId);
+            return location ? [location] : [];
+        });
+    }
+
+    isMovementTowardUnlockedExtraction(previousX, previousY, nextX, nextY, entity = this.playerSystem?.player) {
+        const targets = this.getUnlockedExtractionLocationsForReturnPressure();
+        if (targets.length === 0) return false;
+        const halfWidth = (Number(entity?.width) || 0) / 2;
+        const halfHeight = (Number(entity?.height) || 0) / 2;
+        const previousCenter = { x: previousX + halfWidth, y: previousY + halfHeight };
+        const nextCenter = { x: nextX + halfWidth, y: nextY + halfHeight };
+        return targets.some(location => {
+            const before = Math.hypot(previousCenter.x - location.x, previousCenter.y - location.y);
+            const after = Math.hypot(nextCenter.x - location.x, nextCenter.y - location.y);
+            return after < before - 0.01;
+        });
     }
 
     updateReturnPressure(distance) {
@@ -406,7 +445,8 @@ export class CombatSystem {
             {
                 magazine: weapon.magazineSize,
                 reserve: weapon.reserveAmmo,
-                reloadRemainingMs: 0
+                reloadRemainingMs: 0,
+                shotCooldownRemainingMs: 0
             }
         ]));
     }
@@ -416,6 +456,7 @@ export class CombatSystem {
         this.weaponStates = this.createFreshWeaponStates();
         this.firingHeld = false;
         this.shotCooldownTimer = 0;
+        this.weaponSwapLockTimer = 0;
         this.aimWorldPoint = null;
         this.aimDirection = { x: 1, y: 0 };
         return this.getWeaponState();
@@ -453,6 +494,7 @@ export class CombatSystem {
                 magazine: Math.max(0, Math.floor(Number(runtime.magazine) || 0)),
                 reserve: Math.max(0, Math.floor(Number(runtime.reserve) || 0)),
                 reloadRemainingMs: Math.max(0, Number(runtime.reloadRemainingMs) || 0),
+                shotCooldownRemainingMs: Math.max(0, Number(runtime.shotCooldownRemainingMs) || 0),
                 reloading: (Number(runtime.reloadRemainingMs) || 0) > 0,
                 available: allowedWeaponIds.has(id),
                 active: id === this.activeWeaponId
@@ -464,7 +506,9 @@ export class CombatSystem {
             firing: this.firingHeld,
             activeWeaponId: this.activeWeaponId,
             allowedWeaponIds: [...allowedWeaponIds],
-            shotCooldownMs: Math.max(0, this.shotCooldownTimer),
+            shotCooldownMs: Math.max(0, Number(this.weaponStates[this.activeWeaponId]?.shotCooldownRemainingMs) || 0),
+            swapLockRemainingMs: Math.max(0, this.weaponSwapLockTimer),
+            fireBlockedRemainingMs: this.getActiveFireBlockMs(),
             aimDirection: { ...this.aimDirection },
             aimWorldPoint: this.aimWorldPoint ? { ...this.aimWorldPoint } : null,
             weapons,
@@ -536,20 +580,46 @@ export class CombatSystem {
             return { success: false, message: '当前配装未携带该武器' };
         }
         if (weaponId === this.activeWeaponId) {
-            this.expeditionMetaSystem?.setWeaponMode?.(weaponId);
+            if (!this.runSystem.active && !this.expeditionMetaSystem?.getState?.()?.activeRaid) {
+                this.expeditionMetaSystem?.setWeaponMode?.(weaponId);
+            }
             return { success: true, message: `当前已装备${this.getWeaponConfig(weaponId).name}`, weapon: this.getWeaponState().active };
         }
+        const previousWeaponId = this.activeWeaponId;
+        const previousState = this.weaponStates[previousWeaponId];
+        const cancelledReload = (Number(previousState?.reloadRemainingMs) || 0) > 0;
+        if (previousState) previousState.reloadRemainingMs = 0;
         this.activeWeaponId = weaponId;
-        this.expeditionMetaSystem?.setWeaponMode?.(weaponId);
-        this.shotCooldownTimer = Math.min(this.shotCooldownTimer, 120);
+        // 出发前的模式选择属于配装；远征中的切换只改变当前手持模式，不能回写
+        // 局外配装或活动远征快照，否则“出发后锁定”会成为错误承诺。
+        if (!this.runSystem.active && !this.expeditionMetaSystem?.getState?.()?.activeRaid) {
+            this.expeditionMetaSystem?.setWeaponMode?.(weaponId);
+        }
+        // 每次真实切枪都需要完成举枪动作。各武器自己的射击冷却继续按真实时间推进，
+        // 因此来回切枪既不能缩短精确枪射速，也不能让非当前武器在后台换弹。
+        this.weaponSwapLockTimer = Math.max(
+            this.weaponSwapLockTimer,
+            Math.max(0, Number(this.config.weaponSwapLockMs) || 350)
+        );
+        this.cancelInactiveReloads();
+        this.syncLegacyShotCooldownTimer();
         this.notifyStateChange();
-        return { success: true, message: `已切换为${this.getWeaponConfig(weaponId).name}`, weapon: this.getWeaponState().active };
+        return {
+            success: true,
+            message: `已切换为${this.getWeaponConfig(weaponId).name}${cancelledReload ? '，原武器换弹已取消' : ''}`,
+            weapon: this.getWeaponState().active,
+            swapLockMs: this.weaponSwapLockTimer,
+            cancelledReload
+        };
     }
 
     reloadWeapon(weaponId = this.activeWeaponId) {
         const config = this.getWeaponConfig(weaponId);
         const state = this.weaponStates[weaponId];
         if (!config || !state) return { success: false, message: '未知武器' };
+        if (weaponId !== this.activeWeaponId) {
+            return { success: false, message: '只能为当前武器换弹' };
+        }
         if (state.reloadRemainingMs > 0) return { success: false, message: '正在换弹' };
         if (state.magazine >= config.magazineSize) return { success: false, message: '弹匣已满' };
         if (state.reserve <= 0) return { success: false, message: '没有备用弹药' };
@@ -560,8 +630,17 @@ export class CombatSystem {
 
     updateWeaponTimers(deltaTime) {
         const safeDelta = Math.max(0, Number(deltaTime) || 0);
-        this.shotCooldownTimer = Math.max(0, this.shotCooldownTimer - safeDelta);
+        this.weaponSwapLockTimer = Math.max(0, this.weaponSwapLockTimer - safeDelta);
         Object.entries(this.weaponStates).forEach(([weaponId, state]) => {
+            state.shotCooldownRemainingMs = Math.max(
+                0,
+                (Number(state.shotCooldownRemainingMs) || 0) - safeDelta
+            );
+            if (weaponId !== this.activeWeaponId) {
+                // 切走即取消换弹：不扣备用弹药，也不会在背包里自动完成。
+                state.reloadRemainingMs = 0;
+                return;
+            }
             if ((state.reloadRemainingMs || 0) <= 0) return;
             const previous = state.reloadRemainingMs;
             state.reloadRemainingMs = Math.max(0, previous - safeDelta);
@@ -573,6 +652,29 @@ export class CombatSystem {
                 state.reserve -= loaded;
             }
         });
+        this.syncLegacyShotCooldownTimer();
+    }
+
+    cancelInactiveReloads() {
+        Object.entries(this.weaponStates).forEach(([weaponId, state]) => {
+            if (weaponId !== this.activeWeaponId && state) state.reloadRemainingMs = 0;
+        });
+    }
+
+    syncLegacyShotCooldownTimer() {
+        this.shotCooldownTimer = Math.max(
+            0,
+            Number(this.weaponStates[this.activeWeaponId]?.shotCooldownRemainingMs) || 0
+        );
+        return this.shotCooldownTimer;
+    }
+
+    getActiveFireBlockMs() {
+        const weaponCooldown = Math.max(
+            0,
+            Number(this.weaponStates[this.activeWeaponId]?.shotCooldownRemainingMs) || 0
+        );
+        return Math.max(weaponCooldown, Math.max(0, Number(this.weaponSwapLockTimer) || 0));
     }
 
     updateWorldAwareness() {
@@ -1172,12 +1274,13 @@ export class CombatSystem {
         const target = this.monsters
             .map(monster => ({
                 monster,
+                hitbox: this.getMonsterHitbox(monster),
                 distance: Math.hypot(
                     point.x - (monster.x + monster.width / 2),
                     point.y - (monster.y + monster.height / 2)
                 )
             }))
-            .filter(item => item.distance <= Math.max(34, item.monster.width))
+            .filter(item => item.distance <= Math.max(34, item.hitbox.width / 2, item.hitbox.height / 2))
             .sort((a, b) => a.distance - b.distance)[0]?.monster;
         if (!target) return { success: false, message: '' };
         this.focusTargetId = target.id;
@@ -1309,7 +1412,11 @@ export class CombatSystem {
         this.encounterRewardsCommitted = false;
         this.encounterSpawnTimer = 0;
         this.attackTimer = 0;
+        Object.values(this.weaponStates).forEach(state => {
+            state.shotCooldownRemainingMs = 0;
+        });
         this.shotCooldownTimer = 0;
+        this.weaponSwapLockTimer = 0;
         this.firingHeld = false;
         this.firstStrikeBonus = Math.max(0, Math.min(1, Number(spec.playerAdvantage?.firstStrikeBonus) || 0));
         this.firstStrikePending = this.firstStrikeBonus > 0;
@@ -1419,7 +1526,7 @@ export class CombatSystem {
     updateAttack(deltaTime) {
         if (!this.playerSystem || this.isPaused) return;
         if (!this.legacyAutoAimEnabled) {
-            if (!this.firingHeld || this.shotCooldownTimer > 0) return;
+            if (!this.firingHeld || this.getActiveFireBlockMs() > 0) return;
             this.fireCurrentWeapon();
             return;
         }
@@ -1517,6 +1624,22 @@ export class CombatSystem {
         const weapon = this.getWeaponConfig();
         const state = this.weaponStates[this.activeWeaponId];
         if (!weapon || !state) return { success: false, code: 'invalid-weapon', message: '武器状态无效' };
+        if (this.weaponSwapLockTimer > 0) {
+            return {
+                success: false,
+                code: 'swapping',
+                message: '正在切换武器',
+                remainingMs: this.weaponSwapLockTimer
+            };
+        }
+        if ((Number(state.shotCooldownRemainingMs) || 0) > 0) {
+            return {
+                success: false,
+                code: 'cooldown',
+                message: '武器尚未完成射击循环',
+                remainingMs: state.shotCooldownRemainingMs
+            };
+        }
         if (state.reloadRemainingMs > 0) return { success: false, code: 'reloading', message: '正在换弹' };
         if (state.magazine <= 0) {
             const reload = this.reloadWeapon();
@@ -1575,7 +1698,8 @@ export class CombatSystem {
         }
 
         state.magazine -= 1;
-        this.shotCooldownTimer = weapon.fireIntervalMs * movementRatePenalty / attackSpeed;
+        state.shotCooldownRemainingMs = weapon.fireIntervalMs * movementRatePenalty / attackSpeed;
+        this.syncLegacyShotCooldownTimer();
         this.playerSystem.playAttackAnimation?.();
         return {
             success: true,
@@ -1640,6 +1764,41 @@ export class CombatSystem {
         return rawAttack * (1 + petAttackPercent / 100);
     }
 
+    getBossAreaAttackGeometry() {
+        const damageRadius = Math.max(1, Number(this.config.bossDamageRadius) || 145);
+        const warningRadius = Math.max(
+            damageRadius,
+            Number(this.config.bossWarningRadius) || 150
+        );
+        return { damageRadius, warningRadius };
+    }
+
+    getMonsterVisualScale(monster = {}) {
+        return monster.isBoss ? 2.05 : (monster.isElite ? 1.8 : 1.58);
+    }
+
+    getMonsterHitbox(monster = {}, padding = 0) {
+        const visualScale = this.getMonsterVisualScale(monster);
+        const coverage = Math.max(
+            0.5,
+            Math.min(1, Number(this.config.monsterHitboxVisualCoverage) || 0.75)
+        );
+        // 原始逻辑盒通常只覆盖放大后贴图的 49%~63%。命中盒至少保留原尺寸，
+        // 并扩展到可见贴图约 75%，让打中躯干外缘的弹道不再被判空。
+        const width = Math.max(Number(monster.width) || 0, (Number(monster.width) || 0) * visualScale * coverage);
+        const height = Math.max(Number(monster.height) || 0, (Number(monster.height) || 0) * visualScale * coverage);
+        const safePadding = Math.max(0, Number(padding) || 0);
+        const center = this.getEntityCenter(monster);
+        return {
+            x: center.x - width / 2 - safePadding,
+            y: center.y - height / 2 - safePadding,
+            width: width + safePadding * 2,
+            height: height + safePadding * 2,
+            visualScale,
+            coverage
+        };
+    }
+
     updateMonsters(deltaTime) {
         const dt = deltaTime / 1000;
         const hero = this.getHeroCenter();
@@ -1659,8 +1818,9 @@ export class CombatSystem {
                 if (previous > 0 && monster.bossTelegraphTimer <= 0 && monster.bossTarget) {
                     const target = monster.bossTarget;
                     const currentHero = this.getHeroCenter();
-                    this.explosions.push({ x: target.x, y: target.y, radius: 145, life: 520, color: '#ff7043' });
-                    if (Math.hypot(currentHero.x - target.x, currentHero.y - target.y) <= 145) {
+                    const { damageRadius } = this.getBossAreaAttackGeometry();
+                    this.explosions.push({ x: target.x, y: target.y, radius: damageRadius, life: 520, color: '#ff7043' });
+                    if (Math.hypot(currentHero.x - target.x, currentHero.y - target.y) <= damageRadius) {
                         this.damageHero(monster.attack * 1.25, monster);
                     }
                     monster.bossTarget = null;
@@ -1934,16 +2094,20 @@ export class CombatSystem {
 
     findProjectileMonsterHit(start, end, radius = 5) {
         return this.monsters
-            .filter(monster => monster.hp > 0 && this.segmentIntersectsRect(
-                start.x,
-                start.y,
-                end.x,
-                end.y,
-                monster.x - radius,
-                monster.y - radius,
-                monster.width + radius * 2,
-                monster.height + radius * 2
-            ))
+            .filter(monster => {
+                if (monster.hp <= 0) return false;
+                const hitbox = this.getMonsterHitbox(monster, radius);
+                return this.segmentIntersectsRect(
+                    start.x,
+                    start.y,
+                    end.x,
+                    end.y,
+                    hitbox.x,
+                    hitbox.y,
+                    hitbox.width,
+                    hitbox.height
+                );
+            })
             .sort((left, right) => {
                 const leftCenter = this.getEntityCenter(left);
                 const rightCenter = this.getEntityCenter(right);
@@ -2995,15 +3159,29 @@ export class CombatSystem {
 
     renderMonster(ctx, monster) {
         if (monster.bossTelegraphTimer > 0 && monster.bossTarget) {
-            const pulse = 0.72 + Math.sin(Date.now() / 70) * 0.18;
+            const pulse = (Math.sin(Date.now() / 70) + 1) / 2;
+            const { warningRadius } = this.getBossAreaAttackGeometry();
             ctx.save();
-            ctx.fillStyle = `rgba(255, 80, 55, ${0.12 + pulse * 0.1})`;
+            ctx.fillStyle = `rgba(255, 80, 55, ${0.1 + pulse * 0.08})`;
             ctx.strokeStyle = '#ff7043';
             ctx.lineWidth = 4;
             ctx.setLineDash([12, 8]);
             ctx.beginPath();
-            ctx.arc(monster.bossTarget.x, monster.bossTarget.y, 145 * pulse, 0, Math.PI * 2);
+            // 外圈始终准确标出安全边界；脉冲只作用于透明度和内部提示圈。
+            ctx.arc(monster.bossTarget.x, monster.bossTarget.y, warningRadius, 0, Math.PI * 2);
             ctx.fill();
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.strokeStyle = `rgba(255, 178, 120, ${0.35 + pulse * 0.45})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(
+                monster.bossTarget.x,
+                monster.bossTarget.y,
+                Math.max(1, warningRadius - 24 + pulse * 12),
+                0,
+                Math.PI * 2
+            );
             ctx.stroke();
             ctx.restore();
         }
@@ -3021,7 +3199,7 @@ export class CombatSystem {
         const image = this.monsterImages[monster.templateId];
         const animationState = monster.stunTimer > 0 ? 'idle' : monster.combatState;
         const sheet = this.getMonsterStateSheet(monster.templateId, animationState);
-        const visualScale = monster.isBoss ? 2.05 : (monster.isElite ? 1.8 : 1.58);
+        const visualScale = this.getMonsterVisualScale(monster);
         const renderWidth = monster.width * visualScale;
         const renderHeight = monster.height * visualScale;
         const renderX = monster.x + monster.width / 2 - renderWidth / 2;
@@ -3213,7 +3391,12 @@ export class CombatSystem {
             weaponStates: Object.fromEntries(Object.entries(this.weaponStates).map(([id, state]) => [id, { ...state }])),
             aimDirection: { ...this.aimDirection },
             aimWorldPoint: this.aimWorldPoint ? { ...this.aimWorldPoint } : null,
-            shotCooldownTimer: this.shotCooldownTimer,
+            // 旧字段继续写入，便于旧客户端读取当前武器冷却；新客户端以 weaponStates 为准。
+            shotCooldownTimer: Math.max(
+                0,
+                Number(this.weaponStates[this.activeWeaponId]?.shotCooldownRemainingMs) || 0
+            ),
+            weaponSwapLockTimer: Math.max(0, Number(this.weaponSwapLockTimer) || 0),
             legacyAutoAimEnabled: this.legacyAutoAimEnabled,
             firstStrikePending: this.firstStrikePending,
             firstStrikeBonus: this.firstStrikeBonus,
@@ -3301,16 +3484,25 @@ export class CombatSystem {
         this.bullets = Array.isArray(active.bullets) ? active.bullets.map(bullet => ({ ...bullet })) : [];
         const restoredWeaponId = String(active.activeWeaponId || '');
         this.activeWeaponId = this.getWeaponConfig(restoredWeaponId) ? restoredWeaponId : this.weaponOrder[0];
+        const legacyShotCooldown = Math.max(0, Number(active.shotCooldownTimer) || 0);
         if (active.weaponStates && typeof active.weaponStates === 'object') {
             this.weaponOrder.forEach(weaponId => {
                 const config = this.getWeaponConfig(weaponId);
                 const saved = active.weaponStates[weaponId] || {};
+                const hasPerWeaponCooldown = Object.prototype.hasOwnProperty.call(saved, 'shotCooldownRemainingMs');
                 this.weaponStates[weaponId] = {
                     magazine: Math.max(0, Math.min(config.magazineSize, Math.floor(Number(saved.magazine) || 0))),
                     reserve: Math.max(0, Math.floor(Number(saved.reserve) || 0)),
-                    reloadRemainingMs: Math.max(0, Number(saved.reloadRemainingMs) || 0)
+                    reloadRemainingMs: weaponId === this.activeWeaponId
+                        ? Math.max(0, Number(saved.reloadRemainingMs) || 0)
+                        : 0,
+                    shotCooldownRemainingMs: hasPerWeaponCooldown
+                        ? Math.max(0, Number(saved.shotCooldownRemainingMs) || 0)
+                        : weaponId === this.activeWeaponId ? legacyShotCooldown : 0
                 };
             });
+        } else {
+            this.weaponStates[this.activeWeaponId].shotCooldownRemainingMs = legacyShotCooldown;
         }
         const aimX = Number(active.aimDirection?.x);
         const aimY = Number(active.aimDirection?.y);
@@ -3321,7 +3513,9 @@ export class CombatSystem {
             this.aimWorldPoint = { x: Number(active.aimWorldPoint.x), y: Number(active.aimWorldPoint.y) };
         }
         this.firingHeld = false;
-        this.shotCooldownTimer = Math.max(0, Number(active.shotCooldownTimer) || 0);
+        this.weaponSwapLockTimer = Math.max(0, Number(active.weaponSwapLockTimer) || 0);
+        this.cancelInactiveReloads();
+        this.syncLegacyShotCooldownTimer();
         this.legacyAutoAimEnabled = Boolean(active.legacyAutoAimEnabled);
         this.manualAimEnabled = !this.legacyAutoAimEnabled;
         this.firstStrikePending = Boolean(active.firstStrikePending);

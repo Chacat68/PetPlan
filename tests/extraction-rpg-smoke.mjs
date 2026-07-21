@@ -266,7 +266,7 @@ test("宠物探索天赋只强化匹配的搜索方式并受规则上限约束",
   });
 
   assert.equal(searchResult.success, true);
-  assert.equal(searchResult.gainedLoot.length, 2, "额外战利品数量应封顶为 1");
+  assert.equal(searchResult.gainedLoot.length, 3, "旧同步入口按整个普通地点 2 件基础产量结算，额外数量仍封顶为 1");
   assert.equal(run.getState().threat, 0, "威胁减免应在应用后保持非负");
   assert.equal(searchResult.supplyFound, true);
   assert.equal(searchResult.ambushed, false);
@@ -423,16 +423,16 @@ test("CombatSystem 失败仅发放保底收益且重复失败不会再次发奖"
   const firstSettlement = combat.getBattleState().settlement;
   assert.equal(firstSettlement.extracted, false);
   assert.equal(firstSettlement.reason, "defeated");
-  assert.equal(firstSettlement.coins, 30);
+  assert.equal(firstSettlement.coins, 10);
   assert.equal(firstSettlement.crystals, 0);
-  assert.equal(firstSettlement.exp, 22, "失败经验保留后应应用领地经验加成");
-  assert.deepEqual(resourceTotals, { coins: 30, crystals: 0 });
-  assert.equal(experience.total, 22);
+  assert.equal(firstSettlement.exp, 11, "战败经验保留后应应用领地经验加成");
+  assert.deepEqual(resourceTotals, { coins: 10, crystals: 0 });
+  assert.equal(experience.total, 11);
   assert.equal(combat.meta.losses, 1);
 
   const secondSettlement = combat.finishExpedition(false, "duplicate-call");
   assert.deepEqual(secondSettlement, firstSettlement);
-  assert.deepEqual(resourceTotals, { coins: 30, crystals: 0 });
-  assert.equal(experience.total, 22);
+  assert.deepEqual(resourceTotals, { coins: 10, crystals: 0 });
+  assert.equal(experience.total, 11);
   assert.equal(combat.meta.losses, 1);
 });
