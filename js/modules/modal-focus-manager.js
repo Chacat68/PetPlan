@@ -14,6 +14,7 @@ export class ModalFocusManager {
   constructor() {
     this.activeModal = null;
     this.restoreTarget = null;
+    this.onChange = null;
     this.handleKeydown = this.handleKeydown.bind(this);
     this.isBound = false;
     this.bind();
@@ -35,6 +36,7 @@ export class ModalFocusManager {
     }
 
     this.activeModal = modal;
+    this.notifyChange();
     const initialFocus =
       typeof initialFocusSelector === "string"
         ? modal.querySelector(initialFocusSelector)
@@ -46,6 +48,7 @@ export class ModalFocusManager {
     if (modal && this.activeModal !== modal) return;
 
     this.activeModal = null;
+    this.notifyChange();
     const restoreTarget = this.restoreTarget;
     this.restoreTarget = null;
     if (restoreTarget?.isConnected) {
@@ -59,6 +62,19 @@ export class ModalFocusManager {
     this.isBound = false;
     this.activeModal = null;
     this.restoreTarget = null;
+    this.onChange = null;
+  }
+
+  setOnChange(callback) {
+    this.onChange = typeof callback === "function" ? callback : null;
+  }
+
+  notifyChange() {
+    try {
+      this.onChange?.(this.activeModal);
+    } catch (error) {
+      console.warn("[ModalFocusManager] 状态回调失败:", error);
+    }
   }
 
   handleKeydown(event) {

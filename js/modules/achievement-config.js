@@ -1,3 +1,5 @@
+import { EXPEDITION_MILESTONE_REWARD_CONFIG } from "./progression-config.js?v=expedition-milestones-20260721a";
+
 export const ACHIEVEMENT_CATEGORIES = Object.freeze([
   Object.freeze({
     id: "all",
@@ -172,6 +174,16 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     target: 10,
     reward: { rubies: 100 },
   }),
+  ...EXPEDITION_MILESTONE_REWARD_CONFIG.map((milestone) => defineAchievement({
+    id: milestone.id,
+    category: "expedition",
+    metric: milestone.metric,
+    icon: milestone.icon,
+    title: milestone.title,
+    desc: milestone.desc,
+    target: milestone.target,
+    reward: { rubies: milestone.rubies },
+  })),
   defineAchievement({
     id: "pet_first",
     category: "companion",
@@ -201,6 +213,16 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     desc: "曾同时上阵 3 只宠物",
     target: 3,
     reward: { rubies: 30 },
+  }),
+  defineAchievement({
+    id: "expedition_pet_team",
+    category: "companion",
+    metric: "maxExpeditionPetCount",
+    icon: "P",
+    title: "伙伴远征队",
+    desc: "曾以 3 只宠物的完整编队成功撤离",
+    target: 3,
+    reward: { rubies: 80 },
   }),
   defineAchievement({
     id: "pet_friendship_40",

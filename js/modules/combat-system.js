@@ -4,8 +4,8 @@
  * ExpeditionRunSystem 负责路线和结算，本类负责战斗实体、主动技能与 Canvas 渲染。
  */
 
-import { ExpeditionRunSystem } from './expedition-run-system.js?v=pet-loop-20260713a';
-import { ExpeditionWorldSystem } from './expedition-world-system.js?v=world-exploration-20260712b';
+import { ExpeditionRunSystem } from './expedition-run-system.js?v=duckov-phase1-20260721b';
+import { ExpeditionWorldSystem } from './expedition-world-system.js?v=duckov-phase1-20260721b';
 import { CameraSystem } from './camera-system.js?v=world-exploration-20260712b';
 import { TargetingSystem } from './targeting-system.js?v=tower-defense-20260710b';
 
@@ -22,6 +22,72 @@ const PET_ROLE_COLORS = Object.freeze({
     light: '#fff4a8',
     dark: '#c38cff',
     default: '#ffd167'
+});
+
+/**
+ * 远征武器的局内基准配置。
+ *
+ * 武器伤害由 baseDamage 主导，旧版永久 attack 只经过对数软缩放后参与，
+ * 避免高等级存档把所有早期敌人压缩成一次自动攻击。
+ */
+export const EXPEDITION_WEAPON_CONFIGS = Object.freeze({
+    rifle: Object.freeze({
+        id: 'rifle',
+        name: '巡林步枪',
+        category: 'rifle',
+        magazineSize: 24,
+        reserveAmmo: 96,
+        reloadMs: 1450,
+        fireIntervalMs: 145,
+        bulletSpeed: 760,
+        range: 610,
+        baseDamage: 12,
+        attributeScaling: 0.7,
+        spreadDegrees: 2.2,
+        movingSpreadDegrees: 6.5,
+        movingDamageMultiplier: 0.9,
+        movingFireIntervalMultiplier: 1.08,
+        pellets: 1,
+        color: '#ffd167'
+    }),
+    shotgun: Object.freeze({
+        id: 'shotgun',
+        name: '拓荒霰弹枪',
+        category: 'shotgun',
+        magazineSize: 6,
+        reserveAmmo: 30,
+        reloadMs: 1950,
+        fireIntervalMs: 690,
+        bulletSpeed: 650,
+        range: 315,
+        baseDamage: 4.2,
+        attributeScaling: 0.18,
+        spreadDegrees: 10,
+        movingSpreadDegrees: 17,
+        movingDamageMultiplier: 0.82,
+        movingFireIntervalMultiplier: 1.16,
+        pellets: 6,
+        color: '#ffb36b'
+    }),
+    marksman: Object.freeze({
+        id: 'marksman',
+        name: '哨卫精确枪',
+        category: 'marksman',
+        magazineSize: 5,
+        reserveAmmo: 25,
+        reloadMs: 2250,
+        fireIntervalMs: 920,
+        bulletSpeed: 1040,
+        range: 880,
+        baseDamage: 20,
+        attributeScaling: 0.75,
+        spreadDegrees: 0.65,
+        movingSpreadDegrees: 4.8,
+        movingDamageMultiplier: 0.76,
+        movingFireIntervalMultiplier: 1.28,
+        pellets: 1,
+        color: '#72d7ff'
+    })
 });
 
 export class CombatSystem {
@@ -43,6 +109,7 @@ export class CombatSystem {
         this.lastNearbyLocationId = null;
         this.worldRevision = 0;
         this.runPreparation = { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
+        this.runLoadoutEffects = { armorDefense: 0, petGuard: 0, consumableSupplies: 0, consumed: [] };
 
         this.monsters = [];
         this.bullets = [];
@@ -58,8 +125,35 @@ export class CombatSystem {
         this.attackTimer = 0;
         this.uiNotifyTimer = 0;
         this.extractionTimer = 0;
+        this.extractionTotalDuration = 0;
+        this.extractionOutOfZoneTimer = 0;
+        this.extractionReinforcementTimer = 0;
+        this.extractionReinforcementIntervalMs = 0;
         this.guardTimer = 0;
+        this.supplyCooldownTimer = 0;
+        this.timeSinceDamage = Infinity;
+        this.runRegenTimer = 0;
+        this.runDamageTaken = 0;
+        this.returnPressure = { distance: 0, level: 0, triggers: 0 };
+        this.petSquadSnapshot = null;
+        this.petGuardHp = 0;
+        this.petGuardMaxHp = 0;
+        this.petRescueUsed = false;
+        this.petRescueInvulnerabilityTimer = 0;
+        this.runBossKills = 0;
+        this.runEliteKills = 0;
         this.focusTargetId = null;
+        this.weaponOrder = Object.keys(EXPEDITION_WEAPON_CONFIGS);
+        this.activeWeaponId = this.weaponOrder[0];
+        this.weaponStates = this.createFreshWeaponStates();
+        this.aimDirection = { x: 1, y: 0 };
+        this.aimWorldPoint = null;
+        this.firingHeld = false;
+        this.shotCooldownTimer = 0;
+        this.manualAimEnabled = true;
+        this.legacyAutoAimEnabled = false;
+        this.firstStrikePending = false;
+        this.firstStrikeBonus = 0;
 
         this.monsterTemplates = [
             {
@@ -70,12 +164,14 @@ export class CombatSystem {
             {
                 id: 'bat', name: '疾风蝙蝠', image: 'images/monsters/bat_table.png',
                 baseHp: 27, baseAttack: 8, speed: 82, coinReward: 11,
-                crystalReward: 0, expReward: 7, size: 31, attackInterval: 950
+                crystalReward: 0, expReward: 7, size: 31, attackInterval: 1250,
+                combatStyle: 'ranged', rangedRange: 280
             },
             {
                 id: 'goblin', name: '哥布林', image: 'images/monsters/goblin_table.png',
                 baseHp: 46, baseAttack: 10, speed: 62, coinReward: 14,
-                crystalReward: 0, expReward: 9, size: 36, attackInterval: 1120
+                crystalReward: 0, expReward: 9, size: 36, attackInterval: 1120,
+                combatStyle: 'charger'
             },
             {
                 id: 'skeleton', name: '重甲骷髅', image: 'images/monsters/skeleton_table.png',
@@ -85,12 +181,14 @@ export class CombatSystem {
             {
                 id: 'demon', name: '深渊恶魔', image: 'images/monsters/demon_table.png',
                 baseHp: 112, baseAttack: 19, speed: 48, coinReward: 32,
-                crystalReward: 2, expReward: 24, size: 46, attackInterval: 1180
+                crystalReward: 2, expReward: 24, size: 46, attackInterval: 1420,
+                combatStyle: 'ranged', rangedRange: 330
             },
             {
                 id: 'dragon', name: '核心守卫', image: 'images/monsters/dragon_table.png',
                 baseHp: 560, baseAttack: 45, speed: 35, coinReward: 150,
-                crystalReward: 10, expReward: 120, size: 64, attackInterval: 1450, isBoss: true
+                crystalReward: 10, expReward: 120, size: 64, attackInterval: 1550,
+                isBoss: true, combatStyle: 'boss'
             }
         ];
 
@@ -106,9 +204,17 @@ export class CombatSystem {
             spawnInterval: 460,
             heroEngageRange: 64,
             skillGuardReduction: 0.42,
-            heroMoveSpeed: 235,
-            heroAttackRange: 520,
-            petAcquireRange: 430
+            heroMoveSpeed: 174,
+            heroAttackRange: 475,
+            heroMovingAttackRange: 390,
+            movingAttackIntervalMultiplier: 1.75,
+            movingDamageMultiplier: 0.72,
+            petAcquireRange: 430,
+            extractionOutOfZoneGraceMs: 750,
+            extractionDecayMultiplier: 1.4,
+            extractionReinforcementIntervalMs: 2600,
+            supplyCooldownMs: 5000,
+            supplyCombatSafeWindowMs: 1100
         };
 
         this.mapWidth = 750;
@@ -117,6 +223,7 @@ export class CombatSystem {
         this.resourceSystem = null;
         this.territorySystem = null;
         this.petSystem = null;
+        this.expeditionMetaSystem = null;
         this.onStateChange = null;
         this.skillCooldowns = new Map();
 
@@ -127,9 +234,17 @@ export class CombatSystem {
         this.battleInitialized = false;
         this.meta = {
             bestDepth: 0,
+            bestExtractedDepth: 0,
             extractions: 0,
-            losses: 0
+            losses: 0,
+            bossKills: 0,
+            flawlessExtractions: 0,
+            bestValue: 0,
+            maxExpeditionPetCount: 0,
+            contractFragments: 0,
+            deepMaterials: 0
         };
+        this.runSnapshot = null;
 
         console.log('[CombatSystem] 宠物远征模式初始化完成');
     }
@@ -184,6 +299,10 @@ export class CombatSystem {
         this.petSystem = petSystem;
     }
 
+    setExpeditionMetaSystem(expeditionMetaSystem) {
+        this.expeditionMetaSystem = expeditionMetaSystem || null;
+    }
+
     setOnStateChange(callback) {
         this.onStateChange = typeof callback === 'function' ? callback : null;
     }
@@ -212,7 +331,7 @@ export class CombatSystem {
     canMoveHero() {
         return Boolean(
             this.runSystem.active &&
-            ['route', 'combat', 'extraction-ready', 'extracting'].includes(this.runSystem.phase)
+            ['route', 'search', 'combat', 'extraction-ready', 'extracting'].includes(this.runSystem.phase)
         );
     }
 
@@ -242,15 +361,218 @@ export class CombatSystem {
         }
 
         const safeDelta = Math.max(0, Math.min(Number(deltaTime) || 0, 100));
-        const speed = this.config.heroMoveSpeed + (player.attackSpeed || 1) * 12;
+        // 攻速不再大幅转化为移动速度，避免成长后重新形成永久风筝。
+        const attackSpeed = this.runSnapshot?.player?.attackSpeed ?? player.attackSpeed ?? 1;
+        const petMoveMultiplier = 1 + Math.max(0, Number(this.petSquadSnapshot?.auras?.moveSpeedPercent) || 0) / 100;
+        const speed = (this.config.heroMoveSpeed + Math.min(24, Math.max(0, attackSpeed - 1) * 5)) * petMoveMultiplier;
         const scale = (speed * safeDelta) / 1000;
+        const previousX = player.x;
+        const previousY = player.y;
         const result = this.worldSystem.moveEntity(
             player,
             this.movementInput.x * scale,
             this.movementInput.y * scale
         );
+        if (result.moved && this.runSystem.activeSearch) {
+            this.interruptSearch('movement');
+        }
+        // 撤离在最小深度解锁后，玩家从任意路线节点返程都应承担移动暴露压力；
+        // 不能只在清完整张图后的 extraction-ready 阶段才开始计数。
+        if (result.moved && this.runSystem.canExtract?.()) {
+            this.updateReturnPressure(Math.hypot(player.x - previousX, player.y - previousY));
+        }
         this.updateWorldAwareness();
         return result;
+    }
+
+    updateReturnPressure(distance) {
+        const relief = Math.max(0, Number(this.runSystem.worldEventState?.returnPressureReduction) || 0);
+        const stealth = Math.max(0, Number(this.runSystem.stealthCharges) || 0);
+        const multiplier = Math.max(0.35, 1 - relief / 100 - stealth * 0.12);
+        this.returnPressure.distance += Math.max(0, distance) * multiplier;
+        this.returnPressure.level = Math.min(100, Math.floor(this.returnPressure.distance / 12));
+        const nextTrigger = (this.returnPressure.triggers + 1) * 420;
+        if (this.returnPressure.distance >= nextTrigger && this.returnPressure.triggers < 3) {
+            this.returnPressure.triggers += 1;
+            const threatGain = 3 + this.returnPressure.triggers * 2;
+            this.runSystem.addThreat?.(threatGain);
+            this.addBannerText(`返程巡逻警戒：威胁 +${threatGain}`, '#ffb36b');
+        }
+    }
+
+    createFreshWeaponStates() {
+        return Object.fromEntries(Object.values(EXPEDITION_WEAPON_CONFIGS).map(weapon => [
+            weapon.id,
+            {
+                magazine: weapon.magazineSize,
+                reserve: weapon.reserveAmmo,
+                reloadRemainingMs: 0
+            }
+        ]));
+    }
+
+    resetWeaponLoadout() {
+        this.activeWeaponId = this.weaponOrder[0];
+        this.weaponStates = this.createFreshWeaponStates();
+        this.firingHeld = false;
+        this.shotCooldownTimer = 0;
+        this.aimWorldPoint = null;
+        this.aimDirection = { x: 1, y: 0 };
+        return this.getWeaponState();
+    }
+
+    getWeaponConfig(weaponId = this.activeWeaponId) {
+        return EXPEDITION_WEAPON_CONFIGS[weaponId] || null;
+    }
+
+    getEquippedWeaponProfile() {
+        const metaState = this.expeditionMetaSystem?.getState?.();
+        return metaState?.activeRaid?.loadoutSnapshot?.mainWeapon
+            || metaState?.loadout?.mainWeapon
+            || null;
+    }
+
+    getAllowedWeaponIds() {
+        const profile = this.getEquippedWeaponProfile();
+        if (!profile) return [...this.weaponOrder];
+        const configured = Array.isArray(profile.combatWeaponIds) && profile.combatWeaponIds.length
+            ? profile.combatWeaponIds
+            : [profile.combatWeaponId];
+        const allowed = [...new Set(configured.map(String))]
+            .filter(weaponId => this.getWeaponConfig(weaponId));
+        return allowed.length ? allowed : [this.weaponOrder[0]];
+    }
+
+    getWeaponState() {
+        const allowedWeaponIds = new Set(this.getAllowedWeaponIds());
+        const weapons = this.weaponOrder.map(id => {
+            const config = this.getWeaponConfig(id);
+            const runtime = this.weaponStates[id] || {};
+            return {
+                ...config,
+                magazine: Math.max(0, Math.floor(Number(runtime.magazine) || 0)),
+                reserve: Math.max(0, Math.floor(Number(runtime.reserve) || 0)),
+                reloadRemainingMs: Math.max(0, Number(runtime.reloadRemainingMs) || 0),
+                reloading: (Number(runtime.reloadRemainingMs) || 0) > 0,
+                available: allowedWeaponIds.has(id),
+                active: id === this.activeWeaponId
+            };
+        });
+        return {
+            manualAim: this.manualAimEnabled,
+            legacyAutoAim: this.legacyAutoAimEnabled,
+            firing: this.firingHeld,
+            activeWeaponId: this.activeWeaponId,
+            allowedWeaponIds: [...allowedWeaponIds],
+            shotCooldownMs: Math.max(0, this.shotCooldownTimer),
+            aimDirection: { ...this.aimDirection },
+            aimWorldPoint: this.aimWorldPoint ? { ...this.aimWorldPoint } : null,
+            weapons,
+            active: weapons.find(weapon => weapon.active) || null
+        };
+    }
+
+    setAimWorldPosition(x, y, { screenSpace = false } = {}) {
+        const safeX = Number(x);
+        const safeY = Number(y);
+        if (!Number.isFinite(safeX) || !Number.isFinite(safeY)) {
+            return { success: false, message: '瞄准坐标无效' };
+        }
+        const point = screenSpace ? this.screenToWorld(safeX, safeY) : { x: safeX, y: safeY };
+        const origin = this.getHeroCenter();
+        const dx = point.x - origin.x;
+        const dy = point.y - origin.y;
+        const length = Math.hypot(dx, dy);
+        if (length <= 0.001) return { success: false, message: '瞄准方向无效' };
+        this.aimWorldPoint = { x: point.x, y: point.y };
+        this.aimDirection = { x: dx / length, y: dy / length };
+        return { success: true, point: { ...this.aimWorldPoint }, direction: { ...this.aimDirection } };
+    }
+
+    setAimScreenPosition(x, y) {
+        return this.setAimWorldPosition(x, y, { screenSpace: true });
+    }
+
+    setAimDirection(x, y) {
+        const safeX = Number(x);
+        const safeY = Number(y);
+        const length = Math.hypot(safeX, safeY);
+        if (!Number.isFinite(length) || length <= 0.001) {
+            return { success: false, message: '瞄准方向无效' };
+        }
+        this.aimDirection = { x: safeX / length, y: safeY / length };
+        this.aimWorldPoint = null;
+        return { success: true, direction: { ...this.aimDirection } };
+    }
+
+    setFiring(held = false) {
+        this.firingHeld = Boolean(held);
+        return { success: true, firing: this.firingHeld };
+    }
+
+    startFiring() {
+        return this.setFiring(true);
+    }
+
+    stopFiring() {
+        return this.setFiring(false);
+    }
+
+    setLegacyAutoAim(enabled = false) {
+        this.legacyAutoAimEnabled = Boolean(enabled);
+        this.manualAimEnabled = !this.legacyAutoAimEnabled;
+        if (this.legacyAutoAimEnabled) this.firingHeld = false;
+        return { success: true, enabled: this.legacyAutoAimEnabled };
+    }
+
+    switchWeapon(weaponIdOrIndex) {
+        const weaponId = Number.isInteger(weaponIdOrIndex)
+            ? this.weaponOrder[weaponIdOrIndex]
+            : String(weaponIdOrIndex || '');
+        if (!this.getWeaponConfig(weaponId)) {
+            return { success: false, message: '未知武器' };
+        }
+        if (!this.getAllowedWeaponIds().includes(weaponId)) {
+            return { success: false, message: '当前配装未携带该武器' };
+        }
+        if (weaponId === this.activeWeaponId) {
+            this.expeditionMetaSystem?.setWeaponMode?.(weaponId);
+            return { success: true, message: `当前已装备${this.getWeaponConfig(weaponId).name}`, weapon: this.getWeaponState().active };
+        }
+        this.activeWeaponId = weaponId;
+        this.expeditionMetaSystem?.setWeaponMode?.(weaponId);
+        this.shotCooldownTimer = Math.min(this.shotCooldownTimer, 120);
+        this.notifyStateChange();
+        return { success: true, message: `已切换为${this.getWeaponConfig(weaponId).name}`, weapon: this.getWeaponState().active };
+    }
+
+    reloadWeapon(weaponId = this.activeWeaponId) {
+        const config = this.getWeaponConfig(weaponId);
+        const state = this.weaponStates[weaponId];
+        if (!config || !state) return { success: false, message: '未知武器' };
+        if (state.reloadRemainingMs > 0) return { success: false, message: '正在换弹' };
+        if (state.magazine >= config.magazineSize) return { success: false, message: '弹匣已满' };
+        if (state.reserve <= 0) return { success: false, message: '没有备用弹药' };
+        state.reloadRemainingMs = config.reloadMs;
+        this.notifyStateChange();
+        return { success: true, message: `${config.name}开始换弹`, reloadMs: config.reloadMs };
+    }
+
+    updateWeaponTimers(deltaTime) {
+        const safeDelta = Math.max(0, Number(deltaTime) || 0);
+        this.shotCooldownTimer = Math.max(0, this.shotCooldownTimer - safeDelta);
+        Object.entries(this.weaponStates).forEach(([weaponId, state]) => {
+            if ((state.reloadRemainingMs || 0) <= 0) return;
+            const previous = state.reloadRemainingMs;
+            state.reloadRemainingMs = Math.max(0, previous - safeDelta);
+            if (previous > 0 && state.reloadRemainingMs <= 0) {
+                const config = this.getWeaponConfig(weaponId);
+                const needed = Math.max(0, config.magazineSize - state.magazine);
+                const loaded = Math.min(needed, state.reserve);
+                state.magazine += loaded;
+                state.reserve -= loaded;
+            }
+        });
     }
 
     updateWorldAwareness() {
@@ -270,9 +592,12 @@ export class CombatSystem {
     syncWorldWithRunState() {
         const run = this.runSystem.getState();
         this.worldSystem.syncRouteChoices(run.routeChoices);
-        this.worldSystem.setExtractionUnlocked(run.depth >= run.minExtractionDepth);
+        this.worldSystem.updateExtractionAvailability?.(run);
         if (run.phase === 'extraction-ready') {
-            this.worldSystem.trackLocation('extraction-beacon');
+            const preferredExtraction = run.extractionAvailability?.emergency?.canExtract
+                ? 'emergency-extraction'
+                : 'extraction-beacon';
+            this.worldSystem.trackLocation(preferredExtraction);
         }
         this.worldRevision += 1;
         this.updateWorldAwareness();
@@ -284,7 +609,10 @@ export class CombatSystem {
         if (result.success) {
             const center = this.getHeroCenter();
             const distance = this.worldSystem.getDistanceToLocation(result.location.id, center.x, center.y);
-            result.message = `已追踪 ${result.location.name}，距离 ${Math.round(distance)} 米`;
+            const displayName = result.location.discovered || result.location.known || result.location.kind === 'extraction'
+                ? result.location.name
+                : '未知信号';
+            result.message = `已追踪 ${displayName}，距离 ${Math.round(distance)} 米`;
             this.worldRevision += 1;
             this.notifyStateChange();
         }
@@ -293,13 +621,39 @@ export class CombatSystem {
 
     interactWithNearbyLocation() {
         if (!this.runSystem.active) return { success: false, message: '请先开始远征' };
+        if (this.runSystem.pendingLootChoice) return { success: false, message: '请先处理背包中待取舍的战利品' };
         const nearby = this.updateWorldAwareness();
+        const nearbyContainer = this.worldSystem.getContainer?.(this.worldSystem.nearbyContainerId);
+        if (this.runSystem.phase === 'search' && nearbyContainer) {
+            if (this.runSystem.activeSearch) {
+                return { success: false, message: '搜索正在进行中' };
+            }
+            return this.searchArea('quick');
+        }
         if (!nearby) return { success: false, message: '附近没有可交互地点' };
         if (nearby.kind === 'extraction') {
-            if (!this.runSystem.canExtract()) {
-                return { success: false, message: `至少清理 ${this.runSystem.minExtractionDepth} 个区域后才能撤离` };
+            const availability = this.runSystem.getExtractionAvailability?.(nearby.extractionType || nearby.id)
+                || { canExtract: this.runSystem.canExtract?.(), message: '当前无法撤离' };
+            if (!availability.canExtract) return { success: false, message: availability.message };
+            return this.requestExtraction({ extractionType: nearby.extractionType || nearby.id });
+        }
+        if (nearby.kind === 'world-event') {
+            if (!['route', 'extraction-ready'].includes(this.runSystem.phase)) {
+                return { success: false, message: '战斗中无法调查支线信号' };
             }
-            return this.requestExtraction();
+            const consumed = this.worldSystem.consumeWorldEvent(nearby.id);
+            if (!consumed.success) return consumed;
+            const resolved = this.runSystem.resolveWorldEvent?.({
+                ...(consumed.effect || {}),
+                source: nearby.type || nearby.id
+            }) || consumed;
+            this.syncWorldWithRunState();
+            this.notifyStateChange();
+            return {
+                ...resolved,
+                success: true,
+                message: `${consumed.message}。${resolved.message || ''}`.trim()
+            };
         }
         if (this.runSystem.phase !== 'route') {
             return { success: false, message: '请先完成当前地点事件' };
@@ -314,6 +668,18 @@ export class CombatSystem {
     getInteractionState() {
         const center = this.getHeroCenter();
         const nearby = this.nearbyLocation;
+        const nearbyContainer = this.worldSystem.getContainer?.(this.worldSystem.nearbyContainerId);
+        if (this.runSystem.phase === 'search' && nearbyContainer) {
+            const activeSearch = this.runSystem.getSearchState?.();
+            return {
+                available: !activeSearch && nearbyContainer.state === 'available',
+                label: activeSearch ? `正在搜索 ${nearbyContainer.name}` : `搜索 ${nearbyContainer.name}`,
+                detail: activeSearch
+                    ? `进度 ${Math.floor((activeSearch.progress || 0) * 100)}%`
+                    : '按 E 快速搜索，或在面板选择搜索方式',
+                location: { ...nearbyContainer }
+            };
+        }
         if (!nearby) {
             const target = this.worldSystem.getState(center).navigationTarget;
             return {
@@ -323,8 +689,12 @@ export class CombatSystem {
                 location: null
             };
         }
-        const extractionBlocked = nearby.kind === 'extraction' && !this.runSystem.canExtract();
-        const validPhase = nearby.kind === 'extraction'
+        const extractionAvailability = nearby.kind === 'extraction'
+            ? this.runSystem.getExtractionAvailability?.(nearby.extractionType || nearby.id)
+            : null;
+        const extractionBlocked = nearby.kind === 'extraction' && !extractionAvailability?.canExtract;
+        const eventLocation = nearby.kind === 'world-event';
+        const validPhase = nearby.kind === 'extraction' || eventLocation
             ? ['route', 'extraction-ready'].includes(this.runSystem.phase)
             : this.runSystem.phase === 'route';
         return {
@@ -333,10 +703,12 @@ export class CombatSystem {
                 ? '撤离信标尚未解锁'
                 : nearby.kind === 'extraction'
                     ? '启动撤离信标'
+                    : eventLocation
+                        ? `调查 ${nearby.name}`
                     : `进入 ${nearby.name}`,
             detail: extractionBlocked
-                ? `还需清理 ${Math.max(0, this.runSystem.minExtractionDepth - this.runSystem.depth)} 个区域`
-                : '按 E 或点击交互',
+                ? (extractionAvailability?.message || '当前撤离点不可用')
+                : eventLocation ? `${nearby.danger || '可选支线'} · 按 E 调查` : '按 E 或点击交互',
             location: { ...nearby }
         };
     }
@@ -352,6 +724,11 @@ export class CombatSystem {
 
     resetBattle() {
         this.clearEncounter();
+        this.resetWeaponLoadout();
+        const loadoutWeaponId = this.expeditionMetaSystem?.getLoadout?.()?.mainWeapon?.combatWeaponId;
+        if (loadoutWeaponId && this.getWeaponConfig(loadoutWeaponId)) {
+            this.activeWeaponId = loadoutWeaponId;
+        }
         this.petSystem?.resetBattleStates?.();
         this.runSystem.reset();
         this.worldSystem.reset();
@@ -360,8 +737,23 @@ export class CombatSystem {
         this.lastNearbyLocationId = null;
         this.runMaxHp = this.calculateRunMaxHp();
         this.runHp = this.runMaxHp;
+        this.runSnapshot = null;
+        this.runPreparation = { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
+        this.runLoadoutEffects = { armorDefense: 0, petGuard: 0, consumableSupplies: 0, consumed: [] };
         this.skillCooldowns.clear();
         this.guardTimer = 0;
+        this.supplyCooldownTimer = 0;
+        this.timeSinceDamage = Infinity;
+        this.runRegenTimer = 0;
+        this.runDamageTaken = 0;
+        this.returnPressure = { distance: 0, level: 0, triggers: 0 };
+        this.petSquadSnapshot = null;
+        this.petGuardHp = 0;
+        this.petGuardMaxHp = 0;
+        this.petRescueUsed = false;
+        this.petRescueInvulnerabilityTimer = 0;
+        this.runBossKills = 0;
+        this.runEliteKills = 0;
         this.lastSettlement = null;
         this.settled = false;
         this.battleInitialized = true;
@@ -371,29 +763,95 @@ export class CombatSystem {
     }
 
     startRun() {
+        const requestedWeaponId = this.activeWeaponId;
+        const staleMetaRaid = this.expeditionMetaSystem?.getState?.()?.activeRaid || null;
         if (!this.battleInitialized) this.resetBattle();
         const phase = this.runSystem.phase;
         if (phase === 'extracted' || phase === 'defeat') this.resetBattle();
+        if (this.runSystem.active) return { success: false, message: '远征已经开始' };
+        if (staleMetaRaid) {
+            this.expeditionMetaSystem?.resolveRaidLoadout?.({ extracted: false });
+        }
 
         const permanentBonuses = this.territorySystem?.calculateBonuses?.() || {};
         const preparedBonuses = this.territorySystem?.getPreparedBonuses?.()
             || { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
+        const metaLoadout = this.expeditionMetaSystem?.getLoadout?.() || null;
+        const equippedConsumables = (metaLoadout?.consumables || [])
+            .map((item, index) => ({ item, index }))
+            .filter(({ item }) => item && Number(item.supplyValue) > 0);
+        const consumableSupplies = equippedConsumables.reduce(
+            (sum, { item }) => sum + Math.max(0, Math.floor(Number(item.supplyValue) || 0)),
+            0
+        );
         const result = this.runSystem.startRun({
-            supplies: 2 + (permanentBonuses.supplyBonus || 0) + (preparedBonuses.supplies || 0),
+            supplies: 2 + (permanentBonuses.supplyBonus || 0) + (preparedBonuses.supplies || 0) + consumableSupplies,
             backpackCapacity: 8
         });
         if (!result.success) return result;
-        this.runPreparation = this.territorySystem?.consumePreparedBonuses?.()
+        const consumedPreparation = this.territorySystem?.consumePreparedBonuses?.()
             || { ...preparedBonuses };
-
+        const armorDefense = Math.max(0, Math.floor(Number(metaLoadout?.armor?.defenseBonus) || 0));
+        const petGuardBonus = Math.max(0, Math.floor(Number(metaLoadout?.petLinker?.guardBonus) || 0));
+        this.runPreparation = {
+            ...consumedPreparation,
+            defense: Math.max(0, Number(consumedPreparation.defense) || 0) + armorDefense
+        };
+        this.runLoadoutEffects = {
+            armorDefense,
+            petGuard: petGuardBonus,
+            consumableSupplies,
+            consumed: []
+        };
+        this.runSnapshot = this.captureRunSnapshot(permanentBonuses, this.runPreparation);
         this.clearEncounter();
+        this.resetWeaponLoadout();
+        const loadoutWeaponId = metaLoadout?.mainWeapon?.combatWeaponId
+            || (this.getWeaponConfig(requestedWeaponId) ? requestedWeaponId : this.weaponOrder[0]);
+        if (loadoutWeaponId && this.getWeaponConfig(loadoutWeaponId)) {
+            this.activeWeaponId = loadoutWeaponId;
+        }
         this.petSystem?.resetBattleStates?.();
         this.runMaxHp = this.calculateRunMaxHp();
         this.runHp = this.runMaxHp;
         this.skillCooldowns.clear();
+        this.supplyCooldownTimer = 0;
+        this.timeSinceDamage = Infinity;
+        this.runRegenTimer = 0;
+        this.runDamageTaken = 0;
+        this.returnPressure = { distance: 0, level: 0, triggers: 0 };
+        this.petSquadSnapshot = this.petSystem?.getCombatSupportSnapshot?.()
+            || this.petSystem?.getExpeditionSquadSnapshot?.()
+            || null;
+        this.meta.maxExpeditionPetCount = Math.max(
+            this.meta.maxExpeditionPetCount || 0,
+            Number(this.petSquadSnapshot?.count ?? this.petSquadSnapshot?.members?.length) || 0
+        );
+        this.petGuardMaxHp = Math.max(
+            0,
+            Math.floor(this.petSquadSnapshot?.guardCapacity || 0) + petGuardBonus
+        );
+        this.petGuardHp = this.petGuardMaxHp;
+        this.petRescueUsed = false;
+        this.petRescueInvulnerabilityTimer = 0;
+        this.runBossKills = 0;
+        this.runEliteKills = 0;
         this.lastSettlement = null;
         this.settled = false;
         this.worldSystem.startRun(this.runSystem.getState().routeChoices);
+        const metaRaid = this.expeditionMetaSystem?.startRaid?.();
+        if (metaRaid?.success) {
+            this.runLoadoutEffects.consumed = equippedConsumables.map(({ item, index }) => {
+                const used = this.expeditionMetaSystem.markConsumableUsed?.(index, 1);
+                return {
+                    instanceId: item.instanceId,
+                    name: item.name,
+                    index,
+                    quantity: used?.used || 0,
+                    supplyValue: Math.max(0, Math.floor(Number(item.supplyValue) || 0))
+                };
+            }).filter(item => item.quantity > 0);
+        }
         this.placeHeroAtCamp({ force: true });
         this.syncWorldWithRunState();
         this.addBannerText('远征开始', '#ffd167');
@@ -406,6 +864,7 @@ export class CombatSystem {
     }
 
     chooseRoute(nodeId, { requireProximity = false } = {}) {
+        if (this.runSystem.pendingLootChoice) return { success: false, message: '请先处理背包中待取舍的战利品' };
         if (requireProximity && this.nearbyLocation?.nodeId !== nodeId) {
             return { success: false, message: '请先走到目标地点附近' };
         }
@@ -420,14 +879,74 @@ export class CombatSystem {
     }
 
     searchArea(mode) {
-        const result = this.runSystem.resolveSearch(mode, {
+        if (this.runSystem.pendingLootChoice) return { success: false, message: '请先处理背包中待取舍的战利品' };
+        if (this.runSystem.activeSearch) return { success: false, message: '搜索正在进行中' };
+        const nearbyContainerId = this.worldSystem.nearbyContainerId || null;
+        const activeContainers = this.worldSystem.getContainersForLocation?.(
+            this.worldSystem.activeLocationId,
+            { includeFinished: false }
+        ) || [];
+        let containerResult = null;
+        if (activeContainers.length > 0) {
+            containerResult = this.worldSystem.beginContainerSearch?.(nearbyContainerId);
+            if (!containerResult?.success) {
+                return containerResult || { success: false, message: '需要靠近容器才能搜索' };
+            }
+        }
+        const context = containerResult?.context || {};
+        const result = this.runSystem.beginSearch(mode, {
             hasPet: Boolean(this.petSystem?.equippedPets?.length),
-            searchBonuses: this.petSystem?.getExplorationSearchBonuses?.(mode) || {}
+            searchBonuses: this.petSystem?.getExplorationSearchBonuses?.(mode) || {},
+            containerId: context.containerId || null,
+            completeNode: context.completeNode,
+            isLastContainer: context.isLastContainer
         });
-        if (result.success && result.encounter) this.beginEncounter(result.encounter);
-        else if (result.success) {
+        if (!result.success && containerResult?.success) {
+            this.worldSystem.cancelContainerSearch?.(context.containerId, 'start-failed');
+        }
+        this.notifyStateChange();
+        return result;
+    }
+
+    updateActiveSearch(deltaTime) {
+        if (!this.runSystem.activeSearch) return null;
+        const result = this.runSystem.updateSearch(deltaTime);
+        if (!result?.completed) return result;
+        if (result.containerId) {
+            this.worldSystem.completeContainerSearch?.(result.containerId);
+            this.worldRevision += 1;
+        }
+        if (result.encounter) {
+            this.beginEncounter(result.encounter);
+        } else if (result.nodeCompleted) {
             this.worldSystem.completeActiveLocation();
             this.syncWorldWithRunState();
+        } else {
+            this.updateWorldAwareness();
+        }
+        this.notifyStateChange();
+        return result;
+    }
+
+    cancelSearch(reason = 'cancelled') {
+        const activeSearch = this.runSystem.getSearchState?.();
+        const result = this.runSystem.cancelSearch?.(reason)
+            || { success: false, message: '当前没有进行中的搜索' };
+        if (result.success && activeSearch?.containerId) {
+            this.worldSystem.cancelContainerSearch?.(activeSearch.containerId, reason);
+            this.worldRevision += 1;
+        }
+        this.notifyStateChange();
+        return result;
+    }
+
+    interruptSearch(reason = 'damage') {
+        const activeSearch = this.runSystem.getSearchState?.();
+        const result = this.runSystem.interruptSearch?.(reason)
+            || { success: false, message: '当前没有进行中的搜索' };
+        if (result.success && activeSearch?.containerId) {
+            this.worldSystem.cancelContainerSearch?.(activeSearch.containerId, reason);
+            this.worldRevision += 1;
         }
         this.notifyStateChange();
         return result;
@@ -459,17 +978,38 @@ export class CombatSystem {
         return result;
     }
 
-    requestExtraction() {
+    requestExtraction(options = {}) {
+        if (this.runSystem.pendingLootChoice) return { success: false, message: '请先处理背包中待取舍的战利品' };
         const nearby = this.updateWorldAwareness();
         if (this.worldSystem.initialized && nearby?.kind !== 'extraction') {
-            return { success: false, message: '请返回入口撤离信标附近' };
+            return { success: false, message: '请先靠近一个可用撤离点' };
         }
-        const result = this.runSystem.startExtraction();
+        const requestedType = typeof options === 'string'
+            ? options
+            : options.extractionType || options.locationId || nearby?.extractionType || nearby?.id || 'entry';
+        if (
+            this.worldSystem.initialized
+            && nearby?.kind === 'extraction'
+            && this.runSystem.normalizeExtractionType?.(requestedType) !== this.runSystem.normalizeExtractionType?.(nearby.extractionType || nearby.id)
+        ) {
+            return { success: false, message: '当前所在位置与选择的撤离点不符' };
+        }
+        const result = this.runSystem.startExtraction({ extractionType: requestedType });
         if (result.success) {
-            this.worldSystem.activateExtraction();
+            this.worldSystem.activateExtraction(result.extractionType || requestedType);
             this.extractionTimer = result.durationMs;
+            this.extractionTotalDuration = result.durationMs;
+            this.extractionOutOfZoneTimer = 0;
+            this.extractionReinforcementIntervalMs = Math.max(
+                1200,
+                Number(result.encounter?.reinforcementIntervalMs) || this.config.extractionReinforcementIntervalMs
+            );
+            this.extractionReinforcementTimer = this.extractionReinforcementIntervalMs;
             this.beginEncounter({ ...result.encounter, durationMs: result.durationMs });
-            this.addBannerText('撤离信标启动', '#72d7ff');
+            this.addBannerText(
+                result.extractionType === 'emergency' ? '应急撤离启动' : '入口信标启动',
+                result.extractionType === 'emergency' ? '#ffb36b' : '#72d7ff'
+            );
         }
         this.notifyStateChange();
         return result;
@@ -477,11 +1017,20 @@ export class CombatSystem {
 
     useSupply() {
         if (this.runHp >= this.runMaxHp) return { success: false, message: '远征生命已满' };
+        if (this.supplyCooldownTimer > 0) {
+            return { success: false, message: `补给冷却中（${Math.ceil(this.supplyCooldownTimer / 1000)}秒）` };
+        }
+        if (this.isCombatActive() && this.timeSinceDamage < this.config.supplyCombatSafeWindowMs) {
+            return { success: false, message: '刚受到攻击，先脱离火力再使用补给' };
+        }
         const result = this.runSystem.spendSupply();
         if (result.success) {
             const heal = Math.max(1, Math.ceil(this.runMaxHp * result.healRatio));
             const actualHeal = this.healHero(heal);
             result.message = `使用补给，恢复 ${actualHeal} 点生命`;
+            this.supplyCooldownTimer = this.config.supplyCooldownMs;
+            this.worldSystem.updateExtractionAvailability?.(this.runSystem.getState());
+            this.worldRevision += 1;
         }
         this.notifyStateChange();
         return result;
@@ -489,6 +1038,22 @@ export class CombatSystem {
 
     useMedkit() {
         return this.useSupply();
+    }
+
+    resolveLootChoice(action, replaceItemId = null) {
+        const result = this.runSystem.resolveLootChoice?.(action, replaceItemId)
+            || { success: false, message: '背包取舍功能不可用' };
+        this.notifyStateChange();
+        return result;
+    }
+
+    toggleLootInsurance(itemId) {
+        const item = this.runSystem.backpack?.find(entry => entry.id === itemId);
+        const result = item?.insured
+            ? this.runSystem.unprotectLoot?.(itemId)
+            : this.runSystem.protectLoot?.(itemId);
+        this.notifyStateChange();
+        return result || { success: false, message: '未找到该战利品' };
     }
 
     usePetSkill(instanceId) {
@@ -553,7 +1118,7 @@ export class CombatSystem {
 
         const cooldownReduction = Math.min(
             0.2,
-            Math.max(0, (this.territorySystem?.calculateBonuses?.().petCooldownReduction || 0) / 100)
+            Math.max(0, (this.runSnapshot?.territory?.petCooldownReduction || 0) / 100)
         );
         const cooldown = Math.max(
             3000,
@@ -627,21 +1192,44 @@ export class CombatSystem {
     update(deltaTime) {
         if (!this.battleInitialized) this.resetBattle();
         const safeDelta = Math.max(0, Math.min(deltaTime, 100));
-        this.updateSkillCooldowns(safeDelta);
         this.guardTimer = Math.max(0, this.guardTimer - safeDelta);
+        this.petRescueInvulnerabilityTimer = Math.max(0, this.petRescueInvulnerabilityTimer - safeDelta);
+        this.supplyCooldownTimer = Math.max(0, this.supplyCooldownTimer - safeDelta);
+        this.timeSinceDamage = Math.min(60000, this.timeSinceDamage + safeDelta);
         this.uiNotifyTimer += safeDelta;
-        this.updateHeroMovement(this.playerSystem?.player, safeDelta);
+        const movement = this.updateHeroMovement(this.playerSystem?.player, safeDelta);
+        this.playerSystem?.setCombatState?.(movement.moved ? 'move' : 'idle');
+
+        if (this.runSystem.active && !this.isPaused) {
+            this.updateWeaponTimers(safeDelta);
+            this.updateRunRegeneration(safeDelta);
+            this.updateActiveSearch(safeDelta);
+        }
 
         if (this.isCombatActive()) {
+            // 宠物技能只在真实战斗时间推进，路线规划/切场景不能白等冷却。
+            this.updateSkillCooldowns(safeDelta);
             this.updateEncounterSpawns(safeDelta);
             this.updateAttack(safeDelta);
             this.updateMonsters(safeDelta);
             this.updateBullets(safeDelta);
 
             if (this.runSystem.phase === 'extracting') {
-                if (this.isHeroInExtractionZone()) {
+                const inZone = this.isHeroInExtractionZone();
+                const contested = this.isExtractionContested();
+                if (inZone && !contested) {
+                    this.extractionOutOfZoneTimer = 0;
                     this.extractionTimer = Math.max(0, this.extractionTimer - safeDelta);
+                } else if (!inZone) {
+                    this.extractionOutOfZoneTimer += safeDelta;
+                    if (this.extractionOutOfZoneTimer > this.config.extractionOutOfZoneGraceMs) {
+                        this.extractionTimer = Math.min(
+                            this.extractionTotalDuration,
+                            this.extractionTimer + safeDelta * this.config.extractionDecayMultiplier
+                        );
+                    }
                 }
+                this.updateExtractionPressure(safeDelta);
                 if (this.extractionTimer <= 0 && !this.settled) this.finishExpedition(true, 'extracted');
             } else if (
                 this.runSystem.phase === 'combat' &&
@@ -666,11 +1254,48 @@ export class CombatSystem {
     }
 
     isHeroInExtractionZone() {
-        const location = this.worldSystem.getLocation('extraction-beacon');
+        const location = this.getActiveExtractionLocation();
         if (!location) return false;
         const hero = this.getHeroCenter();
         return Math.hypot(hero.x - location.x, hero.y - location.y)
             <= location.radius + this.worldSystem.interactionRadius;
+    }
+
+    isExtractionContested() {
+        const location = this.getActiveExtractionLocation();
+        if (!location) return false;
+        return this.monsters.some(monster => {
+            const center = this.getEntityCenter(monster);
+            return Math.hypot(center.x - location.x, center.y - location.y)
+                <= location.radius + this.worldSystem.interactionRadius * 0.65;
+        });
+    }
+
+    getActiveExtractionLocation() {
+        const activeLocationId = this.worldSystem.activeExtractionLocationId
+            || this.runSystem.getExtractionRule?.(this.runSystem.activeExtractionType)?.locationId
+            || 'extraction-beacon';
+        return this.worldSystem.getLocation(activeLocationId);
+    }
+
+    updateExtractionPressure(deltaTime) {
+        this.extractionReinforcementTimer -= deltaTime;
+        if (this.extractionReinforcementTimer > 0) return;
+        const depth = Math.max(1, this.runSystem.depth || 1);
+        const threat = this.runSystem.threat || 0;
+        const count = 1 + Math.floor(threat / 45);
+        const available = depth >= 5 ? ['bat', 'goblin', 'demon'] : ['bat', 'goblin'];
+        for (let index = 0; index < count && this.monsters.length < this.config.maxMonsters; index += 1) {
+            this.spawnMonster({
+                templateId: available[Math.floor(this.random() * available.length)],
+                elite: threat >= 70 && index === 0,
+                depth
+            }, depth);
+        }
+        this.extractionReinforcementTimer = Math.max(
+            1200,
+            (this.extractionReinforcementIntervalMs || this.config.extractionReinforcementIntervalMs) - threat * 4
+        );
     }
 
     beginEncounter(spec = {}) {
@@ -684,6 +1309,10 @@ export class CombatSystem {
         this.encounterRewardsCommitted = false;
         this.encounterSpawnTimer = 0;
         this.attackTimer = 0;
+        this.shotCooldownTimer = 0;
+        this.firingHeld = false;
+        this.firstStrikeBonus = Math.max(0, Math.min(1, Number(spec.playerAdvantage?.firstStrikeBonus) || 0));
+        this.firstStrikePending = this.firstStrikeBonus > 0;
         this.uiNotifyTimer = 0;
         this.addBannerText(this.getEncounterTitle(spec.type), spec.boss ? '#ff7043' : '#ffd167');
     }
@@ -725,7 +1354,7 @@ export class CombatSystem {
         const template = this.monsterTemplates.find(item => item.id === normalizedSpec.templateId)
             || this.monsterTemplates[0];
         const depth = Math.max(1, depthNumber || normalizedSpec.depth || this.runSystem.depth + 1);
-        const playerLevel = this.playerSystem?.player?.level || 1;
+        const playerLevel = this.runSnapshot?.player?.level ?? this.playerSystem?.player?.level ?? 1;
         const threat = this.runSystem.threat || 0;
         const depthScale = 1 + (depth - 1) * 0.16;
         const threatScale = 1 + threat * 0.006;
@@ -766,6 +1395,15 @@ export class CombatSystem {
             engageRange: Math.max(42, size * 0.9),
             isBoss: Boolean(template.isBoss || normalizedSpec.boss),
             isElite: Boolean(normalizedSpec.elite),
+            combatStyle: template.combatStyle || 'melee',
+            rangedRange: template.rangedRange || 0,
+            chargeCooldown: 900 + this.random() * 700,
+            chargeTelegraph: 0,
+            chargeVector: null,
+            bossAbilityTimer: template.isBoss ? 1800 : 0,
+            bossTelegraphTimer: 0,
+            bossTarget: null,
+            pathDirection: this.random() < 0.5 ? -1 : 1,
             slowFactor: 1,
             slowTimer: 0,
             stunTimer: 0,
@@ -779,46 +1417,79 @@ export class CombatSystem {
     }
 
     updateAttack(deltaTime) {
-        if (!this.playerSystem || this.monsters.length === 0) return;
-        const player = this.playerSystem.player;
-        const attackInterval = this.config.attackInterval / Math.max(0.1, player.attackSpeed || 1);
+        if (!this.playerSystem || this.isPaused) return;
+        if (!this.legacyAutoAimEnabled) {
+            if (!this.firingHeld || this.shotCooldownTimer > 0) return;
+            this.fireCurrentWeapon();
+            return;
+        }
+        if (this.monsters.length === 0) return;
+        const player = this.runSnapshot?.player || this.playerSystem.player;
+        const moving = Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01;
+        const movementPenalty = moving ? this.config.movingAttackIntervalMultiplier : 1;
+        const attackInterval = this.config.attackInterval * movementPenalty / Math.max(0.1, player.attackSpeed || 1);
         this.attackTimer += deltaTime;
         if (this.attackTimer < attackInterval) return;
         this.attackTimer %= attackInterval;
-        this.fireAtNearestMonsters();
+        this.fireAtNearestMonsters({ consumeAmmo: true });
     }
 
-    fireAtNearestMonsters() {
+    fireAtNearestMonsters({ consumeAmmo = false } = {}) {
         if (!this.playerSystem) return;
-        const player = this.playerSystem.player;
-        const origin = this.getEntityCenter(player);
+        const weaponState = this.weaponStates[this.activeWeaponId];
+        if (consumeAmmo && (!weaponState || weaponState.reloadRemainingMs > 0 || weaponState.magazine <= 0)) {
+            if (weaponState?.magazine <= 0) this.reloadWeapon();
+            return;
+        }
+        const livePlayer = this.playerSystem.player;
+        const player = this.runSnapshot?.player || livePlayer;
+        const origin = this.getEntityCenter(livePlayer);
+        const moving = Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01;
+        const attackRange = moving ? this.config.heroMovingAttackRange : this.config.heroAttackRange;
         const limit = Math.max(1, player.multiShot || 1);
         const targets = [];
         const focus = this.monsters.find(monster => {
             if (monster.id !== this.focusTargetId || monster.hp <= 0) return false;
             const point = this.getEntityCenter(monster);
-            return Math.hypot(point.x - origin.x, point.y - origin.y) <= this.config.heroAttackRange;
+            return Math.hypot(point.x - origin.x, point.y - origin.y) <= attackRange
+                && !this.isLineBlocked(origin, point);
         });
         if (focus) targets.push(focus);
         this.getTargets(origin, {
             strategy: 'nearest',
             limit: limit + 1,
-            maxRange: this.config.heroAttackRange
+            maxRange: attackRange
         }).forEach(target => {
-            if (!targets.includes(target) && targets.length < limit) targets.push(target);
+            if (
+                !targets.includes(target) &&
+                targets.length < limit &&
+                !this.isLineBlocked(origin, this.getEntityCenter(target))
+            ) targets.push(target);
         });
+        if (targets.length > 0 && consumeAmmo) weaponState.magazine -= 1;
         targets.forEach(target => this.fireBullet(target));
     }
 
     fireBullet(target) {
         if (!this.playerSystem || !target) return null;
-        const player = this.playerSystem.player;
+        const player = this.runSnapshot?.player || this.playerSystem.player;
         const targetPoint = this.getEntityCenter(target);
         const origin = this.getPlayerBulletOrigin(targetPoint);
-        const isCrit = this.random() * 100 < (player.crit || 0);
+        const petCritChance = Math.max(0, Number(this.petSquadSnapshot?.auras?.critChance) || 0) * 100;
+        const isCrit = this.random() * 100 < ((player.crit || 0) + petCritChance);
         let damage = this.getPlayerAttackDamage();
-        if (isCrit) damage *= (player.critDamage || 150) / 100;
+        if (Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01) {
+            damage *= this.config.movingDamageMultiplier;
+        }
+        if (isCrit) {
+            const petCritDamage = Math.max(0, Number(this.petSquadSnapshot?.auras?.critDamagePercent) || 0);
+            damage *= ((player.critDamage || 150) + petCritDamage) / 100;
+        }
+        damage *= this.consumeFirstStrikeMultiplier();
         this.playerSystem.playAttackAnimation?.();
+        const dx = targetPoint.x - origin.x;
+        const dy = targetPoint.y - origin.y;
+        const distance = Math.hypot(dx, dy) || 1;
         const bullet = {
             id: this.nextBulletId++,
             source: 'hero',
@@ -826,6 +1497,9 @@ export class CombatSystem {
             y: origin.y,
             targetId: target.id,
             speed: this.config.bulletSpeed,
+            vx: (dx / distance) * this.config.bulletSpeed,
+            vy: (dy / distance) * this.config.bulletSpeed,
+            remainingRange: Math.max(this.config.heroAttackRange, distance + 30),
             damage,
             isCrit,
             size: isCrit ? 9 : 7,
@@ -836,6 +1510,121 @@ export class CombatSystem {
         return bullet;
     }
 
+    fireCurrentWeapon() {
+        if (!this.playerSystem || !this.isCombatActive()) {
+            return { success: false, code: 'inactive', message: '当前无法开火' };
+        }
+        const weapon = this.getWeaponConfig();
+        const state = this.weaponStates[this.activeWeaponId];
+        if (!weapon || !state) return { success: false, code: 'invalid-weapon', message: '武器状态无效' };
+        if (state.reloadRemainingMs > 0) return { success: false, code: 'reloading', message: '正在换弹' };
+        if (state.magazine <= 0) {
+            const reload = this.reloadWeapon();
+            return { success: false, code: 'empty', message: reload.success ? '弹匣为空，自动换弹' : reload.message };
+        }
+
+        const moving = Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01;
+        const originCenter = this.getHeroCenter();
+        const direction = this.getCurrentAimDirection(originCenter);
+        const targetPoint = {
+            x: originCenter.x + direction.x * 100,
+            y: originCenter.y + direction.y * 100
+        };
+        const origin = this.getPlayerBulletOrigin(targetPoint);
+        const player = this.runSnapshot?.player || this.playerSystem.player;
+        const attackSpeed = Math.max(0.65, Math.min(1.65, Number(player.attackSpeed) || 1));
+        const movementRatePenalty = moving ? weapon.movingFireIntervalMultiplier : 1;
+        const firstStrikeMultiplier = this.consumeFirstStrikeMultiplier();
+        const baseDamage = this.getWeaponShotDamage(weapon, { moving }) * firstStrikeMultiplier;
+        const spreadDegrees = moving ? weapon.movingSpreadDegrees : weapon.spreadDegrees;
+        const projectiles = [];
+
+        for (let pellet = 0; pellet < weapon.pellets; pellet += 1) {
+            const spreadRadians = (this.random() * 2 - 1) * spreadDegrees * Math.PI / 180;
+            const cos = Math.cos(spreadRadians);
+            const sin = Math.sin(spreadRadians);
+            const shotDirection = {
+                x: direction.x * cos - direction.y * sin,
+                y: direction.x * sin + direction.y * cos
+            };
+            const petCritChance = Math.max(0, Number(this.petSquadSnapshot?.auras?.critChance) || 0) * 100;
+            const isCrit = this.random() * 100 < ((player.crit || 0) + petCritChance);
+            const petCritDamage = Math.max(0, Number(this.petSquadSnapshot?.auras?.critDamagePercent) || 0);
+            const damage = isCrit
+                ? baseDamage * ((player.critDamage || 150) + petCritDamage) / 100
+                : baseDamage;
+            const bullet = {
+                id: this.nextBulletId++,
+                source: 'hero',
+                weaponId: weapon.id,
+                x: origin.x,
+                y: origin.y,
+                targetId: null,
+                speed: weapon.bulletSpeed,
+                vx: shotDirection.x * weapon.bulletSpeed,
+                vy: shotDirection.y * weapon.bulletSpeed,
+                remainingRange: weapon.range,
+                damage,
+                isCrit,
+                size: isCrit ? 7 : 5,
+                color: isCrit ? '#ff7043' : weapon.color,
+                effects: {}
+            };
+            this.bullets.push(bullet);
+            projectiles.push(bullet);
+        }
+
+        state.magazine -= 1;
+        this.shotCooldownTimer = weapon.fireIntervalMs * movementRatePenalty / attackSpeed;
+        this.playerSystem.playAttackAnimation?.();
+        return {
+            success: true,
+            weaponId: weapon.id,
+            projectiles,
+            magazine: state.magazine,
+            reserve: state.reserve,
+            firstStrike: firstStrikeMultiplier > 1
+        };
+    }
+
+    getCurrentAimDirection(origin = this.getHeroCenter()) {
+        if (this.aimWorldPoint) {
+            const dx = this.aimWorldPoint.x - origin.x;
+            const dy = this.aimWorldPoint.y - origin.y;
+            const length = Math.hypot(dx, dy);
+            if (length > 0.001) return { x: dx / length, y: dy / length };
+        }
+        const length = Math.hypot(this.aimDirection.x, this.aimDirection.y) || 1;
+        return { x: this.aimDirection.x / length, y: this.aimDirection.y / length };
+    }
+
+    getWeaponShotDamage(weapon = this.getWeaponConfig(), { moving = false } = {}) {
+        if (!weapon) return 0;
+        const playerAttack = this.runSnapshot?.player?.attack ?? this.playerSystem?.player?.attack ?? 1;
+        const territoryBonuses = this.runSnapshot?.territory || this.territorySystem?.calculateBonuses?.() || {};
+        const attackRating = Math.max(
+            0,
+            Number(playerAttack) + Number(territoryBonuses.attack || 0) + Number(this.runPreparation.attack || 0)
+        );
+        const softGrowth = Math.log2(1 + attackRating / 20) * 5;
+        const petAttackPercent = Math.max(
+            0,
+            Math.min(35, Number(this.petSquadSnapshot?.auras?.attackPercent) || 0)
+        );
+        let damage = (weapon.baseDamage + softGrowth * weapon.attributeScaling) * (1 + petAttackPercent / 100);
+        if (moving) damage *= weapon.movingDamageMultiplier;
+        return damage;
+    }
+
+    consumeFirstStrikeMultiplier() {
+        if (!this.firstStrikePending || this.firstStrikeBonus <= 0) return 1;
+        this.firstStrikePending = false;
+        const multiplier = 1 + this.firstStrikeBonus;
+        const hero = this.getHeroCenter();
+        this.addStatusText(hero.x, hero.y - 42, '隐蔽先手', '#8dffb5', true);
+        return multiplier;
+    }
+
     getPlayerBulletOrigin(targetPoint) {
         if (typeof this.playerSystem?.getGunMuzzlePosition === 'function') {
             return this.playerSystem.getGunMuzzlePosition(targetPoint);
@@ -844,9 +1633,11 @@ export class CombatSystem {
     }
 
     getPlayerAttackDamage() {
-        const baseAttack = this.playerSystem?.player?.attack || 1;
-        const territoryBonuses = this.territorySystem?.calculateBonuses?.() || {};
-        return baseAttack + (territoryBonuses.attack || 0) + (this.runPreparation.attack || 0);
+        const baseAttack = this.runSnapshot?.player?.attack ?? this.playerSystem?.player?.attack ?? 1;
+        const territoryBonuses = this.runSnapshot?.territory || this.territorySystem?.calculateBonuses?.() || {};
+        const rawAttack = baseAttack + (territoryBonuses.attack || 0) + (this.runPreparation.attack || 0);
+        const petAttackPercent = Math.max(0, Number(this.petSquadSnapshot?.auras?.attackPercent) || 0);
+        return rawAttack * (1 + petAttackPercent / 100);
     }
 
     updateMonsters(deltaTime) {
@@ -861,20 +1652,89 @@ export class CombatSystem {
                 return;
             }
 
+            if (monster.bossTelegraphTimer > 0) {
+                const previous = monster.bossTelegraphTimer;
+                monster.bossTelegraphTimer = Math.max(0, previous - deltaTime);
+                monster.combatState = 'attack';
+                if (previous > 0 && monster.bossTelegraphTimer <= 0 && monster.bossTarget) {
+                    const target = monster.bossTarget;
+                    const currentHero = this.getHeroCenter();
+                    this.explosions.push({ x: target.x, y: target.y, radius: 145, life: 520, color: '#ff7043' });
+                    if (Math.hypot(currentHero.x - target.x, currentHero.y - target.y) <= 145) {
+                        this.damageHero(monster.attack * 1.25, monster);
+                    }
+                    monster.bossTarget = null;
+                }
+                return;
+            }
+
+            if (monster.chargeTelegraph > 0) {
+                const previous = monster.chargeTelegraph;
+                monster.chargeTelegraph = Math.max(0, previous - deltaTime);
+                monster.combatState = 'attack';
+                if (previous > 0 && monster.chargeTelegraph <= 0 && monster.chargeVector) {
+                    const chargeDistance = monster.speed * 1.9;
+                    this.moveMonsterWithAvoidance(
+                        monster,
+                        monster.chargeVector.x,
+                        monster.chargeVector.y,
+                        chargeDistance
+                    );
+                    const chargedCenter = this.getEntityCenter(monster);
+                    const currentHero = this.getHeroCenter();
+                    if (Math.hypot(currentHero.x - chargedCenter.x, currentHero.y - chargedCenter.y) <= monster.engageRange + 24) {
+                        this.damageHero(monster.attack * 1.35, monster);
+                    }
+                    monster.chargeVector = null;
+                }
+                return;
+            }
+
             const center = this.getEntityCenter(monster);
             const dx = hero.x - center.x;
             const dy = hero.y - center.y;
             const distance = Math.hypot(dx, dy);
             monster.progress = Math.max(0, Math.min(1, 1 - distance / Math.max(1, this.worldSystem.width)));
-            if (distance > monster.engageRange) {
+
+            if (monster.isBoss) {
+                monster.bossAbilityTimer -= deltaTime;
+                if (monster.bossAbilityTimer <= 0 && distance <= 420) {
+                    monster.bossTarget = { ...hero };
+                    monster.bossTelegraphTimer = 900;
+                    monster.bossAbilityTimer = 5000;
+                    this.addStatusText(hero.x, hero.y - 48, '危险区域！', '#ff7043', true);
+                    return;
+                }
+            }
+
+            if (monster.combatStyle === 'charger') {
+                monster.chargeCooldown -= deltaTime;
+                if (monster.chargeCooldown <= 0 && distance > 105 && distance < 360) {
+                    const safeDistance = distance || 1;
+                    monster.chargeVector = { x: dx / safeDistance, y: dy / safeDistance };
+                    monster.chargeTelegraph = 520;
+                    monster.chargeCooldown = 3600;
+                    this.addStatusText(center.x, center.y - 30, '冲锋！', '#ffd167');
+                    return;
+                }
+            }
+
+            const hasLineOfSight = !this.isLineBlocked(center, hero);
+            const ranged = monster.combatStyle === 'ranged';
+            const engageRange = ranged ? monster.rangedRange : monster.engageRange;
+            if (ranged && distance < 125) {
                 const safeDistance = distance || 1;
-                const travel = Math.min(distance - monster.engageRange, monster.speed * (monster.slowFactor || 1) * dt);
-                this.worldSystem.moveEntity(
-                    monster,
-                    (dx / safeDistance) * travel,
-                    (dy / safeDistance) * travel,
-                    { padding: 10 }
-                );
+                this.moveMonsterWithAvoidance(monster, -dx / safeDistance, -dy / safeDistance, monster.speed * dt);
+                monster.combatState = 'move';
+                return;
+            }
+            if (distance > engageRange || (ranged && !hasLineOfSight)) {
+                const safeDistance = distance || 1;
+                const desiredDistance = ranged && !hasLineOfSight
+                    ? monster.speed * (monster.slowFactor || 1) * dt
+                    : Math.max(0, distance - engageRange);
+                const travel = Math.min(desiredDistance, monster.speed * (monster.slowFactor || 1) * dt);
+                this.moveMonsterWithAvoidance(monster, dx / safeDistance, dy / safeDistance, travel);
                 monster.combatState = 'move';
                 return;
             }
@@ -883,23 +1743,89 @@ export class CombatSystem {
             monster.attackCooldown -= deltaTime;
             if (monster.attackCooldown <= 0) {
                 monster.attackCooldown += monster.attackInterval;
-                this.damageHero(monster.attack, monster);
+                if (ranged) this.fireEnemyBullet(monster, hero);
+                else this.damageHero(monster.attack, monster);
             }
         });
     }
 
+    moveMonsterWithAvoidance(monster, directionX, directionY, travel) {
+        const result = this.worldSystem.moveEntity(
+            monster,
+            directionX * travel,
+            directionY * travel,
+            { padding: 10 }
+        );
+        if (!result.blockedX && !result.blockedY) return result;
+
+        // 无网格寻路时采用稳定的贴墙转向；实体会沿障碍边缘滑行，而非永久卡住。
+        const side = monster.pathDirection || 1;
+        const alternate = this.worldSystem.moveEntity(
+            monster,
+            -directionY * travel * side,
+            directionX * travel * side,
+            { padding: 10 }
+        );
+        if (!alternate.moved) monster.pathDirection = -side;
+        return alternate;
+    }
+
+    fireEnemyBullet(monster, targetPoint = this.getHeroCenter()) {
+        if (!monster || monster.hp <= 0 || !targetPoint) return null;
+        const origin = this.getEntityCenter(monster);
+        const dx = targetPoint.x - origin.x;
+        const dy = targetPoint.y - origin.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= 0.001 || this.isLineBlocked(origin, targetPoint, 3)) return null;
+        const speed = monster.isElite ? 380 : 330;
+        const bullet = {
+            id: this.nextBulletId++,
+            source: 'enemy',
+            sourceMonsterId: monster.id,
+            x: origin.x,
+            y: origin.y,
+            targetId: null,
+            speed,
+            vx: (dx / distance) * speed,
+            vy: (dy / distance) * speed,
+            remainingRange: Math.max(monster.rangedRange || 280, distance + 45),
+            damage: monster.attack,
+            isCrit: false,
+            size: monster.isElite ? 7 : 6,
+            color: monster.isElite ? '#c38cff' : '#ff667d',
+            effects: {}
+        };
+        this.bullets.push(bullet);
+        return bullet;
+    }
+
     damageHero(rawDamage, monster = null) {
         if (this.settled || this.runHp <= 0) return 0;
-        const playerDefense = this.playerSystem?.player?.defense || 0;
-        const territoryDefense = this.territorySystem?.calculateBonuses?.().defense || 0;
+        if (this.petRescueInvulnerabilityTimer > 0) return 0;
+        if (this.runSystem.activeSearch) this.interruptSearch('damage');
+        const playerDefense = this.runSnapshot?.player?.defense ?? this.playerSystem?.player?.defense ?? 0;
+        const territoryDefense = this.runSnapshot?.territory?.defense ?? this.territorySystem?.calculateBonuses?.().defense ?? 0;
         let damage = Math.max(
             1,
             Math.floor(rawDamage - (playerDefense + territoryDefense + (this.runPreparation.defense || 0)) * 0.32)
         );
         if (this.guardTimer > 0) damage = Math.max(1, Math.floor(damage * (1 - this.config.skillGuardReduction)));
+        const petReduction = Math.max(0, Math.min(0.28, Number(this.petSquadSnapshot?.damageReduction) || 0));
+        damage = Math.max(1, Math.floor(damage * (1 - petReduction)));
+        const guardAbsorbed = Math.min(this.petGuardHp, Math.max(0, Math.ceil(damage * 0.5)));
+        this.petGuardHp = Math.max(0, this.petGuardHp - guardAbsorbed);
+        damage = Math.max(0, damage - guardAbsorbed);
         this.runHp = Math.max(0, this.runHp - damage);
+        this.runDamageTaken += damage;
+        this.timeSinceDamage = 0;
         const hero = this.getHeroCenter();
-        this.addStatusText(hero.x, hero.y - 34, `-${damage}`, '#ff667d', true);
+        this.addStatusText(
+            hero.x,
+            hero.y - 34,
+            guardAbsorbed > 0 ? `护卫 -${guardAbsorbed} / 生命 -${damage}` : `-${damage}`,
+            guardAbsorbed > 0 ? '#72d7ff' : '#ff667d',
+            true
+        );
         this.explosions.push({
             x: hero.x,
             y: hero.y,
@@ -907,9 +1833,19 @@ export class CombatSystem {
             life: 340,
             color: '#ff4757'
         });
-        if (this.runHp <= 0) this.finishExpedition(false, 'defeated');
+        if (this.runHp <= 0 && !this.tryPetRescue()) this.finishExpedition(false, 'defeated');
         this.notifyStateChange();
         return damage;
+    }
+
+    tryPetRescue() {
+        const rescue = this.petSquadSnapshot?.rescue;
+        if (!rescue || this.petRescueUsed) return false;
+        this.petRescueUsed = true;
+        this.runHp = Math.max(1, Math.floor(this.runMaxHp * Math.max(0.05, Number(rescue.restoreHpRatio) || 0.25)));
+        this.petRescueInvulnerabilityTimer = Math.max(0, Number(rescue.invulnerabilityMs) || 1200);
+        this.addBannerText(`${rescue.petName || '伙伴'} · ${rescue.skillName || '浴火重生'}`, '#ff8a50');
+        return true;
     }
 
     damageBase(rawDamage, monster = null) {
@@ -918,7 +1854,9 @@ export class CombatSystem {
 
     healHero(amount) {
         const previous = this.runHp;
-        this.runHp = Math.min(this.runMaxHp, this.runHp + Math.max(0, Math.floor(amount || 0)));
+        const petHealingPercent = Math.max(0, Number(this.petSquadSnapshot?.auras?.healingPercent) || 0);
+        const scaledAmount = Math.floor(Math.max(0, Number(amount) || 0) * (1 + petHealingPercent / 100));
+        this.runHp = Math.min(this.runMaxHp, this.runHp + scaledAmount);
         const actual = this.runHp - previous;
         if (actual > 0) {
             const hero = this.getHeroCenter();
@@ -927,31 +1865,147 @@ export class CombatSystem {
         return actual;
     }
 
+    updateRunRegeneration(deltaTime) {
+        const regen = Math.max(0, this.runSnapshot?.player?.hpRegen ?? this.playerSystem?.player?.hpRegen ?? 0);
+        if (regen <= 0 || this.runHp >= this.runMaxHp || this.timeSinceDamage < 1800) {
+            this.runRegenTimer = 0;
+            return;
+        }
+        this.runRegenTimer += deltaTime;
+        while (this.runRegenTimer >= 1000) {
+            this.runRegenTimer -= 1000;
+            this.healHero(regen);
+        }
+    }
+
     updateBullets(deltaTime) {
         const dt = deltaTime / 1000;
         const remaining = [];
         this.bullets.forEach(bullet => {
-            const target = this.monsters.find(monster => monster.id === bullet.targetId && monster.hp > 0);
-            if (!target) return;
-            const targetPoint = this.getEntityCenter(target);
-            const dx = targetPoint.x - bullet.x;
-            const dy = targetPoint.y - bullet.y;
-            const distance = Math.hypot(dx, dy);
-            const travel = bullet.speed * dt;
-            if (distance <= travel + Math.max(5, target.width * 0.25)) {
-                bullet.x = targetPoint.x;
-                bullet.y = targetPoint.y;
-                this.resolveBulletHit(bullet, target);
+            const travel = Math.min(
+                Math.max(0, Number(bullet.remainingRange) || 0),
+                Math.max(0, Number(bullet.speed) || 0) * dt
+            );
+            if (travel <= 0) return;
+            const velocityLength = Math.hypot(bullet.vx || 0, bullet.vy || 0);
+            if (velocityLength <= 0.001) return;
+            const directionX = bullet.vx / velocityLength;
+            const directionY = bullet.vy / velocityLength;
+            const start = { x: bullet.x, y: bullet.y };
+            const end = {
+                x: bullet.x + directionX * travel,
+                y: bullet.y + directionY * travel
+            };
+            if (this.isLineBlocked(start, end, Math.max(2, bullet.size * 0.55))) {
+                this.explosions.push({ x: end.x, y: end.y, radius: 6, life: 160, color: '#9aa6b2' });
                 return;
             }
-            const safeDistance = distance || 1;
-            bullet.vx = (dx / safeDistance) * bullet.speed;
-            bullet.vy = (dy / safeDistance) * bullet.speed;
-            bullet.x += bullet.vx * dt;
-            bullet.y += bullet.vy * dt;
-            remaining.push(bullet);
+
+            if (bullet.source === 'enemy') {
+                if (this.doesProjectileHitHero(start, end, bullet.size || 5)) {
+                    bullet.x = end.x;
+                    bullet.y = end.y;
+                    const source = this.monsters.find(monster => monster.id === bullet.sourceMonsterId) || null;
+                    this.damageHero(bullet.damage, source);
+                    this.explosions.push({ x: end.x, y: end.y, radius: 8, life: 220, color: bullet.color });
+                    return;
+                }
+            } else {
+                const target = this.findProjectileMonsterHit(start, end, bullet.size || 5);
+                if (target) {
+                    bullet.x = end.x;
+                    bullet.y = end.y;
+                    this.resolveBulletHit(bullet, target);
+                    return;
+                }
+            }
+
+            bullet.x = end.x;
+            bullet.y = end.y;
+            bullet.remainingRange = Math.max(0, bullet.remainingRange - travel);
+            if (bullet.remainingRange > 0) {
+                remaining.push(bullet);
+            } else {
+                this.explosions.push({ x: end.x, y: end.y, radius: 4, life: 120, color: bullet.color });
+            }
         });
         this.bullets = remaining;
+    }
+
+    findProjectileMonsterHit(start, end, radius = 5) {
+        return this.monsters
+            .filter(monster => monster.hp > 0 && this.segmentIntersectsRect(
+                start.x,
+                start.y,
+                end.x,
+                end.y,
+                monster.x - radius,
+                monster.y - radius,
+                monster.width + radius * 2,
+                monster.height + radius * 2
+            ))
+            .sort((left, right) => {
+                const leftCenter = this.getEntityCenter(left);
+                const rightCenter = this.getEntityCenter(right);
+                return Math.hypot(leftCenter.x - start.x, leftCenter.y - start.y)
+                    - Math.hypot(rightCenter.x - start.x, rightCenter.y - start.y);
+            })[0] || null;
+    }
+
+    doesProjectileHitHero(start, end, radius = 5) {
+        const hero = this.playerSystem?.player;
+        if (!hero) return false;
+        return this.segmentIntersectsRect(
+            start.x,
+            start.y,
+            end.x,
+            end.y,
+            hero.x - radius,
+            hero.y - radius,
+            hero.width + radius * 2,
+            hero.height + radius * 2
+        );
+    }
+
+    isLineBlocked(start, end, padding = 4) {
+        if (!start || !end) return false;
+        return (this.worldSystem.obstacles || []).some(obstacle => this.segmentIntersectsRect(
+            start.x,
+            start.y,
+            end.x,
+            end.y,
+            obstacle.x - padding,
+            obstacle.y - padding,
+            obstacle.width + padding * 2,
+            obstacle.height + padding * 2
+        ));
+    }
+
+    segmentIntersectsRect(x1, y1, x2, y2, rectX, rectY, rectWidth, rectHeight) {
+        const minX = rectX;
+        const maxX = rectX + rectWidth;
+        const minY = rectY;
+        const maxY = rectY + rectHeight;
+        if ((x1 >= minX && x1 <= maxX && y1 >= minY && y1 <= maxY)
+            || (x2 >= minX && x2 <= maxX && y2 >= minY && y2 <= maxY)) return true;
+
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        let tMin = 0;
+        let tMax = 1;
+        for (const [origin, direction, low, high] of [[x1, dx, minX, maxX], [y1, dy, minY, maxY]]) {
+            if (Math.abs(direction) < 1e-9) {
+                if (origin < low || origin > high) return false;
+                continue;
+            }
+            let near = (low - origin) / direction;
+            let far = (high - origin) / direction;
+            if (near > far) [near, far] = [far, near];
+            tMin = Math.max(tMin, near);
+            tMax = Math.min(tMax, far);
+            if (tMin > tMax) return false;
+        }
+        return true;
     }
 
     resolveBulletHit(bullet, target) {
@@ -994,6 +2048,11 @@ export class CombatSystem {
         this.encounterRewards.crystals += monster.crystalReward || 0;
         this.encounterRewards.exp += monster.expReward || 0;
         this.encounterRewards.kills += 1;
+        if (monster.isBoss) {
+            this.meta.bossKills += 1;
+            this.runBossKills += 1;
+        }
+        if (monster.isElite) this.runEliteKills += 1;
         this.explosions.push({
             x: monster.x + monster.width / 2,
             y: monster.y + monster.height / 2,
@@ -1024,16 +2083,38 @@ export class CombatSystem {
 
     commitEncounterRewards() {
         if (this.encounterRewardsCommitted) return;
-        if (this.encounterRewards.kills > 0) this.runSystem.addPendingRewards(this.encounterRewards);
+        if (this.encounterRewards.kills > 0) {
+            const multiplier = this.getThreatRewardMultiplier();
+            this.runSystem.addPendingRewards({
+                coins: Math.floor(this.encounterRewards.coins * multiplier),
+                crystals: Math.floor(this.encounterRewards.crystals * multiplier),
+                exp: Math.floor(this.encounterRewards.exp * multiplier),
+                kills: this.encounterRewards.kills
+            });
+        }
         this.encounterRewardsCommitted = true;
+    }
+
+    getThreatRewardMultiplier() {
+        if (typeof this.runSystem.getThreatRewardMultiplier === 'function') {
+            return this.runSystem.getThreatRewardMultiplier();
+        }
+        return 1 + Math.min(0.75, Math.max(0, this.runSystem.threat || 0) * 0.0075);
     }
 
     finishExpedition(extracted, reason) {
         if (this.settled) return this.lastSettlement;
-        this.commitEncounterRewards();
+        const runBeforeSettlement = this.runSystem.getState();
+        const protectedLoot = this.runSystem.getProtectedLoot?.().map(item => ({ ...item })) || [];
+        // 主动放弃不能通过刷一半遭遇带走击杀收益；战败仍沿用原有保底规则。
+        if (reason !== 'abandoned') this.commitEncounterRewards();
+        else {
+            this.encounterRewards = this.createEmptyRewards();
+            this.encounterRewardsCommitted = true;
+        }
         this.settled = true;
         const baseSettlement = this.runSystem.finishRun({ extracted, reason });
-        const territoryBonuses = this.territorySystem?.calculateBonuses?.() || {};
+        const territoryBonuses = this.runSnapshot?.territory || this.territorySystem?.calculateBonuses?.() || {};
         const territoryExpBonus = (territoryBonuses.expBonus || 0) + (this.runPreparation.expBonus || 0);
         const settlement = {
             ...baseSettlement,
@@ -1041,7 +2122,11 @@ export class CombatSystem {
             crystals: Math.floor(baseSettlement.crystals * (1 + (territoryBonuses.crystalBonus || 0) / 100)),
             exp: Math.floor(baseSettlement.exp * (1 + territoryExpBonus / 100))
         };
-        settlement.petBond = this.petSystem?.applyExpeditionBond?.(settlement) || {
+        settlement.bossKills = this.runBossKills;
+        settlement.eliteKills = this.runEliteKills;
+        settlement.participantIds = (this.petSquadSnapshot?.members || []).map(member => member.instanceId);
+        settlement.petBond = this.petSystem?.awardExpeditionProgress?.(settlement)
+            || this.petSystem?.applyExpeditionBond?.(settlement) || {
             plannedGain: 0,
             totalGain: 0,
             count: 0,
@@ -1049,12 +2134,41 @@ export class CombatSystem {
             cappedCount: 0,
             pets: []
         };
+        settlement.petProgress = settlement.petBond;
+        settlement.petIds = [...settlement.participantIds];
+
+        const completedLocations = this.worldSystem.getState?.(this.getHeroCenter())?.locations
+            ?.filter(location => location.completed || location.state === 'cleared')
+            .map(location => ({
+                id: location.nodeId || location.id,
+                type: location.type,
+            })) || [];
+        const activeMetaRaidId = this.expeditionMetaSystem?.getState?.()?.activeRaid?.raidId || null;
+        settlement.metaSettlement = this.expeditionMetaSystem?.applySettlement?.({
+            settlement,
+            settlementId: activeMetaRaidId,
+            loot: runBeforeSettlement.backpack || [],
+            recoveredLoot: protectedLoot,
+            runStats: {
+                petIds: settlement.participantIds,
+                eliteKills: this.runEliteKills,
+                investigatedLocations: completedLocations
+            }
+        }) || null;
 
         this.resourceSystem?.addCoins?.(settlement.coins);
         this.resourceSystem?.addCrystals?.(settlement.crystals);
+        this.resourceSystem?.addRubies?.(settlement.rubyReward || 0);
         this.playerSystem?.addExperience?.(settlement.exp);
         this.meta.bestDepth = Math.max(this.meta.bestDepth, settlement.depth);
-        if (settlement.extracted) this.meta.extractions += 1;
+        this.meta.contractFragments += Math.max(0, Number(settlement.contractFragments) || 0);
+        this.meta.deepMaterials += Math.max(0, Number(settlement.deepMaterials) || 0);
+        if (settlement.extracted) {
+            this.meta.extractions += 1;
+            this.meta.bestExtractedDepth = Math.max(this.meta.bestExtractedDepth, settlement.depth);
+            this.meta.bestValue = Math.max(this.meta.bestValue, Number(settlement.value) || 0);
+            if (this.runDamageTaken <= 0) this.meta.flawlessExtractions += 1;
+        }
         else this.meta.losses += 1;
         this.lastSettlement = settlement;
         this.monsters = [];
@@ -1062,7 +2176,13 @@ export class CombatSystem {
         this.encounterQueue = [];
         this.currentEncounter = null;
         this.extractionTimer = 0;
+        this.extractionTotalDuration = 0;
+        this.extractionOutOfZoneTimer = 0;
+        this.extractionReinforcementTimer = 0;
+        this.extractionReinforcementIntervalMs = 0;
         this.runPreparation = { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
+        this.runLoadoutEffects = { armorDefense: 0, petGuard: 0, consumableSupplies: 0, consumed: [] };
+        this.runSnapshot = null;
         this.clearMovementInput();
         this.worldSystem.completeActiveLocation();
         this.addBannerText(settlement.extracted ? '撤离成功！' : '远征失败', settlement.extracted ? '#72d7ff' : '#ff667d');
@@ -1084,6 +2204,10 @@ export class CombatSystem {
         this.encounterSpawnTimer = 0;
         this.attackTimer = 0;
         this.extractionTimer = 0;
+        this.extractionTotalDuration = 0;
+        this.extractionOutOfZoneTimer = 0;
+        this.extractionReinforcementTimer = 0;
+        this.extractionReinforcementIntervalMs = 0;
         this.focusTargetId = null;
     }
 
@@ -1092,12 +2216,32 @@ export class CombatSystem {
     }
 
     calculateRunMaxHp() {
-        const player = this.playerSystem?.player || {};
-        const bonuses = this.territorySystem?.calculateBonuses?.() || {};
+        const player = this.runSnapshot?.player || this.playerSystem?.player || {};
+        const bonuses = this.runSnapshot?.territory || this.territorySystem?.calculateBonuses?.() || {};
         return Math.max(
             80,
             Math.floor((player.maxHp || 100) + ((bonuses.defense || 0) + (this.runPreparation.defense || 0)) * 3)
         );
+    }
+
+    captureRunSnapshot(territoryBonuses = null, preparation = null) {
+        const player = this.playerSystem?.player || {};
+        const bonuses = territoryBonuses || this.territorySystem?.calculateBonuses?.() || {};
+        return {
+            player: {
+                level: Math.max(1, Number(player.level) || 1),
+                maxHp: Math.max(1, Number(player.maxHp) || 100),
+                attack: Math.max(1, Number(player.attack) || 1),
+                defense: Math.max(0, Number(player.defense) || 0),
+                hpRegen: Math.max(0, Number(player.hpRegen) || 0),
+                attackSpeed: Math.max(0.1, Number(player.attackSpeed) || 1),
+                crit: Math.max(0, Number(player.crit) || 0),
+                critDamage: Math.max(100, Number(player.critDamage) || 150),
+                multiShot: Math.max(1, Math.floor(Number(player.multiShot) || 1))
+            },
+            territory: { ...bonuses },
+            preparation: { ...(preparation || this.runPreparation) }
+        };
     }
 
     getRunHeroState() {
@@ -1149,6 +2293,16 @@ export class CombatSystem {
         const camera = this.cameraSystem.getState();
         const interaction = this.getInteractionState();
         const nearExtraction = interaction.location?.kind === 'extraction';
+        const nearExtractionType = nearExtraction
+            ? (interaction.location.extractionType || interaction.location.id)
+            : null;
+        const nearExtractionAvailability = nearExtractionType
+            ? this.runSystem.getExtractionAvailability?.(nearExtractionType)
+            : null;
+        const activeExtractionType = run.activeExtractionType || null;
+        const activeExtractionRule = activeExtractionType
+            ? this.runSystem.getExtractionRule?.(activeExtractionType)
+            : null;
         const pendingRewards = {
             coins: run.pendingRewards.coins + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.coins),
             crystals: run.pendingRewards.crystals + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.crystals),
@@ -1170,6 +2324,21 @@ export class CombatSystem {
             baseHp: this.runHp,
             baseMaxHp: this.runMaxHp,
             threat: run.threat,
+            threatForecast: run.threatForecast || {
+                current: run.threat,
+                nextTier: Math.min(100, Math.ceil((run.threat + 1) / 20) * 20),
+                rewardMultiplier: this.getThreatRewardMultiplier()
+            },
+            rewardMultiplier: run.rewardMultiplier || this.getThreatRewardMultiplier(),
+            overpressure: run.overpressure || 0,
+            returnPressure: run.returnPressure || { ...this.returnPressure },
+            threatPreview: run.threatPreview || null,
+            searchProfiles: run.searchProfiles || null,
+            activeSearch: run.activeSearch || null,
+            searchState: run.searchState || run.activeSearch || null,
+            isSearching: Boolean(run.isSearching || run.activeSearch),
+            insuredSlotCount: run.insuredSlotCount || 0,
+            searchMetrics: run.searchMetrics || null,
             supplies: run.supplies,
             energy: run.supplies,
             activeEnemies: this.monsters.length,
@@ -1178,6 +2347,7 @@ export class CombatSystem {
             backpackCount: run.backpack.length,
             backpackCapacity: run.backpackCapacity,
             backpackRewards: run.backpackRewards,
+            pendingLootChoice: run.pendingLootChoice || null,
             pendingValue,
             rewards: pendingRewards,
             currentNode: run.currentNode,
@@ -1195,35 +2365,57 @@ export class CombatSystem {
                 canMove: this.canMoveHero()
             },
             interaction,
+            weapon: this.getWeaponState(),
+            loadoutEffects: JSON.parse(JSON.stringify(this.runLoadoutEffects)),
             petSkills: this.getPetSkillsState(),
+            petGuard: {
+                hp: this.petGuardHp,
+                maxHp: this.petGuardMaxHp,
+                damageReduction: this.petSquadSnapshot?.damageReduction || 0,
+                rescueReady: Boolean(this.petSquadSnapshot?.rescue && !this.petRescueUsed)
+            },
             searchBonuses: {
                 quick: this.petSystem?.getExplorationSearchBonuses?.('quick') || {},
                 thorough: this.petSystem?.getExplorationSearchBonuses?.('thorough') || {},
                 pet: this.petSystem?.getExplorationSearchBonuses?.('pet') || {}
             },
             extraction: {
-                unlocked: run.depth >= run.minExtractionDepth,
-                canExtract: run.canExtract && nearExtraction,
+                unlocked: Object.values(run.extractionAvailability || {}).some(item => item?.canExtract),
+                canExtract: Boolean(nearExtractionAvailability?.canExtract),
+                nearType: nearExtractionType,
+                activeType: activeExtractionType,
+                activeLocationId: activeExtractionRule?.locationId || world.activeExtractionLocationId || null,
+                activeRule: activeExtractionRule,
+                rules: run.extractionRules || {},
+                availability: run.extractionAvailability || {},
                 inZone: this.isHeroInExtractionZone(),
+                contested: this.isExtractionContested(),
+                outOfZoneMs: this.extractionOutOfZoneTimer,
+                reinforcementMs: Math.max(0, this.extractionReinforcementTimer),
                 remainingMs: this.extractionTimer,
-                remainingSeconds: Math.ceil(this.extractionTimer / 1000)
+                remainingSeconds: Math.ceil(this.extractionTimer / 1000),
+                totalMs: this.extractionTotalDuration
             },
             actions: {
+                blockedByLootChoice: Boolean(run.pendingLootChoice),
                 canStart: phase === 'briefing' || phase === 'extracted' || phase === 'defeat',
-                canChooseRoute: phase === 'route',
+                canChooseRoute: phase === 'route' && !run.pendingLootChoice,
                 canTrackMap: phase === 'route' || phase === 'extraction-ready',
-                canSearch: phase === 'search',
+                canSearch: phase === 'search' && !run.pendingLootChoice && !run.isSearching && !run.activeSearch,
                 canRest: phase === 'camp',
-                canExtract: run.canExtract && nearExtraction,
+                canExtract: Boolean(nearExtractionAvailability?.canExtract),
                 canInteract: interaction.available,
                 canMove: this.canMoveHero(),
-                canHeal: run.active && run.supplies > 0 && this.runHp < this.runMaxHp,
+                canHeal: run.active && run.supplies > 0 && this.runHp < this.runMaxHp
+                    && this.supplyCooldownTimer <= 0
+                    && (!this.isCombatActive() || this.timeSinceDamage >= this.config.supplyCombatSafeWindowMs),
                 canAbandon: run.active,
                 canRestart: !run.active
             },
             canStartWave: phase === 'briefing',
             isWaveActive: this.isCombatActive(),
             settlement: this.lastSettlement ? { ...this.lastSettlement } : null,
+            raidMeta: this.expeditionMetaSystem?.getState?.() || null,
             meta: { ...this.meta }
         };
     }
@@ -1490,7 +2682,8 @@ export class CombatSystem {
 
     renderWorldPaths(ctx) {
         const locations = Array.from(this.worldSystem.locations.values())
-            .filter(location => location.kind === 'route' && location.state !== 'missed')
+            // 已放弃的分支仍属于地形的一部分，保留它可避免选择路线后道路突然位移。
+            .filter(location => location.kind === 'route')
             .sort((a, b) => (a.depth || 0) - (b.depth || 0) || (a.branch || 0) - (b.branch || 0));
         const depthCenters = new Map();
         locations.forEach(location => {
@@ -1599,10 +2792,57 @@ export class CombatSystem {
     renderScreenOverlay(ctx) {
         this.renderFogOfWar(ctx);
         this.renderNavigationGuide(ctx);
+        this.renderAimGuide(ctx);
         this.renderMinimap(ctx);
         this.renderExtractionProgress(ctx);
         this.renderPhasePrompt(ctx);
         this.renderFloatingTexts(ctx, { screenSpace: true });
+    }
+
+    renderAimGuide(ctx) {
+        if (!this.runSystem.active || !this.manualAimEnabled) return;
+        const origin = this.getHeroCenter();
+        const direction = this.getCurrentAimDirection(origin);
+        const weaponRange = Math.max(80, Number(this.getWeaponConfig()?.range) || 420);
+        let distance = Math.min(weaponRange, 220);
+        if (this.aimWorldPoint) {
+            distance = Math.min(
+                weaponRange,
+                Math.max(24, Math.hypot(this.aimWorldPoint.x - origin.x, this.aimWorldPoint.y - origin.y))
+            );
+        }
+        const target = {
+            x: origin.x + direction.x * distance,
+            y: origin.y + direction.y * distance
+        };
+        const originScreen = this.cameraSystem.worldToScreen(origin.x, origin.y);
+        const targetScreen = this.cameraSystem.worldToScreen(target.x, target.y);
+        const pulse = 1 + Math.sin(Date.now() / 120) * 0.08;
+        const radius = 10 * pulse;
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 241, 167, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 7]);
+        ctx.beginPath();
+        ctx.moveTo(originScreen.x + direction.x * 24, originScreen.y + direction.y * 24);
+        ctx.lineTo(targetScreen.x - direction.x * radius, targetScreen.y - direction.y * radius);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#fff1a7';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(targetScreen.x, targetScreen.y, radius, 0, Math.PI * 2);
+        ctx.moveTo(targetScreen.x - radius - 6, targetScreen.y);
+        ctx.lineTo(targetScreen.x - radius + 1, targetScreen.y);
+        ctx.moveTo(targetScreen.x + radius - 1, targetScreen.y);
+        ctx.lineTo(targetScreen.x + radius + 6, targetScreen.y);
+        ctx.moveTo(targetScreen.x, targetScreen.y - radius - 6);
+        ctx.lineTo(targetScreen.x, targetScreen.y - radius + 1);
+        ctx.moveTo(targetScreen.x, targetScreen.y + radius - 1);
+        ctx.lineTo(targetScreen.x, targetScreen.y + radius + 6);
+        ctx.stroke();
+        ctx.restore();
     }
 
     renderFogOfWar(ctx) {
@@ -1754,6 +2994,30 @@ export class CombatSystem {
     }
 
     renderMonster(ctx, monster) {
+        if (monster.bossTelegraphTimer > 0 && monster.bossTarget) {
+            const pulse = 0.72 + Math.sin(Date.now() / 70) * 0.18;
+            ctx.save();
+            ctx.fillStyle = `rgba(255, 80, 55, ${0.12 + pulse * 0.1})`;
+            ctx.strokeStyle = '#ff7043';
+            ctx.lineWidth = 4;
+            ctx.setLineDash([12, 8]);
+            ctx.beginPath();
+            ctx.arc(monster.bossTarget.x, monster.bossTarget.y, 145 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+        if (monster.chargeTelegraph > 0 && monster.chargeVector) {
+            const center = this.getEntityCenter(monster);
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 209, 103, 0.82)';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(center.x, center.y);
+            ctx.lineTo(center.x + monster.chargeVector.x * 150, center.y + monster.chargeVector.y * 150);
+            ctx.stroke();
+            ctx.restore();
+        }
         const image = this.monsterImages[monster.templateId];
         const animationState = monster.stunTimer > 0 ? 'idle' : monster.combatState;
         const sheet = this.getMonsterStateSheet(monster.templateId, animationState);
@@ -1854,7 +3118,7 @@ export class CombatSystem {
     renderExtractionProgress(ctx) {
         if (this.runSystem.phase !== 'extracting') return;
         const state = this.getBattleState();
-        const total = Math.max(1, this.currentEncounter?.durationMs || 1);
+        const total = Math.max(1, this.extractionTotalDuration || this.currentEncounter?.durationMs || 1);
         const ratio = 1 - Math.min(1, this.extractionTimer / total);
         const width = Math.min(this.mapWidth * 0.54, 430);
         const x = (this.mapWidth - width) / 2;
@@ -1870,9 +3134,11 @@ export class CombatSystem {
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
         ctx.fillText(
-            state.extraction.inZone
-                ? `撤离倒计时 ${state.extraction.remainingSeconds} 秒`
-                : `离开信标范围 · 倒计时暂停 (${state.extraction.remainingSeconds} 秒)`,
+            state.extraction.contested
+                ? `敌人占据信标 · 清除后继续 (${state.extraction.remainingSeconds} 秒)`
+                : state.extraction.inZone
+                    ? `撤离倒计时 ${state.extraction.remainingSeconds} 秒`
+                    : `离开信标范围 · 进度正在回退 (${state.extraction.remainingSeconds} 秒)`,
             this.mapWidth / 2,
             y - 7
         );
@@ -1910,19 +3176,165 @@ export class CombatSystem {
     }
 
     getSaveData() {
+        const player = this.playerSystem?.player;
+        const activeRun = this.runSystem.active ? {
+            run: this.runSystem.getRunSaveData?.() || null,
+            world: this.worldSystem.getRunSaveData?.() || null,
+            hero: player ? { x: player.x, y: player.y } : null,
+            runHp: this.runHp,
+            runMaxHp: this.runMaxHp,
+            runSnapshot: this.runSnapshot ? JSON.parse(JSON.stringify(this.runSnapshot)) : null,
+            runPreparation: { ...this.runPreparation },
+            runLoadoutEffects: JSON.parse(JSON.stringify(this.runLoadoutEffects)),
+            runDamageTaken: this.runDamageTaken,
+            returnPressure: { ...this.returnPressure },
+            petSquadSnapshot: this.petSquadSnapshot ? JSON.parse(JSON.stringify(this.petSquadSnapshot)) : null,
+            petGuardHp: this.petGuardHp,
+            petGuardMaxHp: this.petGuardMaxHp,
+            petRescueUsed: this.petRescueUsed,
+            petRescueInvulnerabilityTimer: this.petRescueInvulnerabilityTimer,
+            runBossKills: this.runBossKills,
+            runEliteKills: this.runEliteKills,
+            supplyCooldownTimer: this.supplyCooldownTimer,
+            timeSinceDamage: Number.isFinite(this.timeSinceDamage) ? this.timeSinceDamage : 60000,
+            skillCooldowns: Array.from(this.skillCooldowns.entries()),
+            extractionTimer: this.extractionTimer,
+            extractionTotalDuration: this.extractionTotalDuration,
+            extractionOutOfZoneTimer: this.extractionOutOfZoneTimer,
+            extractionReinforcementTimer: this.extractionReinforcementTimer,
+            extractionReinforcementIntervalMs: this.extractionReinforcementIntervalMs,
+            currentEncounter: this.currentEncounter ? { ...this.currentEncounter } : null,
+            encounterQueue: this.encounterQueue.map(item => ({ ...item })),
+            encounterRewards: { ...this.encounterRewards },
+            encounterRewardsCommitted: this.encounterRewardsCommitted,
+            monsters: this.monsters.map(monster => ({ ...monster })),
+            bullets: this.bullets.map(bullet => ({ ...bullet })),
+            activeWeaponId: this.activeWeaponId,
+            weaponStates: Object.fromEntries(Object.entries(this.weaponStates).map(([id, state]) => [id, { ...state }])),
+            aimDirection: { ...this.aimDirection },
+            aimWorldPoint: this.aimWorldPoint ? { ...this.aimWorldPoint } : null,
+            shotCooldownTimer: this.shotCooldownTimer,
+            legacyAutoAimEnabled: this.legacyAutoAimEnabled,
+            firstStrikePending: this.firstStrikePending,
+            firstStrikeBonus: this.firstStrikeBonus,
+            nextMonsterId: this.nextMonsterId,
+            nextBulletId: this.nextBulletId,
+            settled: this.settled
+        } : null;
         return {
             mode: this.mode,
-            meta: { ...this.meta }
+            meta: { ...this.meta },
+            activeRun
         };
     }
 
     loadSaveData(data) {
         if (data?.meta) {
             this.meta.bestDepth = Math.max(0, Number(data.meta.bestDepth ?? data.meta.bestWave) || 0);
+            this.meta.bestExtractedDepth = Math.max(
+                0,
+                Number(data.meta.bestExtractedDepth) || 0
+            );
             this.meta.extractions = Math.max(0, Number(data.meta.extractions ?? data.meta.victories) || 0);
             this.meta.losses = Math.max(0, Number(data.meta.losses ?? data.meta.defeats) || 0);
+            this.meta.bossKills = Math.max(0, Number(data.meta.bossKills) || 0);
+            this.meta.flawlessExtractions = Math.max(0, Number(data.meta.flawlessExtractions) || 0);
+            this.meta.bestValue = Math.max(0, Number(data.meta.bestValue) || 0);
+            this.meta.maxExpeditionPetCount = Math.max(0, Number(data.meta.maxExpeditionPetCount) || 0);
+            this.meta.contractFragments = Math.max(0, Number(data.meta.contractFragments) || 0);
+            this.meta.deepMaterials = Math.max(0, Number(data.meta.deepMaterials) || 0);
         }
         this.resetBattle();
+        const active = data?.activeRun;
+        if (!active || !active.run || typeof this.runSystem.loadRunSaveData !== 'function') return;
+        const runLoaded = this.runSystem.loadRunSaveData(active.run);
+        if (runLoaded === false || runLoaded?.success === false) return;
+        if (active.world && typeof this.worldSystem.loadRunSaveData === 'function') {
+            this.worldSystem.loadRunSaveData(active.world);
+        }
+        if (active.hero && this.playerSystem?.player) {
+            this.playerSystem.player.x = Number(active.hero.x) || 0;
+            this.playerSystem.player.y = Number(active.hero.y) || 0;
+        }
+        this.runHp = Math.max(0, Number(active.runHp) || 0);
+        this.runMaxHp = Math.max(1, Number(active.runMaxHp) || 100);
+        this.runSnapshot = active.runSnapshot || this.captureRunSnapshot();
+        this.runPreparation = { ...this.runPreparation, ...(active.runPreparation || {}) };
+        this.runLoadoutEffects = {
+            ...this.runLoadoutEffects,
+            ...(active.runLoadoutEffects || {}),
+            consumed: Array.isArray(active.runLoadoutEffects?.consumed)
+                ? active.runLoadoutEffects.consumed.map(item => ({ ...item }))
+                : []
+        };
+        this.runDamageTaken = Math.max(0, Number(active.runDamageTaken) || 0);
+        this.returnPressure = {
+            distance: Math.max(0, Number(active.returnPressure?.distance) || 0),
+            level: Math.max(0, Number(active.returnPressure?.level) || 0),
+            triggers: Math.max(0, Number(active.returnPressure?.triggers) || 0)
+        };
+        this.petSquadSnapshot = active.petSquadSnapshot || null;
+        this.petGuardHp = Math.max(0, Number(active.petGuardHp) || 0);
+        this.petGuardMaxHp = Math.max(this.petGuardHp, Number(active.petGuardMaxHp) || 0);
+        this.petRescueUsed = Boolean(active.petRescueUsed);
+        this.petRescueInvulnerabilityTimer = Math.max(0, Number(active.petRescueInvulnerabilityTimer) || 0);
+        this.runBossKills = Math.max(0, Number(active.runBossKills) || 0);
+        this.runEliteKills = Math.max(0, Number(active.runEliteKills) || 0);
+        this.supplyCooldownTimer = Math.max(0, Number(active.supplyCooldownTimer) || 0);
+        this.timeSinceDamage = Math.max(0, Number(active.timeSinceDamage) || 0);
+        this.skillCooldowns = new Map(Array.isArray(active.skillCooldowns) ? active.skillCooldowns : []);
+        this.extractionTimer = Math.max(0, Number(active.extractionTimer) || 0);
+        this.extractionTotalDuration = Math.max(this.extractionTimer, Number(active.extractionTotalDuration) || 0);
+        this.extractionOutOfZoneTimer = Math.max(0, Number(active.extractionOutOfZoneTimer) || 0);
+        this.extractionReinforcementTimer = Math.max(0, Number(active.extractionReinforcementTimer) || 0);
+        this.extractionReinforcementIntervalMs = Math.max(
+            0,
+            Number(active.extractionReinforcementIntervalMs)
+                || Number(active.currentEncounter?.reinforcementIntervalMs)
+                || this.config.extractionReinforcementIntervalMs
+        );
+        this.currentEncounter = active.currentEncounter ? { ...active.currentEncounter } : null;
+        this.encounterQueue = Array.isArray(active.encounterQueue) ? active.encounterQueue.map(item => ({ ...item })) : [];
+        this.encounterRewards = { ...this.createEmptyRewards(), ...(active.encounterRewards || {}) };
+        this.encounterRewardsCommitted = Boolean(active.encounterRewardsCommitted);
+        this.monsters = Array.isArray(active.monsters) ? active.monsters.map(monster => ({ ...monster })) : [];
+        this.bullets = Array.isArray(active.bullets) ? active.bullets.map(bullet => ({ ...bullet })) : [];
+        const restoredWeaponId = String(active.activeWeaponId || '');
+        this.activeWeaponId = this.getWeaponConfig(restoredWeaponId) ? restoredWeaponId : this.weaponOrder[0];
+        if (active.weaponStates && typeof active.weaponStates === 'object') {
+            this.weaponOrder.forEach(weaponId => {
+                const config = this.getWeaponConfig(weaponId);
+                const saved = active.weaponStates[weaponId] || {};
+                this.weaponStates[weaponId] = {
+                    magazine: Math.max(0, Math.min(config.magazineSize, Math.floor(Number(saved.magazine) || 0))),
+                    reserve: Math.max(0, Math.floor(Number(saved.reserve) || 0)),
+                    reloadRemainingMs: Math.max(0, Number(saved.reloadRemainingMs) || 0)
+                };
+            });
+        }
+        const aimX = Number(active.aimDirection?.x);
+        const aimY = Number(active.aimDirection?.y);
+        if (Number.isFinite(aimX) && Number.isFinite(aimY) && Math.hypot(aimX, aimY) > 0.001) {
+            this.setAimDirection(aimX, aimY);
+        }
+        if (Number.isFinite(Number(active.aimWorldPoint?.x)) && Number.isFinite(Number(active.aimWorldPoint?.y))) {
+            this.aimWorldPoint = { x: Number(active.aimWorldPoint.x), y: Number(active.aimWorldPoint.y) };
+        }
+        this.firingHeld = false;
+        this.shotCooldownTimer = Math.max(0, Number(active.shotCooldownTimer) || 0);
+        this.legacyAutoAimEnabled = Boolean(active.legacyAutoAimEnabled);
+        this.manualAimEnabled = !this.legacyAutoAimEnabled;
+        this.firstStrikePending = Boolean(active.firstStrikePending);
+        this.firstStrikeBonus = Math.max(0, Math.min(1, Number(active.firstStrikeBonus) || 0));
+        this.nextMonsterId = Math.max(1, Number(active.nextMonsterId) || 1);
+        this.nextBulletId = Math.max(1, Number(active.nextBulletId) || 1);
+        this.settled = Boolean(active.settled);
+        this.battleInitialized = true;
+        if (this.runSystem.active && !this.expeditionMetaSystem?.getState?.()?.activeRaid) {
+            this.expeditionMetaSystem?.startRaid?.();
+        }
+        this.worldSystem.updateExtractionAvailability?.(this.runSystem.getState());
+        this.updateWorldAwareness();
     }
 }
 

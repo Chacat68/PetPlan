@@ -293,8 +293,9 @@ export class PlayerSystem {
             this.combatSystem.mode === 'extractionRpg' &&
             typeof this.combatSystem.updateHeroMovement === 'function'
         ) {
-            const movement = this.combatSystem.updateHeroMovement(this.player, deltaTime);
-            this.setCombatState(movement.moved ? 'move' : 'idle');
+            // 远征位移由 CombatSystem 在战斗帧中统一推进。这里不能再次移动，
+            // 否则 GameCore 同一帧依次更新 Player/Combat 时会产生双倍速度。
+            this.setCombatState('idle');
             return;
         }
 

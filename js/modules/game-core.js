@@ -173,6 +173,8 @@ export class GameCore {
   update(deltaTime, fateDeltaTime = deltaTime) {
     // 更新各系统
     if (this.systems.player) {
+      // PlayerSystem 只维护属性与动画；远征的世界位移由 CombatSystem
+      // 在本帧稍后统一推进，避免两个系统各移动一次。
       this.systems.player.update(deltaTime);
     }
 

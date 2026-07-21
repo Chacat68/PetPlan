@@ -250,9 +250,67 @@ test("迷雾只揭开走过的地图格，未发现地形不会提前暴露", ()
   assert.equal(alternateLocation.known, false, "未追踪的远端 POI 不应提前标记为已知");
 
   assert.equal(world.trackLocation(alternateLocation.id).success, true);
-  assert.equal(world.getLocation(alternateLocation.id).known, true, "主动追踪后才显示目标情报");
+  assert.equal(world.getLocation(alternateLocation.id).known, false, "追踪只提供方向，不应直接泄露地点情报");
+  world.updatePlayerPosition(alternateLocation.x, alternateLocation.y);
+  assert.equal(world.getLocation(alternateLocation.id).known, true, "接近地点后才显示完整情报");
   world.updatePlayerPosition(farObstacle.x, farObstacle.y);
   assert.equal(world.isAreaRevealed(farObstacle), true, "走到远端后应揭开对应小地图格");
+});
+
+test("远征世界按种子稳定变化，并包含可发现的一次性支线事件", () => {
+  const routes = [
+    createRouteNode("seed-search", "search", 1, 0),
+    createRouteNode("seed-combat", "combat", 1, 1),
+  ];
+  const first = new ExpeditionWorldSystem();
+  const second = new ExpeditionWorldSystem();
+  const third = new ExpeditionWorldSystem();
+  first.startRun(routes, { seed: 1234 });
+  second.startRun(routes, { seed: 1234 });
+  third.startRun(routes, { seed: 9876 });
+
+  const firstRoute = first.getLocationByNodeId("seed-search");
+  const secondRoute = second.getLocationByNodeId("seed-search");
+  const thirdRoute = third.getLocationByNodeId("seed-search");
+  assert.deepEqual(
+    { x: firstRoute.x, y: firstRoute.y },
+    { x: secondRoute.x, y: secondRoute.y },
+    "相同种子必须生成相同地点布局",
+  );
+  assert.notDeepEqual(
+    { x: firstRoute.x, y: firstRoute.y },
+    { x: thirdRoute.x, y: thirdRoute.y },
+    "不同种子应改变地点布局",
+  );
+
+  const event = first.getState(first.spawnPoint).locations.find((location) => location.kind === "world-event");
+  assert.ok(event, "每局应生成可选的支线探索事件");
+  first.updatePlayerPosition(event.x, event.y);
+  assert.equal(first.findNearbyLocation(event.x, event.y)?.id, event.id);
+  const consumed = first.consumeWorldEvent(event.id);
+  assert.equal(consumed.success, true);
+  assert.ok(consumed.effect && typeof consumed.effect === "object");
+  assert.equal(first.consumeWorldEvent(event.id).success, false, "支线事件只能结算一次");
+});
+
+test("远征世界快照可恢复迷雾、地点和支线进度", () => {
+  const routes = [
+    createRouteNode("save-search", "search", 1, 0),
+    createRouteNode("save-combat", "combat", 1, 1),
+  ];
+  const world = new ExpeditionWorldSystem();
+  world.startRun(routes, { seed: 2468 });
+  const event = world.getState(world.spawnPoint).locations.find((location) => location.kind === "world-event");
+  world.updatePlayerPosition(event.x, event.y);
+  world.consumeWorldEvent(event.id);
+  const snapshot = world.getRunSaveData();
+
+  const restored = new ExpeditionWorldSystem();
+  assert.equal(restored.loadRunSaveData(snapshot).success, true);
+  assert.equal(restored.runSeed, 2468);
+  assert.equal(restored.getLocation(event.id).state, "cleared");
+  assert.equal(restored.consumedWorldEvents, 1);
+  assert.deepEqual(restored.getState(event).revealedCells, snapshot.revealedCells);
 });
 
 test("撤离只能在信标近距启动，离开撤离圈时倒计时暂停", () => {

@@ -3,10 +3,32 @@ import {
   ACHIEVEMENT_DEFINITIONS,
 } from "./achievement-config.js?v=achievement-ui-v3-20260714a";
 
-const SAVE_SCHEMA_VERSION = 1;
+const SAVE_SCHEMA_VERSION = 2;
 const REWARD_KEYS = Object.freeze(["coins", "rubies", "crystals"]);
 
 const normalizeCount = (value) => Math.max(0, Math.floor(Number(value) || 0));
+const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
+
+const normalizeProgressContext = (context = {}) => {
+  const normalized = { ...context };
+  normalized.bestExtractedDepth = context.bestExtractedDepth
+    ?? context.deepestExtraction
+    ?? (normalizeCount(context.extractions) > 0 && hasOwn(context, "bestDepth")
+      ? context.bestDepth
+      : 0);
+  normalized.bossKills = context.bossKills ?? context.bossesDefeated ?? 0;
+  normalized.flawlessExtractions = context.flawlessExtractions
+    ?? context.noDamageExtractions
+    ?? 0;
+  normalized.bestValue = context.bestValue
+    ?? context.bestExtractionValue
+    ?? context.highestLootValue
+    ?? 0;
+  normalized.maxExpeditionPetCount = context.maxExpeditionPetCount
+    ?? context.expeditionPetCount
+    ?? 0;
+  return normalized;
+};
 
 let instance = null;
 
@@ -65,10 +87,11 @@ export class AchievementSystem {
   updateProgress(context = {}, { notify = true, announce = true } = {}) {
     let changed = false;
     const newCompletions = [];
+    const normalizedContext = normalizeProgressContext(context);
 
     for (const metric of this.metricKeys) {
       const previous = normalizeCount(this.highWaterMarks[metric]);
-      const next = Math.max(previous, normalizeCount(context[metric]));
+      const next = Math.max(previous, normalizeCount(normalizedContext[metric]));
       if (next !== previous) {
         this.highWaterMarks[metric] = next;
         changed = true;
@@ -228,8 +251,9 @@ export class AchievementSystem {
       }
     }
     if (data.highWaterMarks && typeof data.highWaterMarks === "object") {
+      const migratedMarks = normalizeProgressContext(data.highWaterMarks);
       for (const metric of this.metricKeys) {
-        this.highWaterMarks[metric] = normalizeCount(data.highWaterMarks[metric]);
+        this.highWaterMarks[metric] = normalizeCount(migratedMarks[metric]);
       }
     }
 

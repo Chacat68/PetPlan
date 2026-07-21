@@ -189,6 +189,7 @@ export class TerritorySystem {
       expansionCount: this.expansionCount || 0,
       unlockedSlots: this.unlockedSlots || 1,
       bestDepth: 0,
+      bestExtractedDepth: 0,
       extractions: 0,
       losses: 0,
     };
@@ -199,10 +200,26 @@ export class TerritorySystem {
   }
 
   setProgressContext(context = {}) {
+    const previousExtractions = Math.max(0, Number(this.progressContext?.extractions) || 0);
+    const hasSuccessfulDepth = Object.prototype.hasOwnProperty.call(context, "bestExtractedDepth");
+    const legacySuccessfulDepth = !hasSuccessfulDepth
+      && previousExtractions === 0
+      && Math.max(0, Number(context.extractions) || 0) > 0
+      ? Math.max(0, Number(context.bestDepth) || 0)
+      : null;
+    const successfulDepth = hasSuccessfulDepth
+      ? Math.max(0, Number(context.bestExtractedDepth) || 0)
+      : legacySuccessfulDepth;
     this.progressContext = {
       ...this.createDefaultProgressContext(),
       ...this.progressContext,
       ...context,
+      ...(successfulDepth !== null ? {
+        bestExtractedDepth: Math.max(
+          Math.max(0, Number(this.progressContext?.bestExtractedDepth) || 0),
+          successfulDepth
+        )
+      } : {}),
       buildings: this.buildings.length,
       expansionCount: this.expansionCount,
       unlockedSlots: this.getEffectiveUnlockedSlots(),
@@ -265,6 +282,8 @@ export class TerritorySystem {
       { id: "hero", label: "训练", value: safe.heroTrainingLevel * weights.heroTrainingLevel },
       { id: "pets", label: "额外上阵", value: additionalEquippedPets * weights.equippedPets },
       { id: "petLevels", label: "宠物成长", value: extraPetLevels * weights.extraPetLevels },
+      // Resonance records exploration effort; only rank gates below require a
+      // successful extraction depth.
       { id: "expedition", label: "远征", value: safe.bestDepth * 8 + safe.extractions * 12 },
     ];
   }
@@ -311,7 +330,7 @@ export class TerritorySystem {
       return [
         { id: "rank", label: "领地达到 R2", met: this.rank >= 2 },
         { id: "training", label: "训练场达到 Lv.2", met: this.getBuildingLevel("training_ground") >= 2 },
-        { id: "depth", label: "最深远征达到区域 3", met: this.progressContext.bestDepth >= 3 },
+        { id: "depth", label: "从区域 3 成功撤离", met: this.progressContext.bestExtractedDepth >= 3 },
       ];
     }
     if (type === "library") {
@@ -376,13 +395,13 @@ export class TerritorySystem {
     if (!config) return { complete: true, checks: [], progress: 1, config: null };
     const values = {
       mainBase: this.getBuildingLevel("main_base"),
-      bestDepth: this.progressContext.bestDepth || 0,
+      bestExtractedDepth: this.progressContext.bestExtractedDepth || 0,
       extractions: this.progressContext.extractions || 0,
       constructionScore: this.getConstructionScore(),
     };
     const labels = {
       mainBase: "修复主基地",
-      bestDepth: "最深远征",
+      bestExtractedDepth: "成功撤离深度",
       extractions: "成功撤离",
       constructionScore: "建设度",
     };
@@ -432,9 +451,9 @@ export class TerritorySystem {
     };
     const progress = `${requirement.value} / ${requirement.target}`;
     const definitions = {
-      bestDepth: {
-        title: `远征达到区域 ${requirement.target}`,
-        detail: `当前最深区域 ${progress}`,
+      bestExtractedDepth: {
+        title: `从区域 ${requirement.target} 成功撤离`,
+        detail: `当前成功撤离最深区域 ${progress}`,
         scene: "dungeon",
         ctaLabel: "前往远征",
         route: "远征目标",
@@ -627,7 +646,7 @@ export class TerritorySystem {
     }
 
     const expeditionRequirement = missingProgress.find((check) => (
-      check.metric === "bestDepth" || check.metric === "extractions"
+      check.metric === "bestExtractedDepth" || check.metric === "extractions"
     ));
     if (expeditionRequirement) return this.getRequirementGoal(expeditionRequirement);
 

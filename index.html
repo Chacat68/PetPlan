@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=achievement-ui-v3-20260714a" />
+    <link rel="stylesheet" href="css/style.css?v=duckov-phase1-20260721b" />
   </head>
   <body>
     <section class="orientation-lock" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
@@ -50,6 +50,7 @@
                 <span>生命 <b id="battle-hp-display">--/--</b></span>
                 <span>威胁 <b id="battle-threat-display">0%</b></span>
                 <span>背包 <b id="battle-bag-display">0/8</b></span>
+                <span>护卫 <b id="battle-guard-display">0/0</b></span>
                 <span>敌人 <b id="battle-enemy-display">0</b></span>
               </div>
 
@@ -60,6 +61,16 @@
               <div class="battle-event-feed" id="battle-event-feed" aria-live="polite">
                 准备好后开始远征。撤离前获得的战利品都只是暂存。
               </div>
+              <section class="battle-weapon-hud" id="battle-weapon-hud" aria-live="polite" hidden>
+                <div class="battle-weapon-readout">
+                  <span id="battle-weapon-name">应急手枪</span>
+                  <strong><b id="battle-ammo-magazine">--</b> / <span id="battle-ammo-reserve">--</span></strong>
+                </div>
+                <div class="battle-reload-track" id="battle-reload-track" hidden>
+                  <span id="battle-reload-label">换弹中</span>
+                  <progress id="battle-reload-progress" max="1" value="0"></progress>
+                </div>
+              </section>
               <div class="battle-map-location" id="battle-location-display">自由探索</div>
               <output class="battle-nearby-prompt" id="battle-nearby-prompt" aria-live="polite" hidden></output>
               <div class="battle-skill-dock" id="battle-skill-dock" aria-label="宠物主动技能"></div>
@@ -75,6 +86,15 @@
                   <strong id="battle-interact-label">靠近地点后交互</strong>
                   <span id="battle-interact-detail">WASD / 方向键移动</span>
                 </button>
+                <div class="battle-fire-controls" aria-label="武器操作">
+                  <button type="button" class="battle-reload-btn" id="battle-reload-btn" aria-label="换弹">
+                    R · 换弹
+                  </button>
+                  <button type="button" class="battle-fire-btn" id="battle-fire-btn" aria-label="按住射击" aria-pressed="false">
+                    <strong>射击</strong>
+                    <span>瞄准后按住</span>
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -102,6 +122,33 @@
               <p id="battle-room-desc">选择路线，搜索物资，击败阻拦者，并判断何时收手。</p>
             </section>
 
+            <section class="expedition-loadout-panel" id="battle-loadout-panel">
+              <div class="expedition-section-row">
+                <span class="expedition-section-title">出发配装</span>
+                <b id="battle-stash-summary">仓库 0 件</b>
+              </div>
+              <div class="expedition-weapon-slots" id="battle-weapon-slots" aria-label="主武器选择"></div>
+              <div class="expedition-loadout-summary" id="battle-loadout-summary">
+                基础武器不会因撤离失败而丢失。
+              </div>
+              <div class="expedition-equipped-items" id="battle-equipped-items" aria-label="当前远征配装"></div>
+              <div class="expedition-stash-list" id="battle-stash-list" aria-live="polite"></div>
+              <div class="expedition-contract-list" id="battle-contract-list" aria-live="polite"></div>
+            </section>
+
+            <section class="expedition-risk-preview" id="battle-risk-preview" aria-live="polite">
+              <div class="expedition-section-row">
+                <span class="expedition-section-title">风险与结算预估</span>
+                <b id="battle-threat-tier-label">警戒 · 收益 ×1.00</b>
+              </div>
+              <div class="expedition-risk-grid">
+                <span>下档威胁 <b id="battle-threat-next">25（还差 25）</b></span>
+                <span>返程压力 <b id="battle-return-pressure">未启动</b></span>
+                <span>成功撤离 <b id="battle-success-preview">0 金币 / 0 水晶</b></span>
+                <span>失败保留 <b id="battle-failure-preview">0 金币 / 保险 0 件</b></span>
+              </div>
+            </section>
+
             <section class="expedition-route-panel" id="battle-route-panel" hidden>
               <span class="expedition-section-title">地图目标 · 点击追踪</span>
               <div class="expedition-route-list" id="battle-route-list"></div>
@@ -110,10 +157,17 @@
             <section class="expedition-loot-panel">
               <div class="expedition-section-row">
                 <span class="expedition-section-title">远征背包</span>
-                <span id="battle-supplies-display">补给 0</span>
+                <span><b id="battle-insurance-display">保险 0/1</b> · <b id="battle-supplies-display">补给 0</b></span>
               </div>
               <div class="expedition-loot-list" id="battle-loot-list" aria-live="polite">
                 <span class="expedition-empty-loot">暂无战利品</span>
+              </div>
+              <div class="expedition-loot-choice" id="battle-loot-choice-panel" hidden>
+                <span class="expedition-section-title">背包已满 · 请选择取舍</span>
+                <strong id="battle-loot-choice-name">新战利品</strong>
+                <small id="battle-loot-choice-detail">选择一件未保险物品替换，或放弃新战利品。</small>
+                <div class="expedition-loot-replace-list" id="battle-loot-replace-list"></div>
+                <button type="button" class="expedition-loot-discard" data-loot-action="discard">放弃新战利品</button>
               </div>
             </section>
 
@@ -133,6 +187,15 @@
                   宠物侦察 <span data-search-preview>稳妥</span>
                 </button>
               </div>
+
+              <section class="expedition-search-progress" id="battle-search-progress" aria-live="polite" hidden>
+                <div class="expedition-section-row">
+                  <strong id="battle-search-progress-label">正在搜索</strong>
+                  <span id="battle-search-progress-time">0.0 秒</span>
+                </div>
+                <progress id="battle-search-progress-bar" max="1" value="0"></progress>
+                <button type="button" id="battle-cancel-search-btn">取消搜索</button>
+              </section>
 
               <div class="expedition-action-group" id="battle-camp-actions" hidden>
                 <button type="button" class="expedition-action-btn" id="battle-rest-btn">
@@ -607,7 +670,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=achievement-ui-v3-20260714a";
+        var moduleSrc = "js/main.js?v=duckov-phase1-20260721b";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

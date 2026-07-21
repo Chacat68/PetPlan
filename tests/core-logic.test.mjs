@@ -789,7 +789,7 @@ test("现代存档可往返，旧版存档可迁移且不会串入会话状态",
 
     assert.equal(await save.saveGame(1), true);
     const serialized = JSON.parse(storage.getItem("petplan_save_1"));
-    assert.equal(serialized.version, "1.3.0");
+    assert.equal(serialized.version, "1.5.0");
     assert.equal(serialized.level, 7);
     assert.deepEqual(serialized.data.fate, { fateCoins: 2, totalFlips: 9 });
     assert.deepEqual(serialized.data.progression, {
@@ -831,7 +831,7 @@ test("现代存档可往返，旧版存档可迁移且不会串入会话状态",
     assert.deepEqual(systems.fate.loaded, {});
     assert.deepEqual(systems.progression.loaded, {});
     assert.deepEqual(systems.achievement.loaded, { claimedAchievementIds: [] });
-    assert.equal(JSON.parse(storage.getItem("petplan_save_2")).version, "1.3.0");
+    assert.equal(JSON.parse(storage.getItem("petplan_save_2")).version, "1.5.0");
 
     storage.setItem("petplan_save_3", "{broken-json");
     const expectedErrors = [];
