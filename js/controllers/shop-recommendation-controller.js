@@ -41,6 +41,7 @@ export class ShopRecommendationController {
     this.filter = "recommended";
     this.listeners = [];
     this.latestRecommendation = null;
+    this.latestGoal = null;
     this.committedPrimaryAction = "";
     this.committedSecondaryAction = "";
     this.committedGuideId = "";
@@ -67,6 +68,16 @@ export class ShopRecommendationController {
       };
       goalRoute.addEventListener("click", handler);
       this.listeners.push({ button: goalRoute, handler });
+    }
+
+    const milestoneRoute = document.getElementById("fate-milestone-route");
+    if (milestoneRoute) {
+      const handler = () => {
+        const scene = milestoneRoute.dataset.scene;
+        if (scene) this.onNavigate?.(scene);
+      };
+      milestoneRoute.addEventListener("click", handler);
+      this.listeners.push({ button: milestoneRoute, handler });
     }
 
     const goalToggle = document.getElementById("fate-next-goal-toggle");
@@ -152,10 +163,12 @@ export class ShopRecommendationController {
 
   resetRecommendationStability() {
     this.latestRecommendation = null;
+    this.latestGoal = null;
     this.committedPrimaryAction = "";
     this.committedSecondaryAction = "";
     this.committedGuideId = "";
     this.pendingRecommendationCommit = false;
+    this.updateFateMilestoneVisibility();
   }
 
   requestRecommendationCommit() {
@@ -634,6 +647,44 @@ export class ShopRecommendationController {
 
     const title = document.getElementById("fate-shop-title");
     if (title) title.textContent = FATE_SHOP_FILTER_LABELS[filter] || "推荐";
+    this.updateFateMilestoneVisibility();
+  }
+
+  updateFateMilestoneVisibility() {
+    const card = document.getElementById("fate-milestone-card");
+    if (!card) return;
+    const visibleRecommendations = Array.from(
+      document.querySelectorAll(".fate-upgrade[data-fate-action]")
+    ).filter((button) => !button.hidden).length;
+    card.hidden = !(
+      this.filter === "recommended" &&
+      this.latestGoal &&
+      visibleRecommendations <= 2
+    );
+  }
+
+  updateFateMilestoneCard(goal = null, recommendation = null) {
+    this.latestGoal = goal;
+    const setText = (id, value) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value || "";
+    };
+    const primaryReason = recommendation?.primary?.reason
+      || recommendation?.primary?.preview
+      || "优先补齐当前成长缺口";
+
+    setText("fate-milestone-title", goal?.title || "下一里程碑");
+    setText("fate-milestone-detail", goal?.detail || "继续成长以解锁下一阶段。");
+    setText("fate-milestone-reason", `推荐理由：${primaryReason}`);
+    setText("fate-milestone-alt", goal?.alt ? `备选：${goal.alt}` : "备选：自由成长");
+
+    const route = document.getElementById("fate-milestone-route");
+    if (route) {
+      route.dataset.scene = goal?.scene || "";
+      route.textContent = goal?.ctaLabel || (goal?.scene ? `前往${goal.route || "目标"}` : "");
+      route.hidden = !goal?.scene;
+    }
+    this.updateFateMilestoneVisibility();
   }
 
   getFateShopCardDisplayOrder(button, filter) {
@@ -696,6 +747,7 @@ export class ShopRecommendationController {
     if (altEl) {
       altEl.textContent = goal.alt ? `备选：${goal.alt}` : "";
     }
+    this.updateFateMilestoneCard(goal, recommendation);
   }
 
   getFateNextGoal(

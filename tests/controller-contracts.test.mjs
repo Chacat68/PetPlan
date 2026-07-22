@@ -4,7 +4,7 @@ import test from "node:test";
 import { AchievementController } from "../js/controllers/achievement-controller.js";
 import { BattleSceneController } from "../js/controllers/battle-scene-controller.js";
 import { FateSceneController } from "../js/controllers/fate-scene-controller.js";
-import { OnboardingController } from "../js/controllers/onboarding-controller.js";
+import { OrientationController } from "../js/controllers/orientation-controller.js";
 import { PetModalController } from "../js/controllers/pet-modal-controller.js";
 import { PlayerModalController } from "../js/controllers/player-modal-controller.js";
 import { SettingsController } from "../js/controllers/settings-controller.js";
@@ -46,9 +46,9 @@ const controllerContracts = [
     ],
   ],
   [
-    "OnboardingController",
-    OnboardingController,
-    ["bind", "destroy", "initialize", "update", "start", "dismiss", "complete"],
+    "OrientationController",
+    OrientationController,
+    ["bind", "destroy", "update", "isNarrowPortrait", "setActive"],
   ],
   [
     "PetModalController",
@@ -123,4 +123,50 @@ test("BattleSceneController 撤离预估使用当前威胁和规则参数", () =
     overpressurePerEnemy: 10,
   }, { depth: 5, threat: 50, overpressure: 0 });
   assert.deepEqual(estimate, { durationSeconds: 12, enemyCount: 14 });
+});
+
+test("BattleSceneController 只在进入远征或阶段变化时重置终端滚动", () => {
+  const originalDocument = globalThis.document;
+  const panel = { scrollTop: 371, dataset: {} };
+  const status = { textContent: "" };
+  globalThis.document = {
+    getElementById(id) {
+      if (id === "upgrade-panel") return panel;
+      if (id === "battle-terminal-status") return status;
+      return null;
+    },
+  };
+
+  try {
+    const controller = Object.create(BattleSceneController.prototype);
+    controller.isSceneActive = true;
+    controller.shouldFocusTerminal = true;
+    controller.lastTerminalPhase = "route";
+    controller.compactTerminalOpen = true;
+
+    controller.syncTerminalContext({
+      phase: "route",
+      phaseLabel: "大地图探索",
+      actions: { canAbandon: true },
+    });
+    assert.equal(panel.scrollTop, 0);
+
+    panel.scrollTop = 144;
+    controller.syncTerminalContext({
+      phase: "route",
+      phaseLabel: "大地图探索",
+      actions: { canAbandon: true },
+    });
+    assert.equal(panel.scrollTop, 144, "同一阶段刷新不应抢夺滚动位置");
+
+    controller.syncTerminalContext({
+      phase: "combat",
+      phaseLabel: "遭遇战斗",
+      actions: { canAbandon: true },
+    });
+    assert.equal(panel.scrollTop, 0);
+    assert.match(status.textContent, /遭遇战斗/);
+  } finally {
+    globalThis.document = originalDocument;
+  }
 });

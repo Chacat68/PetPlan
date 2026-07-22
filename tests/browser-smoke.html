@@ -484,13 +484,12 @@
               return `hero move=3072x256 / 12 · idle foot spread=${footSpread}px · fire_dog/slime=3072x256 / 12 · cache=stable-actions-20260721c`;
             });
 
-            await step("第二阶段的 9 个控制器均已接线", () => {
+            await step("第二阶段的 8 个控制器均已接线", () => {
               const game = frame.contentWindow.game;
               const controllerNames = [
                 "achievementController",
                 "battleSceneController",
                 "fateSceneController",
-                "onboardingController",
                 "petModalController",
                 "playerModalController",
                 "settingsController",
@@ -523,30 +522,13 @@
               return controllerNames.join(" · ");
             });
 
-            await step("成长引导可跳过、重播且不阻断真实操作", async () => {
+            await step("当前版本不再挂载成长引导入口或控制器", () => {
               const doc = frame.contentDocument;
-              const layer = doc.getElementById("onboarding-layer");
-              const skip = doc.getElementById("onboarding-skip-btn");
-              const replay = doc.getElementById("onboarding-replay-btn");
-              assert(layer && !layer.hidden, "新存档没有自动开启成长引导");
-              assert(skip && replay, "成长引导缺少跳过或重播入口");
-              skip.click();
-              assert(layer.hidden, "跳过后成长引导仍然可见");
-              replay.click();
-              assert(!layer.hidden, "重播后成长引导没有恢复");
-              const coin = doc.querySelector(".fate-table-coin");
-              const before = frame.contentWindow.game.fateCoinSystem.totalFlips;
-              coin.click();
-              await waitFor(
-                () => frame.contentWindow.game.fateCoinSystem.totalFlips > before,
-                "引导开启时硬币仍可点击",
-              );
-              await waitFor(
-                () => coin.dataset.settled !== "true",
-                "引导点击后的硬币重新翻面",
-              );
-              skip.click();
-              return "auto → skip → replay → coin click → skip";
+              const game = frame.contentWindow.game;
+              assert(!doc.getElementById("onboarding-layer"), "成长引导浮层仍在页面中");
+              assert(!doc.getElementById("onboarding-replay-btn"), "成长引导入口仍在 HUD 中");
+              assert(!game.onboardingController, "成长引导控制器仍在运行时挂载");
+              return "entry=none · layer=none · controller=none";
             });
 
             await step("玩家按钮可打开并关闭玩家弹窗", async () => {
@@ -841,6 +823,10 @@
                 ),
                 "推荐分类显示了非推荐卡片",
               );
+              assert(
+                !doc.getElementById("fate-milestone-card")?.hidden,
+                "两条推荐下没有显示下一里程碑卡",
+              );
 
               fateFilter.click();
               await waitFor(
@@ -860,6 +846,10 @@
               assert(
                 !doc.getElementById("fate-buy-gold-btn")?.hidden,
                 "命运分类未显示桌面硬币",
+              );
+              assert(
+                doc.getElementById("fate-milestone-card")?.hidden,
+                "非推荐分类仍显示下一里程碑卡",
               );
               const goldReason = doc
                 .getElementById("fate-buy-gold-btn")
@@ -1155,7 +1145,7 @@
               return url.search;
             });
 
-            await step("领地资源信息位于标题栏且不遮挡标题等级", () => {
+            await step("领地等级紧邻标题右侧且资源信息保持独立", () => {
               const doc = frame.contentDocument;
               const scorebar = doc.querySelector(".territory-scorebar");
               const title = doc.querySelector(".territory-scorebar-title");
@@ -1168,11 +1158,31 @@
               const titleRect = title.getBoundingClientRect();
               const resourceRect = resources.getBoundingClientRect();
               const rankRect = rank.getBoundingClientRect();
+              const resourceItems = Array.from(resources.children);
+              const lastResourceRect = resourceItems.at(-1)?.getBoundingClientRect();
               assert(resourceRect.top >= scorebarRect.top, "资源信息超出标题栏顶部");
               assert(resourceRect.bottom <= scorebarRect.bottom, "资源信息超出标题栏底部");
-              assert(resourceRect.left >= titleRect.right, "资源信息与标题重叠");
-              assert(resourceRect.right <= rankRect.left, "资源信息与领地等级重叠");
-              return `titlebar=${Math.round(scorebarRect.height)}px · resources=${Math.round(resourceRect.width)}px`;
+              assert(rankRect.left >= titleRect.right, "领地等级与标题重叠");
+              assert(rankRect.left - titleRect.right <= 24, "领地等级没有紧邻标题右侧");
+              assert(resourceRect.left >= rankRect.right, "资源信息与领地等级重叠");
+              assert(resourceRect.right <= scorebarRect.right, "资源信息超出标题栏右侧");
+              assert(lastResourceRect, "资源栏缺少可见资源项");
+              assert(resourceRect.right - lastResourceRect.right <= 1, "资源卡片没有靠右对齐");
+              return `titlebar=${Math.round(scorebarRect.height)}px · right-gap=${Math.round(resourceRect.right - lastResourceRect.right)}px`;
+            });
+
+            await step("领地移动与交互控件保持紧凑可触控", () => {
+              const doc = frame.contentDocument;
+              const moveButton = doc.querySelector(".territory-move-btn");
+              const interactButton = doc.getElementById("territory-interact-btn");
+              assert(moveButton && interactButton, "领地操作区缺少移动或交互控件");
+              const moveRect = moveButton.getBoundingClientRect();
+              const interactRect = interactButton.getBoundingClientRect();
+              assert(moveRect.width >= 44 && moveRect.width <= 46, "移动按钮尺寸不在紧凑触控范围");
+              assert(moveRect.height >= 44 && moveRect.height <= 48, "移动按钮高度不在紧凑触控范围");
+              assert(interactRect.height >= 44 && interactRect.height <= 48, "交互面板高度不在紧凑触控范围");
+              assert(interactRect.width <= 230, "交互面板仍然过宽");
+              return `move=${Math.round(moveRect.width)}×${Math.round(moveRect.height)} · interact=${Math.round(interactRect.width)}×${Math.round(interactRect.height)}`;
             });
 
             await step("领地小地图位于右上角目标区域", () => {

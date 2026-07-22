@@ -27,6 +27,11 @@ export class BattleSceneController {
     this.pointerDirections = new Map();
     this.firingPointerIds = new Set();
     this.lastWorldRevision = -1;
+    this.lastTerminalPhase = null;
+    this.shouldFocusTerminal = true;
+    this.isSceneActive = false;
+    this.compactTerminalOpen = true;
+    this.lastCompactViewport = false;
     this.abortController = null;
   }
 
@@ -161,6 +166,18 @@ export class BattleSceneController {
       }
       this.handleMetaActionResult(result);
     }, { signal });
+
+    document.getElementById("battle-terminal-toggle")?.addEventListener(
+      "click",
+      () => this.setCompactTerminalOpen(!this.compactTerminalOpen),
+      { signal }
+    );
+    this.lastCompactViewport = this.isCompactTerminalViewport();
+    window.addEventListener(
+      "resize",
+      () => this.handleTerminalViewportChange(),
+      { signal }
+    );
 
     this.bindWeaponControls(signal);
 
@@ -339,7 +356,10 @@ export class BattleSceneController {
   }
 
   setSceneActive(active) {
-    if (!active) this.clearControlInput();
+    const nextActive = Boolean(active);
+    if (nextActive && !this.isSceneActive) this.shouldFocusTerminal = true;
+    this.isSceneActive = nextActive;
+    if (!nextActive) this.clearControlInput();
   }
 
   destroy() {
@@ -407,12 +427,19 @@ export class BattleSceneController {
 
     setText("battle-phase-badge", state.phaseLabel);
     setText("battle-depth-display", `${state.world.explorationPercent}%`);
-    setText("battle-hp-display", `${state.hp}/${state.maxHp}`);
+    const guardHp = Math.ceil(state.petGuard?.hp || 0);
+    const guardMaxHp = Math.ceil(state.petGuard?.maxHp || 0);
+    setText(
+      "battle-hp-display",
+      state.actions.canAbandon && guardMaxHp > 0
+        ? `${state.hp}/${state.maxHp} · 护${guardHp}`
+        : `${state.hp}/${state.maxHp}`
+    );
     setText("battle-threat-display", `${state.threat}%`);
     setText("battle-bag-display", `${state.backpackCount}/${state.backpackCapacity}`);
     setText(
       "battle-guard-display",
-      `${Math.ceil(state.petGuard?.hp || 0)}/${Math.ceil(state.petGuard?.maxHp || 0)}${state.petGuard?.rescueReady ? " +救援" : ""}`
+      `${guardHp}/${guardMaxHp}${state.petGuard?.rescueReady ? " +救援" : ""}`
     );
     setText("battle-enemy-display", state.activeEnemies + state.queuedEnemies);
     setText("battle-rooms-display", `${state.depth} / ${state.maxDepth}`);
@@ -439,6 +466,12 @@ export class BattleSceneController {
       battleScene.dataset.phase = state.phase;
       battleScene.dataset.moving = state.world.player.moving ? "true" : "false";
       battleScene.dataset.raidActive = state.actions.canAbandon ? "true" : "false";
+      battleScene.dataset.combatActive = state.isWaveActive || state.phase === "extracting" ? "true" : "false";
+    }
+    const terminalPanel = document.getElementById("upgrade-panel");
+    if (terminalPanel) {
+      terminalPanel.dataset.phase = state.phase;
+      terminalPanel.dataset.raidActive = state.actions.canAbandon ? "true" : "false";
     }
     const loadoutPanel = document.getElementById("battle-loadout-panel");
     if (loadoutPanel) loadoutPanel.dataset.raidActive = state.actions.canAbandon ? "true" : "false";
@@ -505,7 +538,65 @@ export class BattleSceneController {
 
     setText("battle-command-tip", this.getTip(state));
     if (!state.actions.canAbandon) this.updateAbandonButton(false);
+    this.syncTerminalContext(state);
     this.handleSettlement(state);
+  }
+
+  syncTerminalContext(state = {}) {
+    const panel = document.getElementById("upgrade-panel");
+    if (!panel) return;
+
+    const phase = state.phase || "briefing";
+    const phaseChanged = this.lastTerminalPhase !== phase;
+    const shouldReset = this.isSceneActive && (
+      this.shouldFocusTerminal || phaseChanged
+    );
+
+    if (shouldReset) {
+      panel.scrollTop = 0;
+      const compactDefaultClosed = this.isCompactTerminalViewport()
+        && Boolean(state.actions?.canAbandon);
+      this.setCompactTerminalOpen(!compactDefaultClosed);
+      const status = document.getElementById("battle-terminal-status");
+      if (status && this.lastTerminalPhase !== null) {
+        status.textContent = `远征终端已切换到${state.phaseLabel || "当前阶段"}`;
+      }
+      this.shouldFocusTerminal = false;
+    }
+
+    this.lastTerminalPhase = phase;
+  }
+
+  isCompactTerminalViewport() {
+    return typeof window !== "undefined" && window.matchMedia?.(
+      "(orientation: landscape) and (max-width: 900px), (orientation: landscape) and (max-height: 520px)"
+    ).matches;
+  }
+
+  handleTerminalViewportChange() {
+    const compactViewport = this.isCompactTerminalViewport();
+    if (compactViewport === this.lastCompactViewport) return;
+    this.lastCompactViewport = compactViewport;
+    const state = this.combatSystem?.getBattleState?.() || {};
+    if (!state.actions?.canAbandon) return;
+    this.setCompactTerminalOpen(!compactViewport);
+  }
+
+  setCompactTerminalOpen(open) {
+    this.compactTerminalOpen = Boolean(open);
+    const panel = document.getElementById("upgrade-panel");
+    const toggle = document.getElementById("battle-terminal-toggle");
+    if (panel) panel.dataset.compactOpen = this.compactTerminalOpen ? "true" : "false";
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", this.compactTerminalOpen ? "true" : "false");
+      toggle.setAttribute(
+        "aria-label",
+        this.compactTerminalOpen ? "收起远征终端" : "展开远征终端"
+      );
+      const icon = toggle.querySelector("b");
+      if (icon) icon.textContent = this.compactTerminalOpen ? "›" : "‹";
+    }
+    if (!this.compactTerminalOpen && panel) panel.scrollTop = 0;
   }
 
   getNavigationLabel(location = null) {

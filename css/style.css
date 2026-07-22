@@ -90,7 +90,7 @@
   position: relative;
   z-index: 8;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   min-height: 42px;
@@ -102,6 +102,13 @@
   text-shadow: 2px 2px 0 #000;
   background: linear-gradient(180deg, #26303b, #121820);
   border-bottom: 3px solid #d9913f;
+}
+
+.territory-scorebar-heading {
+  display: flex;
+  align-items: center;
+  gap: clamp(7px, 0.75vw, 14px);
+  min-width: 0;
 }
 
 .territory-scorebar-title,
@@ -141,7 +148,7 @@
 .territory-resource-strip {
   min-width: 0;
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   gap: clamp(4px, 0.65vw, 8px);
   overflow: hidden;
   letter-spacing: 0;
@@ -267,10 +274,10 @@
 .territory-world-controls {
   position: absolute;
   z-index: 8;
-  right: 16px;
-  bottom: 14px;
+  right: 14px;
+  bottom: 12px;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: stretch;
 }
 
@@ -289,9 +296,9 @@
 }
 
 .territory-move-btn {
-  width: 52px;
-  min-height: 52px;
-  font-size: 20px;
+  width: 44px;
+  min-height: 44px;
+  font-size: 16px;
 }
 
 .territory-move-btn[aria-pressed="true"] {
@@ -303,15 +310,21 @@
 
 .territory-interact-btn {
   display: grid;
-  gap: 2px;
-  min-width: min(260px, 29vw);
-  padding: 7px 12px;
+  gap: 0;
+  min-width: min(220px, 24vw);
+  min-height: 44px;
+  padding: 4px 9px;
   text-align: left;
+}
+
+.territory-interact-btn strong {
+  font-size: clamp(11px, 1.1vw, 14px);
+  line-height: 1.1;
 }
 
 .territory-interact-btn span {
   color: #aebdc7;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
 }
 
@@ -447,15 +460,17 @@
   .territory-world-controls {
     right: 7px;
     bottom: 7px;
+    gap: 4px;
   }
 
   .territory-move-btn {
-    width: 42px;
-    min-height: 42px;
+    width: 44px;
+    min-height: 44px;
   }
 
   .territory-interact-btn {
-    min-width: 180px;
+    min-width: 160px;
+    min-height: 44px;
     padding: 4px 8px;
   }
 
@@ -477,6 +492,10 @@
     font-size: 0.72em;
   }
 
+  .territory-scorebar-heading {
+    gap: 4px;
+  }
+
   .territory-resource-strip .territory-resource-name {
     font-size: 0;
   }
@@ -496,6 +515,322 @@
   .territory-interact-btn,
   .territory-context-actions button {
     transition: none;
+  }
+}
+
+/* ==================== Experience optimization v1 ==================== */
+.battle-terminal-toggle {
+  display: none;
+}
+
+#battle-scene[data-raid-active="true"] .battle-resource-strip {
+  display: none;
+}
+
+#battle-scene[data-raid-active="true"] .extraction-run-status {
+  top: clamp(10px, 1vw, 18px);
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+}
+
+#battle-scene[data-raid-active="true"] .extraction-run-status .stat-guard,
+#battle-scene[data-combat-active="false"] .extraction-run-status .stat-enemies {
+  display: none;
+}
+
+#battle-scene[data-combat-active="false"] .battle-fire-controls,
+#battle-scene[data-combat-active="false"] .battle-weapon-hud,
+#battle-scene[data-combat-active="false"] .battle-skill-dock,
+#battle-scene[data-combat-active="true"] .battle-interact-btn {
+  display: none !important;
+}
+
+#upgrade-panel[data-raid-active="true"] .battle-shop-tabs,
+#upgrade-panel[data-raid-active="true"] > h3,
+#upgrade-panel[data-raid-active="true"] .battle-command-summary,
+#upgrade-panel[data-raid-active="true"] .expedition-risk-preview {
+  display: none;
+}
+
+#upgrade-panel[data-raid-active="true"] .expedition-room-card {
+  order: 0;
+}
+
+#upgrade-panel[data-raid-active="true"] .expedition-route-panel {
+  order: 1;
+}
+
+#upgrade-panel[data-raid-active="true"] .battle-command-actions {
+  order: 2;
+}
+
+#upgrade-panel[data-raid-active="true"] .expedition-loot-panel {
+  order: 3;
+}
+
+#upgrade-panel[data-raid-active="true"] .expedition-loadout-panel {
+  order: 4;
+}
+
+#upgrade-panel[data-raid-active="true"] .battle-command-tip {
+  order: 5;
+}
+
+.fate-milestone-card {
+  flex: 0 0 auto;
+  display: grid;
+  gap: clamp(4px, 0.42vw, 8px);
+  margin-top: clamp(5px, 0.5vw, 9px);
+  padding: clamp(9px, 0.85vw, 15px);
+  border: 2px solid rgba(114, 215, 255, 0.62);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(114, 215, 255, 0.12), transparent 58%),
+    #11161d;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.025), 2px 2px 0 #000;
+}
+
+.fate-milestone-card[hidden] {
+  display: none;
+}
+
+.fate-milestone-kicker {
+  color: #8de0ff;
+  font-size: clamp(8px, 0.6vw, 11px);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.fate-milestone-card > strong {
+  overflow: hidden;
+  color: #fff1a7;
+  font-size: clamp(13px, 1vw, 19px);
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fate-milestone-card p,
+.fate-milestone-card small {
+  margin: 0;
+  color: #c9d4df;
+  font-size: clamp(9px, 0.68vw, 12px);
+  line-height: 1.3;
+}
+
+.fate-milestone-card small {
+  color: #8eb7c8;
+}
+
+.fate-milestone-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  min-width: 0;
+  color: #aeb3bf;
+  font-size: clamp(8px, 0.62vw, 11px);
+}
+
+.fate-milestone-footer > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#fate-milestone-route {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 4px 9px;
+  border: 2px solid #f4a545;
+  border-radius: 4px;
+  color: #241408;
+  font: inherit;
+  font-weight: 900;
+  background: #ffd167;
+  box-shadow: 2px 2px 0 #000;
+  cursor: pointer;
+}
+
+#fate-milestone-route[hidden] {
+  display: none;
+}
+
+.orientation-guide {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  color: #fff7df;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(114, 215, 255, 0.16), transparent 34%),
+    #080d13;
+}
+
+.orientation-guide[hidden] {
+  display: none;
+}
+
+.orientation-guide-card {
+  width: min(100%, 440px);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 26px 24px;
+  border: 3px solid #f4a545;
+  border-radius: 12px;
+  text-align: center;
+  background: #101720;
+  box-shadow: inset 0 0 0 3px #3a241d, 7px 8px 0 rgba(0, 0, 0, 0.72);
+}
+
+.orientation-guide-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 3px solid #8de0ff;
+  border-radius: 14px;
+  color: #8de0ff;
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  animation: orientationHint 1.8s ease-in-out infinite;
+}
+
+.orientation-guide-kicker {
+  color: #8de0ff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+}
+
+.orientation-guide h1 {
+  margin: 0;
+  color: #ffd167;
+  font-size: clamp(24px, 7vw, 32px);
+  line-height: 1.15;
+}
+
+.orientation-guide p {
+  margin: 0;
+  color: #c9d4df;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.orientation-guide ul {
+  width: min(100%, 300px);
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  color: #dff7ff;
+  font-size: 14px;
+  text-align: left;
+  list-style: none;
+}
+
+.orientation-guide li::before {
+  content: "✓";
+  margin-right: 8px;
+  color: #8de0ff;
+  font-weight: 900;
+}
+
+#orientation-guide-check {
+  min-height: 48px;
+  padding: 9px 16px;
+  border: 3px solid #f4a545;
+  border-radius: 6px;
+  color: #241408;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  background: #ffd167;
+  box-shadow: 3px 3px 0 #000;
+  cursor: pointer;
+}
+
+#orientation-guide-check:focus-visible {
+  outline: 3px solid #8de0ff;
+  outline-offset: 4px;
+}
+
+.orientation-guide .orientation-guide-status {
+  min-height: 21px;
+  color: #ffcf88;
+  font-size: 13px;
+}
+
+@keyframes orientationHint {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(8deg); }
+}
+
+@media (orientation: landscape) and (max-width: 900px),
+       (orientation: landscape) and (max-height: 520px) {
+  .battle-terminal-toggle {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    align-self: flex-end;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 6px;
+    border: 2px solid #72d7ff;
+    border-radius: 4px;
+    color: #dff7ff;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 900;
+    background: #12222c;
+    box-shadow: 2px 2px 0 #000;
+    cursor: pointer;
+  }
+
+  .battle-terminal-toggle b {
+    color: #ffd167;
+    font-size: 18px;
+  }
+
+  #upgrade-panel[data-raid-active="true"][data-compact-open="false"] {
+    flex-basis: 56px;
+    width: 56px;
+    padding: 5px;
+    overflow: hidden;
+  }
+
+  #upgrade-panel[data-raid-active="true"][data-compact-open="false"]
+    > :not(.battle-terminal-toggle):not(#battle-terminal-status) {
+    display: none !important;
+  }
+
+  #upgrade-panel[data-raid-active="true"][data-compact-open="false"]
+    .battle-terminal-toggle {
+    align-self: center;
+    writing-mode: vertical-rl;
+  }
+
+  .fate-milestone-card {
+    gap: 3px;
+    padding: 6px;
+  }
+
+  .fate-milestone-card small,
+  .fate-milestone-footer > span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orientation-guide-icon {
+    animation: none;
   }
 }
 
@@ -3519,6 +3854,9 @@ body {
 }
 
 .expedition-room-card {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   padding: clamp(9px, 0.9vw, 16px);
   border: clamp(2px, 0.2vw, 4px) solid #4f6675;
   border-radius: 7px;
@@ -3584,6 +3922,9 @@ body {
 }
 
 .expedition-loadout-panel[data-raid-active="true"] #battle-stash-summary,
+.expedition-loadout-panel[data-raid-active="true"] .expedition-section-row,
+.expedition-loadout-panel[data-raid-active="true"] .expedition-loadout-summary,
+.expedition-loadout-panel[data-raid-active="true"] .expedition-equipped-items,
 .expedition-loadout-panel[data-raid-active="true"] .expedition-stash-list,
 .expedition-loadout-panel[data-raid-active="true"] .expedition-contract-list {
   display: none;
@@ -4177,7 +4518,7 @@ body {
 .battle-move-pad {
   position: absolute;
   left: clamp(88px, 7vw, 132px);
-  bottom: clamp(10px, 0.9vw, 18px);
+  bottom: clamp(76px, 6vw, 102px);
   display: grid;
   grid-template-columns: repeat(3, clamp(44px, 3.5vw, 54px));
   grid-template-rows: repeat(3, clamp(44px, 3.5vw, 54px));
@@ -4362,6 +4703,7 @@ body {
   .battle-move-pad {
     grid-template-columns: repeat(3, 44px);
     grid-template-rows: repeat(3, 44px);
+    bottom: 58px;
   }
 
   .battle-interact-btn {
@@ -10693,298 +11035,6 @@ body {
   .player-exp-track span,
   .player-command-modal .player-upgrade-card,
   .settings-command-modal button {
-    transition: none;
-  }
-}
-
-/* ==================== First growth-loop onboarding ==================== */
-.onboarding-replay-btn {
-  position: relative;
-}
-
-.onboarding-replay-icon {
-  display: grid;
-  place-items: center;
-  width: clamp(24px, 2vw, 36px);
-  height: clamp(24px, 2vw, 36px);
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  color: #8de0ff;
-  font-size: clamp(15px, 1.25vw, 22px);
-  font-weight: 900;
-  line-height: 1;
-}
-
-.onboarding-replay-btn[data-onboarding-state="active"] {
-  border-color: #8de0ff;
-  color: #dff7ff;
-}
-
-.onboarding-replay-btn[data-onboarding-state="active"]::after {
-  content: "";
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  width: 11px;
-  height: 11px;
-  border: 2px solid #091116;
-  border-radius: 50%;
-  background: #8de0ff;
-  box-shadow: 0 0 0 2px rgba(141, 224, 255, 0.36);
-  animation: onboardingBeacon 1.4s ease-in-out infinite;
-}
-
-.onboarding-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 220;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.onboarding-layer[hidden],
-.onboarding-focus-ring[hidden] {
-  display: none;
-}
-
-.onboarding-focus-ring {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 1;
-  width: 48px;
-  height: 48px;
-  border: clamp(3px, 0.3vw, 5px) solid #8de0ff;
-  border-radius: clamp(7px, 0.65vw, 12px);
-  background: transparent;
-  box-shadow:
-    0 0 0 3px rgba(5, 12, 18, 0.82),
-    0 0 0 9999px rgba(3, 7, 11, 0.66),
-    0 0 24px rgba(141, 224, 255, 0.94);
-  pointer-events: none;
-  transition:
-    transform 0.18s ease,
-    width 0.18s ease,
-    height 0.18s ease;
-  animation: onboardingFocus 1.55s ease-in-out infinite;
-}
-
-.onboarding-coach {
-  position: absolute;
-  z-index: 2;
-  left: 50%;
-  width: min(560px, 58%);
-  display: grid;
-  gap: clamp(5px, 0.45vw, 8px);
-  padding: clamp(11px, 1vw, 18px) clamp(13px, 1.15vw, 21px);
-  transform: translateX(-50%);
-  border: clamp(3px, 0.28vw, 5px) solid #f2a546;
-  border-radius: clamp(6px, 0.55vw, 10px);
-  color: #fff7df;
-  background:
-    linear-gradient(90deg, rgba(141, 224, 255, 0.1), transparent 28%),
-    rgba(8, 12, 17, 0.97);
-  box-shadow:
-    inset 0 0 0 3px #3a1a18,
-    6px 7px 0 rgba(0, 0, 0, 0.72);
-  pointer-events: auto;
-}
-
-.onboarding-layer[data-placement="top"] .onboarding-coach {
-  top: clamp(16px, 1.5vw, 28px);
-}
-
-.onboarding-layer[data-placement="bottom"] .onboarding-coach {
-  bottom: clamp(84px, 7.2vw, 124px);
-}
-
-.onboarding-layer[data-placement="center"] .onboarding-coach {
-  top: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.onboarding-header,
-.onboarding-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.onboarding-kicker {
-  color: #8de0ff;
-  font-size: clamp(9px, 0.7vw, 12px);
-  font-weight: 900;
-  letter-spacing: 0.13em;
-}
-
-.onboarding-skip {
-  padding: 3px 7px;
-  border: 1px solid #515766;
-  border-radius: 3px;
-  color: #bfc7d3;
-  font-family: inherit;
-  font-size: clamp(9px, 0.68vw, 12px);
-  background: #151a22;
-  cursor: pointer;
-}
-
-.onboarding-skip:hover,
-.onboarding-skip:focus-visible {
-  border-color: #8de0ff;
-  color: #e5f9ff;
-}
-
-.onboarding-stepper {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 4px;
-}
-
-.onboarding-stepper span {
-  min-width: 0;
-  padding: 3px 2px;
-  overflow: hidden;
-  border: 1px solid #343b46;
-  border-radius: 3px;
-  color: #747f8d;
-  font-size: clamp(8px, 0.58vw, 10px);
-  line-height: 1;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: #11161d;
-}
-
-.onboarding-stepper span.is-complete {
-  border-color: rgba(81, 207, 102, 0.7);
-  color: #bff2c8;
-  background: rgba(37, 110, 53, 0.26);
-}
-
-.onboarding-stepper span.is-active {
-  border-color: #f2a546;
-  color: #fff1c9;
-  background: rgba(162, 83, 22, 0.36);
-}
-
-.onboarding-coach h2 {
-  margin: 0;
-  color: #ffd167;
-  font-size: clamp(15px, 1.35vw, 23px);
-  line-height: 1.18;
-}
-
-.onboarding-coach p {
-  margin: 0;
-  color: #eef3f8;
-  font-size: clamp(10px, 0.82vw, 14px);
-  line-height: 1.42;
-}
-
-.onboarding-coach .onboarding-insight {
-  padding: 5px 8px;
-  border-left: 3px solid #8de0ff;
-  color: #b9dce8;
-  background: rgba(44, 107, 128, 0.18);
-}
-
-.onboarding-footer {
-  padding-top: 3px;
-  color: #a9b2bf;
-  font-size: clamp(9px, 0.68vw, 12px);
-}
-
-.onboarding-primary {
-  flex: 0 0 auto;
-  min-height: clamp(26px, 2.2vw, 38px);
-  padding: 5px 12px;
-  border: 2px solid #f2a546;
-  border-radius: 4px;
-  color: #241408;
-  font-family: inherit;
-  font-size: clamp(9px, 0.72vw, 13px);
-  font-weight: 900;
-  background: #ffd167;
-  box-shadow: 2px 3px 0 #000;
-  cursor: pointer;
-}
-
-.onboarding-primary:hover,
-.onboarding-primary:focus-visible {
-  background: #fff0a8;
-  transform: translateY(-1px);
-}
-
-.onboarding-primary[hidden] {
-  display: none;
-}
-
-@keyframes onboardingFocus {
-  0%,
-  100% {
-    filter: brightness(0.9);
-  }
-  50% {
-    filter: brightness(1.35);
-  }
-}
-
-@keyframes onboardingBeacon {
-  0%,
-  100% {
-    opacity: 0.7;
-    transform: scale(0.88);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-}
-
-@media (max-width: 760px) {
-  .onboarding-coach {
-    width: min(480px, 76%);
-    gap: 4px;
-    padding: 9px 11px;
-  }
-
-  .onboarding-layer[data-placement="bottom"] .onboarding-coach {
-    bottom: 68px;
-  }
-
-  .onboarding-coach .onboarding-insight {
-    padding-block: 3px;
-  }
-}
-
-@media (max-height: 420px) {
-  .onboarding-coach {
-    width: min(520px, 68%);
-    gap: 3px;
-    padding: 7px 10px;
-  }
-
-  .onboarding-layer[data-placement="bottom"] .onboarding-coach {
-    bottom: 58px;
-  }
-
-  .onboarding-stepper span {
-    padding-block: 2px;
-  }
-
-  .onboarding-coach .onboarding-insight {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .onboarding-focus-ring,
-  .onboarding-replay-btn[data-onboarding-state="active"]::after {
-    animation: none;
-  }
-
-  .onboarding-focus-ring {
     transition: none;
   }
 }
