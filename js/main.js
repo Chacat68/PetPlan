@@ -22,7 +22,7 @@ import { ExpeditionMetaSystem } from "./modules/expedition-meta-system.js?v=duck
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
 import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-ui-v3-20260714a";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=experience-ux-20260722a";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=expedition-layout-20260722b";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=fate-toast-top-right-20260715a";
 import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-command-ui-v1-20260714a";
 import { OrientationController } from "./controllers/orientation-controller.js?v=experience-ux-20260722a";

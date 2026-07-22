@@ -569,7 +569,7 @@ export class BattleSceneController {
 
   isCompactTerminalViewport() {
     return typeof window !== "undefined" && window.matchMedia?.(
-      "(orientation: landscape) and (max-width: 900px), (orientation: landscape) and (max-height: 520px)"
+      "(max-width: 900px) and (max-height: 600px), (max-height: 520px)"
     ).matches;
   }
 

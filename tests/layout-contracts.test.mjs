@@ -15,14 +15,14 @@ test("窄竖屏使用可恢复的横屏引导而不是压缩玩法舞台", () =>
   assert.match(indexHtml, /旋转设备后会保留当前场景、远征进度与操作位置/);
   assert.match(styleCss, /\.orientation-guide\[hidden\]/);
   assert.match(mainJs, /OrientationController/);
-  assert.match(indexHtml, /style\.css\?v=territory-controls-compact-20260722a/);
+  assert.match(indexHtml, /style\.css\?v=expedition-layout-20260722b/);
 });
 
 test("命运桌不再显示累计次数和银色点击快捷提示", () => {
   assert.doesNotMatch(indexHtml, /fate-total-flips-display/);
   assert.doesNotMatch(indexHtml, /fate-skill-tree-btn/);
   assert.doesNotMatch(indexHtml, /查看银色点击/);
-  assert.match(indexHtml, /main\.js\?v=onboarding-removed-20260722a/);
+  assert.match(indexHtml, /main\.js\?v=expedition-layout-20260722b/);
 });
 
 test("发布入口使用新缓存键且成功撤离深度继续透传", () => {
@@ -39,7 +39,7 @@ test("发布入口使用新缓存键且成功撤离深度继续透传", () => {
   }
   assert.match(
     mainJs,
-    /battle-scene-controller\.js\?v=experience-ux-20260722a/,
+    /battle-scene-controller\.js\?v=expedition-layout-20260722b/,
   );
   assert.match(
     mainJs,
@@ -92,10 +92,13 @@ test("首轮成长引导入口和浮层已从当前版本移除", () => {
 
 test("远征终端和战斗 HUD 使用阶段化减负结构", () => {
   assert.match(indexHtml, /id="battle-terminal-toggle"/);
+  assert.match(indexHtml, /class="battle-terminal-scroll"/);
+  assert.match(indexHtml, /class="battle-terminal-footer"/);
   assert.match(indexHtml, /class="run-stat stat-survival"/);
   assert.match(indexHtml, /id="battle-terminal-status"[^>]*aria-live="polite"/);
   assert.match(styleCss, /#battle-scene\[data-raid-active="true"\] \.battle-resource-strip/);
   assert.match(styleCss, /#upgrade-panel\[data-raid-active="true"\]\[data-compact-open="false"\]/);
+  assert.match(styleCss, /@media \(max-aspect-ratio: 4 \/ 3\) and \(min-width: 541px\)/);
 });
 
 test("命运推荐栏包含随目标更新的下一里程碑卡", () => {
