@@ -15,14 +15,31 @@ test("窄竖屏使用可恢复的横屏引导而不是压缩玩法舞台", () =>
   assert.match(indexHtml, /旋转设备后会保留当前场景、远征进度与操作位置/);
   assert.match(styleCss, /\.orientation-guide\[hidden\]/);
   assert.match(mainJs, /OrientationController/);
-  assert.match(indexHtml, /style\.css\?v=expedition-layout-20260722b/);
+  assert.match(indexHtml, /style\.css\?v=expedition-immersive-exit-20260723a/);
 });
 
 test("命运桌不再显示累计次数和银色点击快捷提示", () => {
   assert.doesNotMatch(indexHtml, /fate-total-flips-display/);
   assert.doesNotMatch(indexHtml, /fate-skill-tree-btn/);
   assert.doesNotMatch(indexHtml, /查看银色点击/);
-  assert.match(indexHtml, /main\.js\?v=expedition-layout-20260722b/);
+  assert.match(indexHtml, /main\.js\?v=expedition-immersive-exit-20260723a/);
+});
+
+test("远征使用沉浸模式并通过 Esc 确认退出", () => {
+  assert.match(styleCss, /body\[data-scene="dungeon"\] \.game-hud-controls\s*\{[^}]*display:\s*none/);
+  assert.match(indexHtml, /id="expedition-exit-dialog"[^>]*role="dialog"[^>]*aria-modal="true"/s);
+  assert.match(indexHtml, /id="expedition-exit-cancel"[^>]*>继续远征<\/button>/);
+  assert.match(indexHtml, /id="expedition-exit-confirm"[^>]*>确认退出<\/button>/);
+  assert.match(mainJs, /if \(this\.currentScene === "dungeon"\)[\s\S]*openExpeditionExitConfirm\(\)/);
+  assert.match(mainJs, /runActive \? this\.combatSystem\.abandonRun\(\) : null/);
+  assert.match(mainJs, /this\.handleNavigation\("territory"\)/);
+});
+
+test("远征从全局导航收拢到领地入口", () => {
+  assert.doesNotMatch(indexHtml, /class="[^"]*nav-btn[^"]*"[^>]*data-tab="dungeon"/);
+  assert.match(indexHtml, /data-territory-action="depart"[^>]*>进入远征<\/button>/);
+  assert.match(mainJs, /territory-system\.js\?v=territory-expedition-entry-20260723a/);
+  assert.match(mainJs, /shop-recommendation-controller\.js\?v=territory-expedition-entry-20260723a/);
 });
 
 test("发布入口使用新缓存键且成功撤离深度继续透传", () => {

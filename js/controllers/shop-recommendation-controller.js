@@ -851,15 +851,15 @@ export class ShopRecommendationController {
 
     if (guide.id === "expedition") {
       return {
-        title: "完成第一次远征探索",
-        detail: "进入远征，选择路线并完成第 1 个区域",
+        title: "从领地进入第一次远征",
+        detail: "进入领地，前往西侧远征入口并完成第 1 个区域",
         route: "首局教学",
         routeType: "combat",
-        scene: "dungeon",
+        scene: "territory",
         action: "progress",
         status: "ready",
         blockers: [],
-        ctaLabel: "前往远征",
+        ctaLabel: "前往领地入口",
         alt: "继续积累命运资源",
       };
     }
@@ -867,14 +867,14 @@ export class ShopRecommendationController {
     if (guide.id === "extraction") {
       return {
         title: "成功撤离 1 次",
-        detail: "探索至少 3 个区域，返回西侧入口并守住撤离信标",
+        detail: "从领地西侧远征入口继续行动，探索至少 3 个区域并守住撤离信标",
         route: "首局教学",
         routeType: "combat",
-        scene: "dungeon",
+        scene: "territory",
         action: "progress",
         status: "in_progress",
         blockers: [{ metric: "extractions", gap: 1 }],
-        ctaLabel: "继续远征",
+        ctaLabel: "前往领地入口",
         alt: "撤离后前往领地",
       };
     }

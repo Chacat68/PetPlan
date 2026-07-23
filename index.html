@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=expedition-layout-20260722b" />
+    <link rel="stylesheet" href="css/style.css?v=expedition-immersive-exit-20260723a" />
   </head>
   <body>
     <div class="game-container">
@@ -474,10 +474,6 @@
               <span class="scene-icon">◎</span>
               <span class="scene-label">命运</span>
             </button>
-            <button class="hud-scene-btn nav-btn" data-tab="dungeon" type="button" aria-label="远征">
-              <span class="scene-icon">⚔</span>
-              <span class="scene-label">远征</span>
-            </button>
             <button class="hud-scene-btn nav-btn" data-tab="territory" type="button" aria-label="领地">
               <span class="scene-icon">▦</span>
               <span class="scene-label">领地</span>
@@ -486,6 +482,26 @@
         </div>
 
       </main>
+
+      <div class="expedition-exit-overlay" id="expedition-exit-overlay" hidden>
+        <section
+          class="expedition-exit-dialog"
+          id="expedition-exit-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="expedition-exit-title"
+          aria-describedby="expedition-exit-message"
+        >
+          <span class="expedition-exit-kicker">行动中止确认</span>
+          <h2 id="expedition-exit-title">退出本次远征？</h2>
+          <p id="expedition-exit-message">确认后将返回领地。</p>
+          <div class="expedition-exit-actions">
+            <button type="button" class="expedition-exit-cancel" id="expedition-exit-cancel">继续远征</button>
+            <button type="button" class="expedition-exit-confirm" id="expedition-exit-confirm">确认退出</button>
+          </div>
+          <small>按 Esc 可取消并继续当前行动</small>
+        </section>
+      </div>
 
       <!-- 弹窗容器 -->
       <div class="modal-container" id="modal-container"></div>
@@ -782,7 +798,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=expedition-layout-20260722b";
+        var moduleSrc = "js/main.js?v=expedition-immersive-exit-20260723a";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

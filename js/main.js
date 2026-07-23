@@ -13,7 +13,7 @@ import { getCombatSystemInstance } from "./modules/combat-system.js?v=review-fix
 import { getSaveSystemInstance } from "./modules/save-system.js?v=review-fixes-20260722a";
 import { getUISystemInstance } from "./modules/ui-system.js";
 import { getPetSystemInstance } from "./modules/pet-system.js?v=review-fixes-20260722a";
-import { getTerritorySystemInstance } from "./modules/territory-system.js?v=pet-loop-calibration-20260713a";
+import { getTerritorySystemInstance } from "./modules/territory-system.js?v=territory-expedition-entry-20260723a";
 import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
 import { getProgressionSystemInstance } from "./modules/progression-system.js?v=growth-onboarding-20260720a";
@@ -28,7 +28,7 @@ import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-
 import { OrientationController } from "./controllers/orientation-controller.js?v=experience-ux-20260722a";
 import { PlayerModalController } from "./controllers/player-modal-controller.js?v=command-modals-v1-20260714a";
 import { SettingsController } from "./controllers/settings-controller.js?v=command-modals-v1-20260714a";
-import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=experience-ux-20260722a";
+import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=territory-expedition-entry-20260723a";
 import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=stable-actions-20260721c";
 
 export class Game {
@@ -38,6 +38,7 @@ export class Game {
     this.isInitialized = false;
     this.currentScene = "fate";
     this.navigationAbortController = null;
+    this.expeditionExitOpen = false;
     this.modalFocusManager = new ModalFocusManager();
     this.orientationController = new OrientationController();
     this.sceneRouter = new SceneRouter();
@@ -297,10 +298,38 @@ export class Game {
       "keydown",
       (event) => {
         if (event.key !== "Escape") return;
+        if (this.orientationController?.active) return;
+        if (this.currentScene === "dungeon") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.repeat) return;
+          if (this.expeditionExitOpen) this.closeExpeditionExitConfirm();
+          else this.openExpeditionExitConfirm();
+          return;
+        }
         this.petModalController.close();
         this.achievementController.close();
         this.settingsController.close();
         this.playerModalController.close();
+      },
+      { signal, capture: true }
+    );
+
+    const exitOverlay = document.getElementById("expedition-exit-overlay");
+    document.getElementById("expedition-exit-cancel")?.addEventListener(
+      "click",
+      () => this.closeExpeditionExitConfirm(),
+      { signal }
+    );
+    document.getElementById("expedition-exit-confirm")?.addEventListener(
+      "click",
+      () => this.confirmExpeditionExit(),
+      { signal }
+    );
+    exitOverlay?.addEventListener(
+      "click",
+      (event) => {
+        if (event.target === exitOverlay) this.closeExpeditionExitConfirm();
       },
       { signal }
     );
@@ -327,6 +356,7 @@ export class Game {
   }
 
   destroy() {
+    this.closeExpeditionExitConfirm();
     this.petModalController?.close();
     this.achievementController?.close();
     this.settingsController?.close();
@@ -385,20 +415,27 @@ export class Game {
     this.currentScene = this.sceneRouter.activate(tab, {
       syncHistory: !silent,
     });
+    this.syncSceneChrome();
     this.fateSceneController.setSceneActive(this.currentScene === "fate");
     this.battleSceneController?.setSceneActive(this.currentScene === "dungeon");
     this.territorySceneController?.setSceneActive(this.currentScene === "territory");
     const upgradePanel = document.getElementById("upgrade-panel");
 
     if (this.currentScene === "fate") {
+      this.closeExpeditionExitConfirm();
       if (upgradePanel) upgradePanel.style.display = "none";
       if (this.combatSystem) this.combatSystem.isPaused = true;
       this.fateSceneController.updateDisplay({ commitRecommendation: true });
     } else if (this.currentScene === "territory") {
+      this.closeExpeditionExitConfirm();
       if (upgradePanel) upgradePanel.style.display = "none";
       if (this.combatSystem) this.combatSystem.isPaused = true;
       this.territorySceneController.updateDisplay();
     } else if (this.currentScene === "dungeon") {
+      this.petModalController?.close();
+      this.achievementController?.close();
+      this.settingsController?.close();
+      this.playerModalController?.close();
       if (upgradePanel) upgradePanel.style.display = "flex";
       if (this.combatSystem) {
         this.combatSystem.prepareBattle();
@@ -423,6 +460,63 @@ export class Game {
     this.syncCombatPause();
 
     console.log("[Game] 切换到:", this.currentScene);
+  }
+
+  syncSceneChrome() {
+    const immersive = this.currentScene === "dungeon";
+    document.body.dataset.scene = this.currentScene;
+    const hud = document.querySelector(".game-hud-controls");
+    if (!hud) return;
+    hud.hidden = immersive;
+    hud.toggleAttribute("inert", immersive);
+    hud.setAttribute("aria-hidden", immersive ? "true" : "false");
+  }
+
+  openExpeditionExitConfirm() {
+    if (this.currentScene !== "dungeon" || this.expeditionExitOpen) return false;
+    const overlay = document.getElementById("expedition-exit-overlay");
+    const dialog = document.getElementById("expedition-exit-dialog");
+    const message = document.getElementById("expedition-exit-message");
+    if (!overlay || !dialog) return false;
+
+    const runActive = Boolean(this.combatSystem?.runSystem?.active);
+    if (message) {
+      message.textContent = runActive
+        ? "确认退出会按主动放弃结算本局：未保护战利品将丢失，仅保留安全袋、30% 金币与 40% 经验，不获得水晶。"
+        : "当前尚未开始行动，确认后将结束整备并返回领地。";
+    }
+    overlay.dataset.runActive = runActive ? "true" : "false";
+    overlay.hidden = false;
+    this.expeditionExitOpen = true;
+    this.battleSceneController?.clearControlInput?.();
+    this.modalFocusManager?.activate?.(dialog, "#expedition-exit-cancel");
+    return true;
+  }
+
+  closeExpeditionExitConfirm() {
+    const overlay = document.getElementById("expedition-exit-overlay");
+    const dialog = document.getElementById("expedition-exit-dialog");
+    if (!this.expeditionExitOpen && overlay?.hidden !== false) return false;
+    if (overlay) overlay.hidden = true;
+    this.expeditionExitOpen = false;
+    this.modalFocusManager?.release?.(dialog);
+    return true;
+  }
+
+  confirmExpeditionExit() {
+    if (this.currentScene !== "dungeon") {
+      this.closeExpeditionExitConfirm();
+      return false;
+    }
+
+    const runActive = Boolean(this.combatSystem?.runSystem?.active);
+    const result = runActive ? this.combatSystem.abandonRun() : null;
+    this.closeExpeditionExitConfirm();
+    this.handleNavigation("territory");
+    this.updateUI();
+    void this.saveSystem?.saveGame?.(1);
+    if (runActive && result?.message) this.uiSystem?.showToast(result.message, "info");
+    return true;
   }
 
   claimExpeditionMetaBalances() {
