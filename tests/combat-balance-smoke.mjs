@@ -13,10 +13,12 @@ globalThis.Image = class ImageStub {
 const { CombatSystem } = await import("../js/modules/combat-system.js");
 const { PlayerSystem } = await import("../js/modules/player-system.js");
 
-function createHarness() {
+function createHarness({ player = {} } = {}) {
   let territory = { attack: 3, defense: 2, expBonus: 0 };
   const resources = { coins: 0, crystals: 0 };
   const playerSystem = new PlayerSystem();
+  Object.assign(playerSystem.player, player);
+  playerSystem.addExperience = () => {};
   playerSystem.player.x = 0;
   playerSystem.player.y = 0;
   playerSystem.player.crit = 0;
@@ -71,9 +73,12 @@ test("远征每帧只由 CombatSystem 推进一次玩家位移", () => {
   assert.equal(playerSystem.getAnimationState(), "idle");
 });
 
-test("移动射击受惩罚且障碍会阻断视线和弹道", () => {
+test("移动射击不降伤害，障碍仍会阻断视线和弹道", () => {
   const { combat, playerSystem } = createHarness();
   assert.equal(combat.startRun().success, true);
+  assert.equal(combat.config.movingDamageMultiplier, 1);
+  assert.equal(combat.config.movingAttackIntervalMultiplier, 1);
+  assert.equal(combat.config.heroMovingAttackRange, combat.config.heroAttackRange);
   const baseDamage = combat.getPlayerAttackDamage();
   combat.setMovementInput(1, 0);
   combat.monsters = [{
@@ -90,7 +95,7 @@ test("移动射击受惩罚且障碍会阻断视线和弹道", () => {
 
   combat.worldSystem.obstacles = [];
   const bullet = combat.fireBullet(combat.monsters[0]);
-  assert.ok(bullet.damage <= baseDamage * combat.config.movingDamageMultiplier);
+  assert.equal(bullet.damage, baseDamage);
   combat.worldSystem.obstacles = [{ x: bullet.x + 18, y: bullet.y - 30, width: 50, height: 60, type: "rock" }];
   const hpBefore = combat.monsters[0].hp;
   combat.updateBullets(100);
@@ -98,7 +103,7 @@ test("移动射击受惩罚且障碍会阻断视线和弹道", () => {
   assert.equal(combat.monsters[0].hp, hpBefore, "子弹撞上障碍不能继续追踪命中");
 });
 
-test("撤离离圈会回退并持续生成增援", () => {
+test("撤离离圈只暂停进度并持续生成增援", () => {
   const { combat, playerSystem } = createHarness();
   assert.equal(combat.startRun().success, true);
   combat.runSystem.phase = "extracting";
@@ -113,7 +118,7 @@ test("撤离离圈会回退并持续生成增援", () => {
   playerSystem.player.y = combat.worldSystem.height - 100;
 
   combat.update(100);
-  assert.ok(combat.extractionTimer > 500, "离圈超过宽限后进度必须回退");
+  assert.equal(combat.extractionTimer, 500, "离圈后进度必须暂停而不是回退");
   assert.ok(combat.monsters.length > 0, "撤离期间必须持续补充守点压力");
 });
 
@@ -189,6 +194,19 @@ test("怪物只在攻击距离内造成伤害，远程怪过近时会后撤", ()
   assert.equal(ranged.combatState, "move");
 });
 
+test("同深度同威胁的怪物生命不再随玩家等级膨胀", () => {
+  const novice = createHarness({ player: { level: 1 } }).combat;
+  const veteran = createHarness({ player: { level: 50 } }).combat;
+  assert.equal(novice.startRun().success, true);
+  assert.equal(veteran.startRun().success, true);
+  novice.runSystem.threat = 40;
+  veteran.runSystem.threat = 40;
+
+  const noviceMonster = novice.spawnMonster({ templateId: "skeleton", depth: 3 }, 3);
+  const veteranMonster = veteran.spawnMonster({ templateId: "skeleton", depth: 3 }, 3);
+  assert.equal(veteranMonster.maxHp, noviceMonster.maxHp);
+});
+
 test("远征开始后玩家与领地属性使用局内快照", () => {
   const { combat, playerSystem, setTerritory } = createHarness();
   playerSystem.player.attack = 20;
@@ -202,16 +220,19 @@ test("远征开始后玩家与领地属性使用局内快照", () => {
   assert.equal(combat.damageHero(20), Math.floor(20 - (0 + 2) * 0.32));
 });
 
-test("恢复属性接入远征生命，补给和技能冷却按战斗时间约束", () => {
-  const { combat } = createHarness();
+test("远征不再自然回血，恢复属性改为小幅强化补给", () => {
+  const { combat } = createHarness({ player: { hpRegen: 10 } });
   assert.equal(combat.startRun().success, true);
   combat.runHp = 50;
   combat.timeSinceDamage = 2000;
-  for (let index = 0; index < 10; index += 1) combat.update(100);
-  assert.equal(combat.runHp, 51, "hpRegen 应恢复独立的 runHp");
+  for (let index = 0; index < 100; index += 1) combat.update(100);
+  assert.equal(combat.runHp, 50, "大地图行进不能依靠等待无限回满");
 
   const supply = combat.useSupply();
   assert.equal(supply.success, true);
+  assert.equal(supply.regenBonusPercent, 10);
+  const baseHeal = Math.ceil(combat.runMaxHp * supply.healRatio);
+  assert.ok(combat.runHp > 50 + baseHeal, "恢复属性应提升单次补给治疗量");
   assert.equal(combat.useSupply().success, false, "补给不能在冷却内连续使用");
 
   combat.skillCooldowns.set("pet", 1000);
@@ -251,7 +272,52 @@ test("宠物生命防御形成护卫，救援技能可在单局触发一次", ()
   assert.ok(combat.petRescueInvulnerabilityTimer > 0);
 });
 
-test("未清场时主动放弃不提交本次遭遇击杀收益", () => {
+test("局内只暴露队长主动技能，完整宠物编队的被动加成仍保留", () => {
+  const { combat } = createHarness();
+  const pets = [
+    { instanceId: "leader", templateId: 1, level: 1 },
+    { instanceId: "support", templateId: 2, level: 1 },
+  ];
+  combat.setPetSystem({
+    equippedPets: pets,
+    resetBattleStates() {},
+    getTemplate(templateId) {
+      return {
+        name: templateId === 1 ? "队长" : "支援",
+        type: "light",
+        emoji: "●",
+        baseStats: { attack: 10 },
+        skill: { name: "协同治疗", heal: 20, cooldown: 1000 },
+      };
+    },
+    getCombatSupportSnapshot() {
+      return {
+        members: pets.map(pet => ({ ...pet })),
+        count: 2,
+        guardCapacity: 0,
+        damageReduction: 0,
+        auras: { attackPercent: 20 },
+      };
+    },
+    awardExpeditionProgress() { return { totalGain: 0, pets: [] }; },
+  });
+  assert.equal(combat.startRun().success, true);
+  combat.runSystem.phase = "combat";
+  combat.currentEncounter = { type: "combat", depth: 1 };
+  combat.runHp = 50;
+
+  assert.equal(combat.petSquadSnapshot.members.length, 2, "被动快照必须保留完整编队");
+  const boostedDamage = combat.getWeaponShotDamage();
+  combat.petSquadSnapshot.auras.attackPercent = 0;
+  const baseDamage = combat.getWeaponShotDamage();
+  combat.petSquadSnapshot.auras.attackPercent = 20;
+  assert.ok(Math.abs(boostedDamage - baseDamage * 1.2) < 0.001, "全队被动光环仍需参与战斗计算");
+  assert.deepEqual(combat.getPetSkillsState().map(skill => skill.instanceId), ["leader"]);
+  assert.equal(combat.usePetSkill("support").code, "leader-skill-only");
+  assert.equal(combat.usePetSkill("leader").success, true);
+});
+
+test("战斗中主动放弃按战败高风险结算", () => {
   const { combat, resources } = createHarness();
   assert.equal(combat.startRun().success, true);
   combat.runSystem.phase = "combat";
@@ -261,7 +327,34 @@ test("未清场时主动放弃不提交本次遭遇击杀收益", () => {
 
   const result = combat.abandonRun();
   assert.equal(result.success, true);
-  assert.equal(result.settlement.coins, 0);
+  assert.equal(result.settlement.reason, "defeated");
+  assert.equal(result.settlement.abandonmentPenalty, false);
+  assert.equal(result.settlement.coins, 10);
   assert.equal(result.settlement.crystals, 0);
-  assert.deepEqual(resources, { coins: 0, crystals: 0 });
+  assert.deepEqual(resources, { coins: 10, crystals: 0 });
+});
+
+test("撤离守点中主动退出同样按战败结算", () => {
+  const { combat } = createHarness();
+  assert.equal(combat.startRun().success, true);
+  combat.runSystem.phase = "extracting";
+  combat.currentEncounter = { type: "extraction", depth: 2 };
+  const result = combat.abandonRun();
+  assert.equal(result.success, true);
+  assert.equal(result.settlement.reason, "defeated");
+  assert.equal(result.settlement.abandonmentPenalty, false);
+});
+
+test("安全阶段主动放弃仍按保底撤退结算", () => {
+  const { combat, resources } = createHarness();
+  assert.equal(combat.startRun().success, true);
+  combat.runSystem.phase = "route";
+  combat.runSystem.addPendingRewards({ coins: 100, exp: 50 });
+
+  const result = combat.abandonRun();
+  assert.equal(result.success, true);
+  assert.equal(result.settlement.reason, "abandoned");
+  assert.equal(result.settlement.abandonmentPenalty, true);
+  assert.equal(result.settlement.coins, 30);
+  assert.deepEqual(resources, { coins: 30, crystals: 0 });
 });

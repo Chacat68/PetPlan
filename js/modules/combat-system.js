@@ -4,9 +4,10 @@
  * ExpeditionRunSystem 负责路线和结算，本类负责战斗实体、主动技能与 Canvas 渲染。
  */
 
-import { ExpeditionRunSystem } from './expedition-run-system.js?v=duckov-phase1-20260721b';
-import { ExpeditionWorldSystem } from './expedition-world-system.js?v=duckov-phase1-20260721b';
-import { CameraSystem } from './camera-system.js?v=world-exploration-20260712b';
+import { ExpeditionRunSystem } from './expedition-run-system.js?v=expedition-simplification-20260723b';
+import { ExpeditionWorldSystem } from './expedition-world-system.js?v=expedition-simplification-20260723b';
+import { CameraSystem } from './camera-system.js?v=expedition-simplification-20260723b';
+import { getPlayerVisualBounds } from './player-system.js?v=expedition-simplification-20260723b';
 import { TargetingSystem } from './targeting-system.js?v=tower-defense-20260710b';
 import {
     CHARACTER_ART_VERSION,
@@ -46,15 +47,16 @@ export const EXPEDITION_WEAPON_CONFIGS = Object.freeze({
         magazineSize: 24,
         reserveAmmo: 96,
         reloadMs: 1450,
-        fireIntervalMs: 145,
+        fireIntervalMs: 175,
         bulletSpeed: 760,
         range: 610,
-        baseDamage: 12,
+        baseDamage: 8,
         attributeScaling: 0.7,
         spreadDegrees: 2.2,
         movingSpreadDegrees: 6.5,
-        movingDamageMultiplier: 0.9,
-        movingFireIntervalMultiplier: 1.08,
+        // 旧字段继续保留给存档与界面读取；移动时只扩大散布，不再降伤害或射速。
+        movingDamageMultiplier: 1,
+        movingFireIntervalMultiplier: 1,
         pellets: 1,
         color: '#ffd167'
     }),
@@ -68,12 +70,12 @@ export const EXPEDITION_WEAPON_CONFIGS = Object.freeze({
         fireIntervalMs: 690,
         bulletSpeed: 650,
         range: 315,
-        baseDamage: 4.2,
+        baseDamage: 6.6,
         attributeScaling: 0.18,
         spreadDegrees: 10,
         movingSpreadDegrees: 17,
-        movingDamageMultiplier: 0.82,
-        movingFireIntervalMultiplier: 1.16,
+        movingDamageMultiplier: 1,
+        movingFireIntervalMultiplier: 1,
         pellets: 6,
         color: '#ffb36b'
     }),
@@ -87,12 +89,12 @@ export const EXPEDITION_WEAPON_CONFIGS = Object.freeze({
         fireIntervalMs: 920,
         bulletSpeed: 1040,
         range: 880,
-        baseDamage: 20,
+        baseDamage: 56,
         attributeScaling: 0.75,
         spreadDegrees: 0.65,
         movingSpreadDegrees: 4.8,
-        movingDamageMultiplier: 0.76,
-        movingFireIntervalMultiplier: 1.28,
+        movingDamageMultiplier: 1,
+        movingFireIntervalMultiplier: 1,
         pellets: 1,
         color: '#72d7ff'
     })
@@ -153,6 +155,7 @@ export class CombatSystem {
         this.focusTargetId = null;
         this.weaponOrder = Object.keys(EXPEDITION_WEAPON_CONFIGS);
         this.activeWeaponId = this.weaponOrder[0];
+        this.lockedWeaponId = null;
         this.weaponStates = this.createFreshWeaponStates();
         this.aimDirection = { x: 1, y: 0 };
         this.aimWorldPoint = null;
@@ -219,9 +222,10 @@ export class CombatSystem {
             skillGuardReduction: 0.42,
             heroMoveSpeed: 174,
             heroAttackRange: 475,
-            heroMovingAttackRange: 390,
-            movingAttackIntervalMultiplier: 1.75,
-            movingDamageMultiplier: 0.72,
+            // 旧自动瞄准字段保留为中性值；移动射击唯一惩罚由武器散布承担。
+            heroMovingAttackRange: 475,
+            movingAttackIntervalMultiplier: 1,
+            movingDamageMultiplier: 1,
             petAcquireRange: 430,
             extractionOutOfZoneGraceMs: 750,
             extractionDecayMultiplier: 1.4,
@@ -330,17 +334,67 @@ export class CombatSystem {
         this.mapHeight = Math.max(1, Math.floor(Number(height) || 1));
         this.cameraSystem.setViewportSize(this.mapWidth, this.mapHeight);
         if (this.playerSystem?.player && this.worldSystem.initialized) {
+            this.constrainHeroToWorld(this.playerSystem.player);
             const center = this.getHeroCenter();
             this.cameraSystem.snapTo(center.x, center.y);
         }
     }
 
-    getWorldBounds() {
+    getHeroVisualBounds(player = this.playerSystem?.player) {
+        return getPlayerVisualBounds(player || this.getHeroPosition());
+    }
+
+    getHeroWorldPadding(player = this.playerSystem?.player) {
+        if (!player) return 18;
+        const visual = this.getHeroVisualBounds(player);
+        const x = Number.isFinite(Number(player.x)) ? Number(player.x) : 0;
+        const y = Number.isFinite(Number(player.y)) ? Number(player.y) : 0;
+        const width = Math.max(0, Number(player.width) || 0);
+        const height = Math.max(0, Number(player.height) || 0);
+        const overflow = Math.max(
+            18,
+            x - visual.left,
+            visual.right - (x + width),
+            y - visual.top,
+            visual.bottom - (y + height)
+        );
+        return Math.ceil(overflow + 2);
+    }
+
+    getHeroCameraInsets(player = this.playerSystem?.player) {
+        const visual = this.getHeroVisualBounds(player);
+        const center = this.getEntityCenter(player || this.getHeroPosition());
         return {
-            minX: 18,
-            minY: 18,
-            maxX: this.worldSystem.width - 18,
-            maxY: this.worldSystem.height - 18,
+            left: Math.max(0, center.x - visual.left),
+            right: Math.max(0, visual.right - center.x),
+            top: Math.max(0, center.y - visual.top),
+            bottom: Math.max(0, visual.bottom - center.y)
+        };
+    }
+
+    constrainHeroToWorld(player = this.playerSystem?.player) {
+        if (!player || !this.worldSystem.initialized) {
+            return { moved: false, x: player?.x ?? 0, y: player?.y ?? 0 };
+        }
+        const result = this.worldSystem.clampEntityToBounds(player, {
+            padding: this.getHeroWorldPadding(player)
+        });
+
+        return {
+            moved: result.moved,
+            x: player.x,
+            y: player.y,
+            clamped: result.moved
+        };
+    }
+
+    getWorldBounds() {
+        const padding = this.getHeroWorldPadding();
+        return {
+            minX: padding,
+            minY: padding,
+            maxX: this.worldSystem.width - padding,
+            maxY: this.worldSystem.height - padding,
             width: this.worldSystem.width,
             height: this.worldSystem.height
         };
@@ -389,7 +443,8 @@ export class CombatSystem {
         const result = this.worldSystem.moveEntity(
             player,
             this.movementInput.x * scale,
-            this.movementInput.y * scale
+            this.movementInput.y * scale,
+            { padding: this.getHeroWorldPadding(player) }
         );
         if (result.moved && this.runSystem.activeSearch) {
             this.interruptSearch('movement');
@@ -464,6 +519,7 @@ export class CombatSystem {
 
     resetWeaponLoadout() {
         this.activeWeaponId = this.weaponOrder[0];
+        this.lockedWeaponId = null;
         this.weaponStates = this.createFreshWeaponStates();
         this.firingHeld = false;
         this.shotCooldownTimer = 0;
@@ -485,6 +541,9 @@ export class CombatSystem {
     }
 
     getAllowedWeaponIds() {
+        if (this.runSystem.active && this.getWeaponConfig(this.lockedWeaponId)) {
+            return [this.lockedWeaponId];
+        }
         const profile = this.getEquippedWeaponProfile();
         if (!profile) return [...this.weaponOrder];
         const configured = Array.isArray(profile.combatWeaponIds) && profile.combatWeaponIds.length
@@ -586,6 +645,17 @@ export class CombatSystem {
             : String(weaponIdOrIndex || '');
         if (!this.getWeaponConfig(weaponId)) {
             return { success: false, message: '未知武器' };
+        }
+        if (
+            this.runSystem.active
+            && this.getWeaponConfig(this.lockedWeaponId)
+            && weaponId !== this.lockedWeaponId
+        ) {
+            return {
+                success: false,
+                code: 'weapon-locked',
+                message: `本次远征已锁定${this.getWeaponConfig(this.lockedWeaponId).name}`
+            };
         }
         if (!this.getAllowedWeaponIds().includes(weaponId)) {
             return { success: false, message: '当前配装未携带该武器' };
@@ -793,6 +863,23 @@ export class CombatSystem {
                 location: { ...nearbyContainer }
             };
         }
+        if (this.runSystem.phase === 'search') {
+            const targetContainer = this.worldSystem.getContainersForLocation?.(
+                this.worldSystem.activeLocationId,
+                { includeFinished: false }
+            )?.[0] || null;
+            const distance = targetContainer
+                ? Math.max(0, Math.round(Math.hypot(targetContainer.x - center.x, targetContainer.y - center.y)))
+                : null;
+            return {
+                available: false,
+                label: '靠近搜索点',
+                detail: targetContainer
+                    ? `继续向地点内的容器移动 · ${distance}m`
+                    : '当前地点没有可用的搜索点',
+                location: targetContainer ? { ...targetContainer } : null
+            };
+        }
         if (!nearby) {
             const target = this.worldSystem.getState(center).navigationTarget;
             return {
@@ -924,6 +1011,7 @@ export class CombatSystem {
         if (loadoutWeaponId && this.getWeaponConfig(loadoutWeaponId)) {
             this.activeWeaponId = loadoutWeaponId;
         }
+        this.lockedWeaponId = this.activeWeaponId;
         this.petSystem?.resetBattleStates?.();
         this.runMaxHp = this.calculateRunMaxHp();
         this.runHp = this.runMaxHp;
@@ -1138,8 +1226,14 @@ export class CombatSystem {
         }
         const result = this.runSystem.spendSupply();
         if (result.success) {
-            const heal = Math.max(1, Math.ceil(this.runMaxHp * result.healRatio));
+            const hpRegen = Math.max(
+                0,
+                Number(this.runSnapshot?.player?.hpRegen ?? this.playerSystem?.player?.hpRegen) || 0
+            );
+            const regenBonus = Math.min(0.2, hpRegen * 0.01);
+            const heal = Math.max(1, Math.ceil(this.runMaxHp * result.healRatio * (1 + regenBonus)));
             const actualHeal = this.healHero(heal);
+            result.regenBonusPercent = Math.round(regenBonus * 100);
             result.message = `使用补给，恢复 ${actualHeal} 点生命`;
             this.supplyCooldownTimer = this.config.supplyCooldownMs;
             this.worldSystem.updateExtractionAvailability?.(this.runSystem.getState());
@@ -1171,6 +1265,12 @@ export class CombatSystem {
 
     usePetSkill(instanceId) {
         if (!this.isCombatActive()) return { success: false, message: '宠物技能只能在战斗中使用' };
+        const leaderInstanceId = this.petSquadSnapshot?.members?.[0]?.instanceId
+            ?? this.petSystem?.equippedPets?.[0]?.instanceId
+            ?? null;
+        if (leaderInstanceId === null || String(instanceId) !== String(leaderInstanceId)) {
+            return { success: false, code: 'leader-skill-only', message: '本次远征只能使用队长宠物的主动技能' };
+        }
         const pet = this.petSystem?.equippedPets?.find(item => String(item.instanceId) === String(instanceId));
         if (!pet) return { success: false, message: '该宠物未上阵' };
         const template = this.petSystem?.getTemplate?.(pet.templateId);
@@ -1251,8 +1351,13 @@ export class CombatSystem {
 
     abandonRun() {
         if (!this.runSystem.active) return { success: false, message: '当前没有进行中的远征' };
-        const settlement = this.finishExpedition(false, 'abandoned');
-        return { success: true, message: '已放弃本局并结算保底收益', settlement };
+        const dangerousExit = this.isCombatActive();
+        const settlement = this.finishExpedition(false, dangerousExit ? 'defeated' : 'abandoned');
+        return {
+            success: true,
+            message: dangerousExit ? '战斗中撤退，按战败结算' : '已放弃本局并结算保底收益',
+            settlement
+        };
     }
 
     restartBattle() {
@@ -1336,12 +1441,8 @@ export class CombatSystem {
                     this.extractionTimer = Math.max(0, this.extractionTimer - safeDelta);
                 } else if (!inZone) {
                     this.extractionOutOfZoneTimer += safeDelta;
-                    if (this.extractionOutOfZoneTimer > this.config.extractionOutOfZoneGraceMs) {
-                        this.extractionTimer = Math.min(
-                            this.extractionTotalDuration,
-                            this.extractionTimer + safeDelta * this.config.extractionDecayMultiplier
-                        );
-                    }
+                } else {
+                    this.extractionOutOfZoneTimer = 0;
                 }
                 this.updateExtractionPressure(safeDelta);
                 if (this.extractionTimer <= 0 && !this.settled) this.finishExpedition(true, 'extracted');
@@ -1359,7 +1460,12 @@ export class CombatSystem {
         this.updateCombatTexts(safeDelta);
         if (this.playerSystem?.player && this.worldSystem.initialized) {
             const center = this.getHeroCenter();
-            this.cameraSystem.follow(center.x, center.y, safeDelta);
+            this.cameraSystem.follow(
+                center.x,
+                center.y,
+                safeDelta,
+                this.getHeroCameraInsets(this.playerSystem.player)
+            );
         }
         if (this.uiNotifyTimer >= 250) {
             this.uiNotifyTimer %= 250;
@@ -1472,15 +1578,13 @@ export class CombatSystem {
         const template = this.monsterTemplates.find(item => item.id === normalizedSpec.templateId)
             || this.monsterTemplates[0];
         const depth = Math.max(1, depthNumber || normalizedSpec.depth || this.runSystem.depth + 1);
-        const playerLevel = this.runSnapshot?.player?.level ?? this.playerSystem?.player?.level ?? 1;
         const threat = this.runSystem.threat || 0;
         const depthScale = 1 + (depth - 1) * 0.16;
         const threatScale = 1 + threat * 0.006;
-        const levelScale = 1 + Math.max(0, playerLevel - 1) * 0.045;
         const eliteScale = normalizedSpec.elite ? 1.65 : 1;
         const bossScale = template.isBoss ? 1 + Math.max(0, depth - 5) * 0.08 : 1;
         const size = template.size * (normalizedSpec.elite && !template.isBoss ? 1.14 : 1);
-        const maxHp = Math.max(1, Math.floor(template.baseHp * depthScale * threatScale * levelScale * eliteScale * bossScale));
+        const maxHp = Math.max(1, Math.floor(template.baseHp * depthScale * threatScale * eliteScale * bossScale));
         const activeLocation = this.worldSystem.getLocation(this.worldSystem.activeLocationId);
         const hero = this.getHeroCenter();
         const spawnOrigin = activeLocation
@@ -1544,9 +1648,7 @@ export class CombatSystem {
         }
         if (this.monsters.length === 0) return;
         const player = this.runSnapshot?.player || this.playerSystem.player;
-        const moving = Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01;
-        const movementPenalty = moving ? this.config.movingAttackIntervalMultiplier : 1;
-        const attackInterval = this.config.attackInterval * movementPenalty / Math.max(0.1, player.attackSpeed || 1);
+        const attackInterval = this.config.attackInterval / Math.max(0.1, player.attackSpeed || 1);
         this.attackTimer += deltaTime;
         if (this.attackTimer < attackInterval) return;
         this.attackTimer %= attackInterval;
@@ -1563,8 +1665,7 @@ export class CombatSystem {
         const livePlayer = this.playerSystem.player;
         const player = this.runSnapshot?.player || livePlayer;
         const origin = this.getEntityCenter(livePlayer);
-        const moving = Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01;
-        const attackRange = moving ? this.config.heroMovingAttackRange : this.config.heroAttackRange;
+        const attackRange = this.config.heroAttackRange;
         const limit = Math.max(1, player.multiShot || 1);
         const targets = [];
         const focus = this.monsters.find(monster => {
@@ -1597,9 +1698,6 @@ export class CombatSystem {
         const petCritChance = Math.max(0, Number(this.petSquadSnapshot?.auras?.critChance) || 0) * 100;
         const isCrit = this.random() * 100 < ((player.crit || 0) + petCritChance);
         let damage = this.getPlayerAttackDamage();
-        if (Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01) {
-            damage *= this.config.movingDamageMultiplier;
-        }
         if (isCrit) {
             const petCritDamage = Math.max(0, Number(this.petSquadSnapshot?.auras?.critDamagePercent) || 0);
             damage *= ((player.critDamage || 150) + petCritDamage) / 100;
@@ -1668,7 +1766,6 @@ export class CombatSystem {
         const origin = this.getPlayerBulletOrigin(targetPoint);
         const player = this.runSnapshot?.player || this.playerSystem.player;
         const attackSpeed = Math.max(0.65, Math.min(1.65, Number(player.attackSpeed) || 1));
-        const movementRatePenalty = moving ? weapon.movingFireIntervalMultiplier : 1;
         const firstStrikeMultiplier = this.consumeFirstStrikeMultiplier();
         const baseDamage = this.getWeaponShotDamage(weapon, { moving }) * firstStrikeMultiplier;
         const spreadDegrees = moving ? weapon.movingSpreadDegrees : weapon.spreadDegrees;
@@ -1710,7 +1807,7 @@ export class CombatSystem {
         }
 
         state.magazine -= 1;
-        state.shotCooldownRemainingMs = weapon.fireIntervalMs * movementRatePenalty / attackSpeed;
+        state.shotCooldownRemainingMs = weapon.fireIntervalMs / attackSpeed;
         this.syncLegacyShotCooldownTimer();
         this.playerSystem.playAttackAnimation?.();
         return {
@@ -1747,9 +1844,7 @@ export class CombatSystem {
             0,
             Math.min(35, Number(this.petSquadSnapshot?.auras?.attackPercent) || 0)
         );
-        let damage = (weapon.baseDamage + softGrowth * weapon.attributeScaling) * (1 + petAttackPercent / 100);
-        if (moving) damage *= weapon.movingDamageMultiplier;
-        return damage;
+        return (weapon.baseDamage + softGrowth * weapon.attributeScaling) * (1 + petAttackPercent / 100);
     }
 
     consumeFirstStrikeMultiplier() {
@@ -2058,6 +2153,10 @@ export class CombatSystem {
     }
 
     updateRunRegeneration(deltaTime) {
+        if (this.runSystem.active) {
+            this.runRegenTimer = 0;
+            return 0;
+        }
         const regen = Math.max(0, this.runSnapshot?.player?.hpRegen ?? this.playerSystem?.player?.hpRegen ?? 0);
         if (regen <= 0 || this.runHp >= this.runMaxHp || this.timeSinceDamage < 1800) {
             this.runRegenTimer = 0;
@@ -2068,6 +2167,7 @@ export class CombatSystem {
             this.runRegenTimer -= 1000;
             this.healHero(regen);
         }
+        return regen;
     }
 
     updateBullets(deltaTime) {
@@ -2449,7 +2549,13 @@ export class CombatSystem {
     }
 
     getPetSkillsState() {
-        return (this.petSystem?.equippedPets || []).map(pet => {
+        const leaderInstanceId = this.petSquadSnapshot?.members?.[0]?.instanceId
+            ?? this.petSystem?.equippedPets?.[0]?.instanceId
+            ?? null;
+        return (this.petSystem?.equippedPets || [])
+            .filter(pet => leaderInstanceId !== null && String(pet.instanceId) === String(leaderInstanceId))
+            .slice(0, 1)
+            .map(pet => {
             const template = this.petSystem?.getTemplate?.(pet.templateId);
             const cooldownMs = Math.max(0, this.skillCooldowns.get(pet.instanceId) || 0);
             return {
@@ -2463,7 +2569,7 @@ export class CombatSystem {
                 cooldownSeconds: Math.ceil(cooldownMs / 1000),
                 ready: cooldownMs <= 0 && this.isCombatActive()
             };
-        });
+            });
     }
 
     updateSkillCooldowns(deltaTime) {
@@ -2505,7 +2611,17 @@ export class CombatSystem {
             exp: run.pendingRewards.exp + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.exp),
             kills: run.pendingRewards.kills + (this.encounterRewardsCommitted ? 0 : this.encounterRewards.kills)
         };
-        const pendingValue = pendingRewards.coins + run.backpackRewards.score;
+        const projectedRubies = Math.max(
+            0,
+            Math.floor(run.depth / 3) + (run.bossDefeated ? 3 : 0) + (run.threat >= 75 ? 1 : 0)
+        );
+        const pendingValue = pendingRewards.coins
+            + pendingRewards.crystals * 35
+            + pendingRewards.exp * 2
+            + run.backpackRewards.score
+            + run.backpackRewards.contractFragments * 45
+            + run.backpackRewards.deepMaterials * 120
+            + projectedRubies * 100;
         const phase = run.phase;
         return {
             mode: this.mode,
@@ -2597,7 +2713,12 @@ export class CombatSystem {
                 canStart: phase === 'briefing' || phase === 'extracted' || phase === 'defeat',
                 canChooseRoute: phase === 'route' && !run.pendingLootChoice,
                 canTrackMap: phase === 'route' || phase === 'extraction-ready',
-                canSearch: phase === 'search' && !run.pendingLootChoice && !run.isSearching && !run.activeSearch,
+                canSearch: phase === 'search'
+                    && interaction.available
+                    && interaction.location?.kind === 'container'
+                    && !run.pendingLootChoice
+                    && !run.isSearching
+                    && !run.activeSearch,
                 canRest: phase === 'camp',
                 canExtract: Boolean(nearExtractionAvailability?.canExtract),
                 canInteract: interaction.available,
@@ -3360,7 +3481,7 @@ export class CombatSystem {
                 ? `敌人占据信标 · 清除后继续 (${state.extraction.remainingSeconds} 秒)`
                 : state.extraction.inZone
                     ? `撤离倒计时 ${state.extraction.remainingSeconds} 秒`
-                    : `离开信标范围 · 进度正在回退 (${state.extraction.remainingSeconds} 秒)`,
+                    : `离开信标范围 · 进度已暂停 (${state.extraction.remainingSeconds} 秒)`,
             this.mapWidth / 2,
             y - 7
         );
@@ -3432,6 +3553,7 @@ export class CombatSystem {
             monsters: this.monsters.map(monster => ({ ...monster })),
             bullets: this.bullets.map(bullet => ({ ...bullet })),
             activeWeaponId: this.activeWeaponId,
+            lockedWeaponId: this.lockedWeaponId,
             weaponStates: Object.fromEntries(Object.entries(this.weaponStates).map(([id, state]) => [id, { ...state }])),
             aimDirection: { ...this.aimDirection },
             aimWorldPoint: this.aimWorldPoint ? { ...this.aimWorldPoint } : null,
@@ -3526,8 +3648,9 @@ export class CombatSystem {
         this.encounterRewardsCommitted = Boolean(active.encounterRewardsCommitted);
         this.monsters = Array.isArray(active.monsters) ? active.monsters.map(monster => ({ ...monster })) : [];
         this.bullets = Array.isArray(active.bullets) ? active.bullets.map(bullet => ({ ...bullet })) : [];
-        const restoredWeaponId = String(active.activeWeaponId || '');
+        const restoredWeaponId = String(active.lockedWeaponId || active.activeWeaponId || '');
         this.activeWeaponId = this.getWeaponConfig(restoredWeaponId) ? restoredWeaponId : this.weaponOrder[0];
+        this.lockedWeaponId = this.activeWeaponId;
         const legacyShotCooldown = Math.max(0, Number(active.shotCooldownTimer) || 0);
         if (active.weaponStates && typeof active.weaponStates === 'object') {
             this.weaponOrder.forEach(weaponId => {
@@ -3572,6 +3695,11 @@ export class CombatSystem {
             this.expeditionMetaSystem?.startRaid?.();
         }
         this.worldSystem.updateExtractionAvailability?.(this.runSystem.getState());
+        this.constrainHeroToWorld(this.playerSystem?.player);
+        if (this.playerSystem?.player && this.worldSystem.initialized) {
+            const center = this.getHeroCenter();
+            this.cameraSystem.snapTo(center.x, center.y);
+        }
         this.updateWorldAwareness();
     }
 }

@@ -37,7 +37,7 @@ export class CameraSystem {
     return this.getState();
   }
 
-  follow(targetX, targetY, deltaTime = 16) {
+  follow(targetX, targetY, deltaTime = 16, targetInsets = {}) {
     const desiredX = targetX - this.viewportWidth / 2;
     const desiredY = targetY - this.viewportHeight / 2;
     const frameScale = Math.max(0, Math.min(4, (Number(deltaTime) || 0) / 16.667));
@@ -49,15 +49,34 @@ export class CameraSystem {
     // 让目标瞬间越过平滑追踪区，因此在插值后再把目标约束进安全框。
     const safeMarginX = Math.min(140, Math.max(48, this.viewportWidth * 0.18));
     const safeMarginY = Math.min(140, Math.max(48, this.viewportHeight * 0.18));
+    const insetGutter = 3;
+    const maxHorizontalMargin = this.viewportWidth / 2;
+    const maxVerticalMargin = this.viewportHeight / 2;
+    const safeLeft = Math.min(
+      maxHorizontalMargin,
+      Math.max(safeMarginX, Math.max(0, Number(targetInsets.left) || 0) + insetGutter),
+    );
+    const safeRight = Math.min(
+      maxHorizontalMargin,
+      Math.max(safeMarginX, Math.max(0, Number(targetInsets.right) || 0) + insetGutter),
+    );
+    const safeTop = Math.min(
+      maxVerticalMargin,
+      Math.max(safeMarginY, Math.max(0, Number(targetInsets.top) || 0) + insetGutter),
+    );
+    const safeBottom = Math.min(
+      maxVerticalMargin,
+      Math.max(safeMarginY, Math.max(0, Number(targetInsets.bottom) || 0) + insetGutter),
+    );
     const screenX = targetX - this.x;
     const screenY = targetY - this.y;
-    if (screenX < safeMarginX) this.x = targetX - safeMarginX;
-    else if (screenX > this.viewportWidth - safeMarginX) {
-      this.x = targetX - (this.viewportWidth - safeMarginX);
+    if (screenX < safeLeft) this.x = targetX - safeLeft;
+    else if (screenX > this.viewportWidth - safeRight) {
+      this.x = targetX - (this.viewportWidth - safeRight);
     }
-    if (screenY < safeMarginY) this.y = targetY - safeMarginY;
-    else if (screenY > this.viewportHeight - safeMarginY) {
-      this.y = targetY - (this.viewportHeight - safeMarginY);
+    if (screenY < safeTop) this.y = targetY - safeTop;
+    else if (screenY > this.viewportHeight - safeBottom) {
+      this.y = targetY - (this.viewportHeight - safeBottom);
     }
     this.clamp();
     return this.getState();

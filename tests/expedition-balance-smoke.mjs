@@ -28,61 +28,64 @@ function forceNode(run, type, depth = 1) {
   run.routeChoices = [];
 }
 
-test("三种搜索方式分别服务速度、产量和品质", () => {
-  const { quick, thorough, pet } = SEARCH_PROFILES;
-  assert.ok(quick.durationSeconds < pet.durationSeconds);
-  assert.ok(quick.threat < pet.threat);
+test("搜索只保留快速与彻底两种策略，旧宠物模式映射为彻底搜刮", () => {
+  const { quick, thorough } = SEARCH_PROFILES;
+  assert.deepEqual(Object.keys(SEARCH_PROFILES), ["quick", "thorough"]);
+  assert.equal(quick.durationSeconds, 2);
+  assert.equal(quick.lootMin, 1);
+  assert.equal(quick.lootMax, 1);
   assert.equal(quick.supplyCost, 0);
-  assert.ok(thorough.lootMax > pet.lootMax);
-  assert.equal(thorough.supplyCost, 1);
-  assert.equal(thorough.durationSeconds, 8);
+  assert.equal(thorough.lootMin, 2);
+  assert.equal(thorough.lootMax, 3);
+  assert.equal(thorough.supplyCost, 0);
+  assert.equal(thorough.durationSeconds, 5);
   assert.equal(thorough.threat, 10);
   assert.equal(thorough.ambushChance, 0.2);
-  assert.ok(pet.quality > quick.quality);
-  assert.equal(pet.requiresPet, true);
+  assert.ok(thorough.threat > quick.threat);
+  assert.ok(thorough.quality > quick.quality);
 
   const run = new ExpeditionRunSystem({ random: () => 0.99 });
   run.startRun({ supplies: 0 });
   const node = run.getState().routeChoices.find(entry => entry.type === "search");
   run.chooseNode(node.id);
-  const unavailable = run.resolveSearch("thorough");
-  assert.equal(unavailable.success, false, "仔细搜刮必须真实支付补给");
-  assert.equal(run.resolveSearch("quick").success, true, "快速搜索应是无补给时的低风险选项");
-  assert.equal(run.getState().searchMetrics.timeSeconds, quick.durationSeconds);
-  assert.equal(run.getState().searchProfiles.pet.role, pet.role);
+  const legacyPet = run.resolveSearch("pet", { hasPet: false });
+  assert.equal(legacyPet.success, true);
+  assert.equal(legacyPet.searchProfile.id, "thorough");
+  assert.equal(legacyPet.foundLoot.length, 3);
+  assert.equal(run.getState().threat, 10);
+  assert.deepEqual(Object.keys(run.getState().searchProfiles), ["quick", "thorough"]);
 });
 
-test("多容器搜索按地点预算控制总产量，仔细搜刮价值高于宠物侦察", () => {
-  function searchContainers(type, mode, count, random = () => 0.99) {
+test("每个搜索地点只结算一次，彻底搜刮的产量高于快速搜索", () => {
+  function searchPoi(type, mode, random = () => 0.99) {
     const run = new ExpeditionRunSystem({ random, backpackCapacity: 8 });
     run.startRun({ supplies: 8, backpackCapacity: 8 });
     forceNode(run, type, 1);
-    for (let index = 0; index < count; index += 1) {
-      const started = run.beginSearch(mode, {
-        hasPet: true,
-        containerId: `${type}-${index + 1}`,
-        isLastContainer: index === count - 1,
-      });
-      assert.equal(started.success, true);
-      const completed = run.updateSearch(started.search.durationMs);
-      assert.equal(completed.success, true);
-      assert.equal(completed.ambushed, false);
-    }
+    const started = run.beginSearch(mode, {
+      hasPet: true,
+      containerId: `${type}-poi`,
+      isLastContainer: false,
+    });
+    assert.equal(started.success, true);
+    const completed = run.updateSearch(started.search.durationMs);
+    assert.equal(completed.success, true);
+    assert.equal(completed.ambushed, false);
+    assert.equal(completed.nodeCompleted, true);
+    assert.equal(run.getState().phase, "route");
+    assert.equal(run.beginSearch(mode, { containerId: `${type}-legacy-second` }).success, false);
     return run;
   }
 
-  const thoroughSearch = searchContainers("search", "thorough", 2);
-  const petSearch = searchContainers("search", "pet", 2);
-  const thoroughCache = searchContainers("cache", "thorough", 3);
-  const petCache = searchContainers("cache", "pet", 3);
+  const quickSearch = searchPoi("search", "quick");
+  const thoroughSearch = searchPoi("search", "thorough");
+  const thoroughCache = searchPoi("cache", "thorough");
 
-  assert.equal(thoroughSearch.backpack.length, 4, "普通点仔细搜刮最多产出 4 件");
-  assert.equal(petSearch.backpack.length, 2, "普通点宠物侦察稳定产出 2 件");
-  assert.equal(thoroughCache.backpack.length, 5, "密封仓库仔细搜刮最多产出 5 件");
-  assert.equal(petCache.backpack.length, 3, "密封仓库宠物侦察稳定产出 3 件");
+  assert.equal(quickSearch.backpack.length, 1);
+  assert.equal(thoroughSearch.backpack.length, 3);
+  assert.equal(thoroughCache.backpack.length, 3);
   assert.ok(
-    thoroughSearch.getBackpackRewards().score > petSearch.getBackpackRewards().score,
-    "相同品质下，仔细搜刮应以更多物品换取更高期望价值",
+    thoroughSearch.getBackpackRewards().score > quickSearch.getBackpackRewards().score,
+    "仔细搜刮应以更久读条和更高警戒换取更多价值",
   );
 });
 
@@ -110,7 +113,7 @@ test("营地休整支付补给，直接离开保留资源并给予先手", () =>
   assert.equal(encounter.playerAdvantage.label, "隐蔽先手");
 });
 
-test("高威胁和超限压力同时提高收益与遭遇压力", () => {
+test("警戒严格封顶 100，不再生成独立超限压力", () => {
   const low = new ExpeditionRunSystem({ random: () => 0.1 });
   low.startRun();
   forceNode(low, "combat", 2);
@@ -125,28 +128,32 @@ test("高威胁和超限压力同时提高收益与遭遇压力", () => {
   assert.ok(highResult.rewardMultiplier > lowResult.rewardMultiplier);
   assert.ok(high.getState().pendingRewards.coins > low.getState().pendingRewards.coins);
   assert.equal(high.getState().threat, 100);
-  assert.ok(high.getState().overpressure >= 30);
+  assert.equal(high.getState().overpressure, 0);
+  assert.equal(high.overpressure, 0);
   assert.ok(highSpec.eliteCount > 0);
   assert.equal(high.getState().threatPreview.nextThreshold, null);
+  assert.equal(high.getState().threatPreview.threatToNext, 0);
 });
 
-test("满背包的新战利品等待玩家手动替换，并支持保险格", () => {
+test("满背包的新战利品自动替换最低价值未保护物", () => {
   const run = new ExpeditionRunSystem({ backpackCapacity: 3 });
   run.startRun({ backpackCapacity: 3 });
   run.addLoot(loot("a", 10));
   run.addLoot(loot("b", 20));
   run.addLoot(loot("c", 30));
+  assert.equal(run.protectLoot("a").success, true);
   const overflow = run.addLoot(loot("incoming", 99), { requireDecision: true, source: "test" });
-  assert.equal(overflow.pending, true);
-  assert.deepEqual(run.backpack.map(item => item.id), ["a", "b", "c"]);
-  assert.equal(run.getState().pendingLootChoice.incoming.id, "incoming");
+  assert.equal(overflow.kept, true);
+  assert.equal(overflow.autoReplaced, true);
+  assert.equal(overflow.discarded.id, "b", "受保护的最低价值物不能被替换");
+  assert.deepEqual(run.backpack.map(item => item.id), ["a", "incoming", "c"]);
+  assert.equal(run.getState().pendingLootChoice, null);
+  assert.deepEqual(run.getState().lootOverflowQueue, []);
 
-  assert.equal(run.protectLoot("b").success, true);
-  assert.equal(run.resolveLootChoice({ action: "replace", replaceItemId: "b" }).success, false);
-  const decision = run.resolveLootChoice({ action: "replace", replaceItemId: "a" });
-  assert.equal(decision.success, true);
-  assert.equal(decision.kept, true);
-  assert.deepEqual(run.backpack.map(item => item.id), ["incoming", "b", "c"]);
+  const lowValue = run.addLoot(loot("scrap", 5), { requireDecision: true, source: "test" });
+  assert.equal(lowValue.kept, false);
+  assert.equal(lowValue.autoDiscarded, true);
+  assert.equal(lowValue.discarded.id, "scrap");
 });
 
 test("深层精英产出专属材料，结算暴露长期统计字段", () => {
@@ -165,7 +172,7 @@ test("深层精英产出专属材料，结算暴露长期统计字段", () => {
   assert.ok("bossDefeated" in settlement);
 });
 
-test("活动局可保存恢复随机序列、世界事件与待选战利品", () => {
+test("活动局可保存恢复随机序列，旧待选物品保留但队列自动收敛", () => {
   const source = new ExpeditionRunSystem({ seed: 20260721, backpackCapacity: 3 });
   source.startRun({ seed: 20260721, backpackCapacity: 3 });
   source.addLoot(loot("a", 10));
@@ -180,17 +187,34 @@ test("活动局可保存恢复随机序列、世界事件与待选战利品", ()
     lootCount: 1,
     lootQuality: 2,
   });
-  assert.ok(source.getState().pendingLootChoice);
+  assert.equal(source.getState().pendingLootChoice, null);
+  assert.deepEqual(source.getState().lootOverflowQueue, []);
   const save = JSON.parse(JSON.stringify(source.getRunSaveData()));
+  save.state.pendingLootChoice = {
+    id: "legacy-pending",
+    incoming: loot("legacy-manual", 80),
+    source: "legacy-save",
+    replaceOptions: [],
+  };
+  save.state.lootOverflowQueue = [{
+    id: "legacy-queued",
+    incoming: loot("legacy-auto", 70),
+    source: "legacy-save",
+    replaceOptions: [],
+  }];
+  save.state.overpressure = 30;
 
   const restored = new ExpeditionRunSystem({ seed: 1 });
   const loaded = restored.loadRunSaveData(save);
   assert.equal(loaded.success, true);
-  assert.equal(restored.getState().threat, source.getState().threat);
+  assert.equal(restored.getState().threat, Math.min(100, source.getState().threat + 30));
+  assert.equal(restored.getState().overpressure, 0);
   assert.equal(restored.getState().supplies, source.getState().supplies);
   assert.equal(restored.getState().insuredSlotCount, source.getState().insuredSlotCount);
-  assert.deepEqual(restored.getState().pendingLootChoice, source.getState().pendingLootChoice);
-  assert.deepEqual(restored.generateLoot(1), source.generateLoot(1), "恢复后随机序列应连续一致");
+  assert.equal(restored.getState().pendingLootChoice.id, "legacy-pending");
+  assert.deepEqual(restored.getState().lootOverflowQueue, []);
+  assert.equal(restored.resolveLootChoice("discard").success, true);
+  assert.equal(restored.getState().pendingLootChoice, null);
 });
 
 test("主动止损的保底高于战败且保险物仍可带回", () => {

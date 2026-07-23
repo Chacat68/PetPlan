@@ -533,7 +533,7 @@ export class ExpeditionWorldSystem {
     const existing = this.getContainersForLocation(location.id);
     if (existing.length > 0) return existing;
 
-    const count = location.type === "cache" ? 3 : 2;
+    const count = 1;
     let salt = 0;
     for (let index = 0; index < location.id.length; index += 1) {
       salt = (Math.imul(salt, 31) + location.id.charCodeAt(index)) >>> 0;
@@ -554,8 +554,8 @@ export class ExpeditionWorldSystem {
         kind: "container",
         locationId: location.id,
         nodeId: location.nodeId,
-        type: location.type === "cache" ? "sealed-crate" : index === 0 ? "supply-crate" : "field-container",
-        name: location.type === "cache" ? `密封货箱 ${index + 1}` : `可搜索容器 ${index + 1}`,
+        type: location.type === "cache" ? "sealed-crate" : "supply-crate",
+        name: location.type === "cache" ? "密封货箱" : "物资搜索点",
         x: openPosition.x + size / 2,
         y: openPosition.y + size / 2,
         radius: 24,
@@ -934,6 +934,27 @@ export class ExpeditionWorldSystem {
     };
   }
 
+  clampEntityToBounds(entity, { padding = 18 } = {}) {
+    if (!entity) return { moved: false, x: 0, y: 0 };
+    const originalX = Number.isFinite(Number(entity.x)) ? Number(entity.x) : 0;
+    const originalY = Number.isFinite(Number(entity.y)) ? Number(entity.y) : 0;
+    const entityWidth = Math.max(0, Number(entity.width) || 0);
+    const entityHeight = Math.max(0, Number(entity.height) || 0);
+    const numericPadding = Number(padding);
+    const safePadding = Number.isFinite(numericPadding) ? Math.max(0, numericPadding) : 18;
+    const maxX = Math.max(safePadding, this.width - entityWidth - safePadding);
+    const maxY = Math.max(safePadding, this.height - entityHeight - safePadding);
+
+    entity.x = Math.max(safePadding, Math.min(maxX, originalX));
+    entity.y = Math.max(safePadding, Math.min(maxY, originalY));
+
+    return {
+      moved: entity.x !== originalX || entity.y !== originalY,
+      x: entity.x,
+      y: entity.y,
+    };
+  }
+
   collidesWithObstacle(entity) {
     const inset = 5;
     return this.obstacles.some((obstacle) => (
@@ -1075,16 +1096,40 @@ export class ExpeditionWorldSystem {
     this.containers = new Map((Array.isArray(data.containers) ? data.containers : [])
       .filter((container) => container && typeof container.id === "string")
       .map((container) => [container.id, { ...container }]));
+    // 旧存档可能在同一地点保存 2–3 个容器。恢复时保留仍在搜索或尚未搜索的一个，
+    // 并把旧 ID 映射到该实体，确保新规则下每个 POI 只发生一次搜索交互。
+    const containerAliases = new Map();
+    const containersByLocation = new Map();
+    for (const container of this.containers.values()) {
+      const group = containersByLocation.get(container.locationId) || [];
+      group.push(container);
+      containersByLocation.set(container.locationId, group);
+    }
+    for (const group of containersByLocation.values()) {
+      if (group.length <= 1) continue;
+      const retained = group.find(container => container.id === data.activeContainerSearchId && container.state === "searching")
+        || group.find(container => container.state === "searching")
+        || group.find(container => container.id === data.nearbyContainerId && container.state === "available")
+        || group.find(container => container.state === "available")
+        || group.find(container => container.state === "searched")
+        || group[0];
+      for (const container of group) {
+        containerAliases.set(container.id, retained.id);
+        if (container.id !== retained.id) this.containers.delete(container.id);
+      }
+    }
     this.createExtractionLocations();
     this.revealedCells = new Set(Array.isArray(data.revealedCells) ? data.revealedCells : []);
     this.activeLocationId = this.locations.has(data.activeLocationId) ? data.activeLocationId : null;
-    this.activeContainerSearchId = this.containers.has(data.activeContainerSearchId)
-      && this.containers.get(data.activeContainerSearchId).state === "searching"
-      ? data.activeContainerSearchId
+    const restoredActiveContainerId = containerAliases.get(data.activeContainerSearchId) || data.activeContainerSearchId;
+    this.activeContainerSearchId = this.containers.has(restoredActiveContainerId)
+      && this.containers.get(restoredActiveContainerId).state === "searching"
+      ? restoredActiveContainerId
       : null;
     this.navigationTargetId = this.locations.has(data.navigationTargetId) ? data.navigationTargetId : null;
     this.nearbyLocationId = this.locations.has(data.nearbyLocationId) ? data.nearbyLocationId : null;
-    this.nearbyContainerId = this.containers.has(data.nearbyContainerId) ? data.nearbyContainerId : null;
+    const restoredNearbyContainerId = containerAliases.get(data.nearbyContainerId) || data.nearbyContainerId;
+    this.nearbyContainerId = this.containers.has(restoredNearbyContainerId) ? restoredNearbyContainerId : null;
     this.distanceTravelled = Math.max(0, Number(data.distanceTravelled) || 0);
     this.lastPlayerPosition = data.lastPlayerPosition
       ? { x: Number(data.lastPlayerPosition.x) || 0, y: Number(data.lastPlayerPosition.y) || 0 }

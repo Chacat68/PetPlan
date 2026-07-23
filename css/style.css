@@ -4835,6 +4835,10 @@ body[data-scene="dungeon"] .game-hud-controls {
   }
 }
 
+.expedition-risk-grid > span:last-child {
+  grid-column: 1 / -1;
+}
+
 /* ==================== 远征战术界面 v2 ==================== */
 #battle-scene {
   --exp-panel: #101722;
@@ -12139,5 +12143,124 @@ body[data-scene="dungeon"] .game-hud-controls {
   .player-command-modal .player-upgrade-card,
   .settings-command-modal button {
     transition: none;
+  }
+}
+
+/* ==================== 远征局内减负 ==================== */
+#upgrade-panel[data-raid-active="true"] .battle-terminal-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 30;
+  min-width: 48px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid rgba(121, 221, 255, 0.62);
+  border-radius: 7px;
+  color: #dff7ff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  background: #152a36;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+#upgrade-panel[data-raid-active="true"] .battle-terminal-toggle small {
+  display: block;
+  margin-top: 1px;
+  color: #84a6b5;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+#upgrade-panel[data-raid-active="true"] .battle-terminal-toggle b {
+  color: var(--exp-amber);
+  font-size: 18px;
+}
+
+#upgrade-panel[data-raid-active="true"] .battle-terminal-header {
+  padding-right: 80px;
+}
+
+#battle-scene[data-raid-active="true"] #upgrade-panel[data-compact-open="false"] {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  align-self: flex-start;
+  padding: 0;
+  overflow: hidden;
+  border-color: rgba(121, 221, 255, 0.52);
+  background: rgba(13, 27, 37, 0.94);
+}
+
+#battle-scene[data-raid-active="true"] #upgrade-panel[data-compact-open="false"]
+  > :not(.battle-terminal-toggle):not(#battle-terminal-status) {
+  display: none !important;
+}
+
+#battle-scene[data-raid-active="true"] #upgrade-panel[data-compact-open="false"] .battle-terminal-toggle {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+#battle-scene[data-raid-active="true"] #upgrade-panel[data-compact-open="false"] .battle-terminal-toggle span {
+  display: none;
+}
+
+.expedition-loadout-panel[data-raid-active="true"]::before {
+  content: "本局锁定武器 · 自动换弹";
+}
+
+.expedition-loadout-panel[data-raid-active="true"] .expedition-weapon-slots {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.expedition-loadout-panel[data-raid-active="true"] .expedition-weapon-slot {
+  min-height: 48px;
+}
+
+.expedition-search-pet-bonus {
+  display: block;
+  padding: 6px 8px;
+  border: 1px solid rgba(121, 221, 255, 0.2);
+  border-radius: 6px;
+  color: #8399a8;
+  font-size: clamp(9px, 0.66vw, 11px);
+  line-height: 1.35;
+  background: rgba(10, 18, 27, 0.66);
+}
+
+.expedition-search-pet-bonus[data-active="true"] {
+  color: #bcecff;
+  border-color: rgba(121, 221, 255, 0.42);
+}
+
+.battle-fire-controls {
+  grid-template-columns: clamp(78px, 7vw, 108px);
+}
+
+.expedition-team-skill-btn {
+  min-width: clamp(108px, 10vw, 158px);
+}
+
+@media (max-width: 540px) {
+  #upgrade-panel[data-raid-active="true"] .battle-terminal-toggle small {
+    display: none;
+  }
+
+  .expedition-team-skill-btn {
+    min-width: 52px;
   }
 }

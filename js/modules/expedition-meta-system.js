@@ -16,7 +16,7 @@ const clampNonNegative = value => Math.max(0, asInteger(value));
 export const EXPEDITION_ITEM_TEMPLATES = Object.freeze({
   "starter-carbine": Object.freeze({
     templateId: "starter-carbine",
-    name: "制式训练武器组",
+    name: "制式训练武器",
     type: "weapon",
     rarity: "starter",
     equipSlot: "mainWeapon",
@@ -27,7 +27,7 @@ export const EXPEDITION_ITEM_TEMPLATES = Object.freeze({
     permanent: true,
     bound: true,
     stackable: false,
-    description: "始终可用、不会在远征失败时遗失；可在步枪、霰弹枪和精确枪模式间切换。",
+    description: "始终可用且不会在远征失败时遗失；出发前选择射击模式，本局内保持锁定。",
   }),
   "contract-fragment": Object.freeze({
     templateId: "contract-fragment",
@@ -425,6 +425,9 @@ export class ExpeditionMetaSystem {
   }
 
   setWeaponMode(combatWeaponId) {
+    if (this.activeRaid) {
+      return { success: false, message: "远征进行中，出发武器已经锁定" };
+    }
     const weapon = this.loadout.mainWeapon;
     if (!weapon) return { success: false, message: "主武器槽为空" };
     const requested = String(combatWeaponId || "");
@@ -435,9 +438,6 @@ export class ExpeditionMetaSystem {
       return { success: false, message: "当前主武器不支持该射击模式" };
     }
     weapon.combatWeaponId = requested;
-    if (this.activeRaid?.loadoutSnapshot?.mainWeapon?.instanceId === weapon.instanceId) {
-      this.activeRaid.loadoutSnapshot.mainWeapon.combatWeaponId = requested;
-    }
     return { success: true, message: `已设置主武器模式：${requested}`, combatWeaponId: requested };
   }
 

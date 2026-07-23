@@ -1,4 +1,4 @@
-import { CameraSystem } from "../modules/camera-system.js?v=territory-world-20260712a";
+import { CameraSystem } from "../modules/camera-system.js?v=expedition-simplification-20260723b";
 import { TerritoryWorldSystem } from "../modules/territory-world-system.js?v=territory-world-20260712a";
 import {
   TERRITORY_BUILDING_ART_SOURCES,

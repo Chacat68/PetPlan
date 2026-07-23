@@ -39,7 +39,7 @@ export class PetSystem {
                     label: '灼热嗅觉',
                     searchMode: 'quick',
                     qualityBonus: 1,
-                    detail: '快速搜索品质判定 +1'
+                    detail: '快速拿取品质判定 +1'
                 },
                 baseRole: {
                     buildingType: 'training_ground',
@@ -63,9 +63,9 @@ export class PetSystem {
                 explorationTalent: {
                     id: 'calm-scout',
                     label: '冷静侦察',
-                    searchMode: 'pet',
+                    searchMode: 'thorough',
                     threatReduction: 3,
-                    detail: '宠物侦察威胁 -3'
+                    detail: '彻底搜刮警戒 -3'
                 },
                 baseRole: {
                     buildingType: 'temple',
@@ -91,7 +91,7 @@ export class PetSystem {
                     label: '电磁感应',
                     searchMode: 'thorough',
                     supplyChanceBonus: 0.12,
-                    detail: '仔细搜刮补给发现率 +12%'
+                    detail: '彻底搜刮补给发现率 +12%'
                 },
                 baseRole: {
                     buildingType: 'crystal_mine',
@@ -115,9 +115,9 @@ export class PetSystem {
                 explorationTalent: {
                     id: 'steady-step',
                     label: '稳重步伐',
-                    searchMode: 'pet',
+                    searchMode: 'thorough',
                     ambushChanceReduction: 0.08,
-                    detail: '宠物侦察伏击率 -8%'
+                    detail: '彻底搜刮伏击率 -8%'
                 },
                 baseRole: {
                     buildingType: 'barracks',
@@ -143,7 +143,7 @@ export class PetSystem {
                     label: '风场扫掠',
                     searchMode: 'thorough',
                     lootCountBonus: 1,
-                    detail: '仔细搜刮额外发现 1 件战利品'
+                    detail: '彻底搜刮额外发现 1 件战利品'
                 },
                 baseRole: {
                     buildingType: 'library',
@@ -167,9 +167,9 @@ export class PetSystem {
                 explorationTalent: {
                     id: 'guiding-light',
                     label: '寻路圣光',
-                    searchMode: 'pet',
+                    searchMode: 'thorough',
                     supplyChanceBonus: 0.15,
-                    detail: '宠物侦察补给发现率 +15%'
+                    detail: '彻底搜刮补给发现率 +15%'
                 },
                 baseRole: {
                     buildingType: 'temple',
@@ -195,7 +195,7 @@ export class PetSystem {
                     label: '无声潜行',
                     searchMode: 'quick',
                     ambushChanceReduction: 0.1,
-                    detail: '快速搜索伏击率 -10%'
+                    detail: '快速拿取伏击率 -10%'
                 },
                 baseRole: {
                     buildingType: 'training_ground',
@@ -227,7 +227,7 @@ export class PetSystem {
                     label: '余烬记忆',
                     searchMode: 'thorough',
                     qualityBonus: 1,
-                    detail: '仔细搜刮品质判定 +1'
+                    detail: '彻底搜刮品质判定 +1'
                 },
                 baseRole: {
                     buildingType: 'workshop',
@@ -463,6 +463,7 @@ export class PetSystem {
     }
 
     getExplorationSearchBonuses(searchMode) {
+        const normalizedMode = searchMode === 'pet' ? 'thorough' : searchMode;
         const bonuses = {
             qualityBonus: 0,
             lootCountBonus: 0,
@@ -475,7 +476,8 @@ export class PetSystem {
         this.equippedPets.forEach(pet => {
             const template = this.getTemplate(pet.templateId);
             const talent = template?.explorationTalent;
-            if (!talent || talent.searchMode !== searchMode) return;
+            const talentMode = talent?.searchMode === 'pet' ? 'thorough' : talent?.searchMode;
+            if (!talent || talentMode !== normalizedMode) return;
 
             bonuses.qualityBonus += Number(talent.qualityBonus) || 0;
             bonuses.lootCountBonus += Number(talent.lootCountBonus) || 0;

@@ -11,43 +11,25 @@ export const SEARCH_PROFILES = Object.freeze({
     lootMin: 1,
     lootMax: 1,
     quality: 0,
-    threat: 3,
+    threat: 2,
     ambushChance: 0.04,
     supplyChance: 0.08,
-    durationSeconds: 3,
-    exposure: 1,
+    durationSeconds: 2,
     supplyCost: 0,
-    role: "低暴露、快速脱离",
+    role: "快速拿取 1 件战利品，警戒增长较低",
   },
   thorough: {
     id: "thorough",
-    name: "仔细搜刮",
-    // 多容器地点按单个容器结算；普通点总计 2-4 件，密封仓库总计 3-5 件。
-    lootMin: 1,
-    lootMax: 2,
+    name: "彻底搜刮",
+    lootMin: 2,
+    lootMax: 3,
     quality: 2,
     threat: 10,
     ambushChance: 0.2,
     supplyChance: 0.24,
-    durationSeconds: 8,
-    exposure: 3,
-    supplyCost: 1,
-    role: "消耗补给换取最大产量",
-  },
-  pet: {
-    id: "pet",
-    name: "宠物侦察",
-    lootMin: 1,
-    lootMax: 1,
-    quality: 2,
-    threat: 8,
-    ambushChance: 0.1,
-    supplyChance: 0.2,
-    durationSeconds: 7,
-    exposure: 2,
+    durationSeconds: 5,
     supplyCost: 0,
-    role: "稳定品质与较低伏击率",
-    requiresPet: true,
+    role: "花费更多时间换取 2–3 件战利品，并显著提高警戒",
   },
 });
 
@@ -133,17 +115,17 @@ export const EXTRACTION_RULES = Object.freeze({
     description: "沿原路返回入口，守点压力较低且不消耗补给。",
     minDepth: 3,
     supplyCost: 0,
-    threatCost: 5,
-    minDurationMs: 6500,
-    baseDurationMs: 8000,
-    threatDurationStepMs: 1500,
-    overpressureDurationStepMs: 80,
-    baseEnemyCount: 4,
-    threatPerEnemy: 14,
-    overpressurePerEnemy: 12,
-    reinforcementBaseMs: 4200,
-    reinforcementDepthStepMs: 180,
-    reinforcementPressureStepMs: 20,
+    threatCost: 3,
+    minDurationMs: 5000,
+    baseDurationMs: 6000,
+    threatDurationStepMs: 1000,
+    overpressureDurationStepMs: 0,
+    baseEnemyCount: 2,
+    threatPerEnemy: 20,
+    overpressurePerEnemy: 999,
+    reinforcementBaseMs: 5500,
+    reinforcementDepthStepMs: 100,
+    reinforcementPressureStepMs: 0,
   }),
   emergency: Object.freeze({
     id: "emergency",
@@ -156,13 +138,13 @@ export const EXTRACTION_RULES = Object.freeze({
     minDurationMs: 8000,
     baseDurationMs: 9000,
     threatDurationStepMs: 1500,
-    overpressureDurationStepMs: 90,
+    overpressureDurationStepMs: 0,
     baseEnemyCount: 5,
     threatPerEnemy: 12,
-    overpressurePerEnemy: 10,
-    reinforcementBaseMs: 3500,
+    overpressurePerEnemy: 999,
+    reinforcementBaseMs: 3200,
     reinforcementDepthStepMs: 190,
-    reinforcementPressureStepMs: 24,
+    reinforcementPressureStepMs: 0,
   }),
 });
 
@@ -232,6 +214,7 @@ export class ExpeditionRunSystem {
     this.phase = "briefing";
     this.depth = 0;
     this.threat = 0;
+    // 保留属性供旧调用读取；新规则不再累积独立的超限压力与暴露值。
     this.overpressure = 0;
     this.exposure = 0;
     this.supplies = 0;
@@ -252,7 +235,7 @@ export class ExpeditionRunSystem {
     this.searchSerial = 0;
     this.activeSearch = null;
     this.searchedContainerIds = [];
-    this.searchMetrics = { timeSeconds: 0, exposure: 0, suppliesSpent: 0 };
+    this.searchMetrics = { timeSeconds: 0, suppliesSpent: 0 };
     this.activeExtractionType = null;
     this.lastAction = "准备好后开始远征。带回战利品的唯一方式，是活着撤离。";
     this.lastSettlement = null;
@@ -363,6 +346,16 @@ export class ExpeditionRunSystem {
     };
   }
 
+  normalizeSearchMode(mode = "quick") {
+    const normalizedMode = String(mode || "quick");
+    return normalizedMode === "pet" ? "thorough" : normalizedMode;
+  }
+
+  getSearchProfile(mode = "quick") {
+    const normalizedMode = this.normalizeSearchMode(mode);
+    return SEARCH_PROFILES[normalizedMode] || null;
+  }
+
   getSearchState() {
     if (!this.activeSearch) return null;
     const durationMs = Math.max(1, this.activeSearch.durationMs);
@@ -379,17 +372,16 @@ export class ExpeditionRunSystem {
     containerId = null,
     completeNode = undefined,
     isLastContainer = undefined,
+    legacySynchronous = false,
   } = {}) {
-    const profile = SEARCH_PROFILES[mode];
+    const normalizedMode = this.normalizeSearchMode(mode);
+    const profile = this.getSearchProfile(normalizedMode);
     if (!this.active || this.phase !== "search" || !this.currentNode) {
       return { success: false, message: "这里没有可搜索的区域" };
     }
     if (this.activeSearch) return { success: false, message: "已有搜索正在进行" };
     if (this.pendingLootChoice) return { success: false, message: "请先处理背包中的待选战利品" };
     if (!profile) return { success: false, message: "未知的搜索方式" };
-    if (profile.requiresPet && !hasPet) {
-      return { success: false, message: "需要至少上阵一只宠物才能侦察" };
-    }
     if (profile.supplyCost > this.supplies) {
       return { success: false, message: `${profile.name}需要 ${profile.supplyCost} 份补给` };
     }
@@ -399,16 +391,16 @@ export class ExpeditionRunSystem {
     }
 
     this.searchSerial += 1;
-    const completeNodeOnFinish = normalizedContainerId
-      ? Boolean(isLastContainer ?? completeNode ?? false)
-      : true;
+    // 一个搜索地点只结算一次。旧调用传入的多容器标记仅用于兼容参数形状。
+    const completeNodeOnFinish = true;
     this.activeSearch = {
       id: `search-${this.runSerial}-${this.searchSerial}`,
-      mode,
+      mode: normalizedMode,
       profileId: profile.id,
       nodeId: this.currentNode.id,
       containerId: normalizedContainerId,
       completeNodeOnFinish,
+      legacySynchronous: Boolean(legacySynchronous),
       elapsedMs: 0,
       durationMs: profile.durationSeconds * 1000,
       searchBonuses: this.normalizeSearchBonuses(searchBonuses),
@@ -482,7 +474,8 @@ export class ExpeditionRunSystem {
   }
 
   completeSearch(search) {
-    const profile = SEARCH_PROFILES[search?.profileId || search?.mode];
+    const normalizedMode = this.normalizeSearchMode(search?.profileId || search?.mode);
+    const profile = this.getSearchProfile(normalizedMode);
     if (!profile || !this.currentNode || this.currentNode.id !== search?.nodeId) {
       return { success: false, completed: false, message: "搜索目标已经失效" };
     }
@@ -493,36 +486,20 @@ export class ExpeditionRunSystem {
 
     const appliedBonuses = this.normalizeSearchBonuses(search.searchBonuses);
     const cacheBonus = this.currentNode.type === "cache" ? 1 : 0;
-    const isContainerSearch = Boolean(search.containerId);
-    const expectedContainerCount = cacheBonus ? 3 : 2;
-    let lootCount;
-    if (isContainerSearch) {
-      const requestedLoot = this.randomInt(profile.lootMin, profile.lootMax)
-        + appliedBonuses.lootCountBonus;
-      // 密封仓库最后一个容器最多给 1 件，避免三个容器叠加到 6 件以上；
-      // 其余容器最多 2 件，使普通搜索点稳定落在 2-4 件、仓库落在 3-5 件。
-      const contextualMax = cacheBonus && search.completeNodeOnFinish ? 1 : 2;
-      lootCount = Math.min(contextualMax, requestedLoot);
-    } else {
-      // 旧同步入口没有容器上下文，按整个地点一次性发放，保持旧调用仍可完成节点。
-      const requestedLoot = this.randomInt(
-        profile.lootMin * expectedContainerCount,
-        profile.lootMax * expectedContainerCount,
-      ) + appliedBonuses.lootCountBonus;
-      lootCount = Math.min(cacheBonus ? 5 : 4, requestedLoot);
-    }
+    const lootCount = Math.min(
+      profile.lootMax + appliedBonuses.lootCountBonus,
+      this.randomInt(profile.lootMin, profile.lootMax) + appliedBonuses.lootCountBonus,
+    );
     this.supplies -= profile.supplyCost;
     this.searchMetrics.timeSeconds += profile.durationSeconds;
-    this.searchMetrics.exposure += profile.exposure;
     this.searchMetrics.suppliesSpent += profile.supplyCost;
-    this.exposure += profile.exposure;
     const gainedLoot = [];
     const foundLoot = [];
     const discardedLoot = [];
     for (let index = 0; index < lootCount; index += 1) {
       const item = this.generateLoot(profile.quality + cacheBonus + appliedBonuses.qualityBonus);
       foundLoot.push(item);
-      const result = this.addLoot(item, { requireDecision: true, source: `search:${search.mode}` });
+      const result = this.addLoot(item, { requireDecision: true, source: `search:${normalizedMode}` });
       if (result.kept) gainedLoot.push(item);
       if (result.discarded) discardedLoot.push(result.discarded);
     }
@@ -546,7 +523,7 @@ export class ExpeditionRunSystem {
     const talentSummary = appliedBonuses.contributors.length > 0
       ? `，${appliedBonuses.contributors.map(item => `${item.petName}·${item.label}`).join("、")}生效`
       : "";
-    const summary = `${profile.name}发现 ${foundLoot.length} 件战利品，耗时 ${profile.durationSeconds} 秒、暴露 ${profile.exposure}${supplyFound ? "，并找到 1 份补给" : ""}${talentSummary}`;
+    const summary = `${profile.name}发现 ${foundLoot.length} 件战利品，耗时 ${profile.durationSeconds} 秒、警戒 +${Math.max(0, profile.threat + cacheBonus * 3 - appliedBonuses.threatReduction)}${supplyFound ? "，并找到 1 份补给" : ""}${talentSummary}`;
     if (ambushed) {
       this.phase = "combat";
       this.currentNode.ambushed = true;
@@ -571,7 +548,7 @@ export class ExpeditionRunSystem {
 
     this.lastAction = `${summary}。`;
     if (search.completeNodeOnFinish) {
-      this.completeCurrentNode({ result: "searched", searchMode: search.mode });
+      this.completeCurrentNode({ result: "searched", searchMode: normalizedMode });
     }
     return {
       success: true,
@@ -592,7 +569,7 @@ export class ExpeditionRunSystem {
 
   // 兼容旧控制器与测试：同步入口仍可用，但权威流程为 beginSearch -> updateSearch。
   resolveSearch(mode, options = {}) {
-    const started = this.beginSearch(mode, options);
+    const started = this.beginSearch(mode, { ...options, legacySynchronous: true });
     if (!started.success) return started;
     return this.updateSearch(started.search.durationMs);
   }
@@ -607,16 +584,14 @@ export class ExpeditionRunSystem {
     this.supplies -= 1;
     const threatReduced = Math.min(this.threat, 18);
     this.threat -= threatReduced;
-    const pressureReduced = Math.min(this.overpressure, 8);
-    this.overpressure -= pressureReduced;
-    this.lastAction = `消耗 1 份补给完成休整：恢复生命、威胁 -${threatReduced}${pressureReduced ? `、超限压力 -${pressureReduced}` : ""}。`;
+    this.lastAction = `消耗 1 份补给完成休整：恢复生命、警戒 -${threatReduced}。`;
     this.completeCurrentNode({ result: "rested" });
     return {
       success: true,
       message: this.lastAction,
       healRatio: 0.42,
       threatReduced,
-      pressureReduced,
+      pressureReduced: 0,
       supplyCost: 1,
       supplyFound: false,
     };
@@ -797,7 +772,6 @@ export class ExpeditionRunSystem {
       rule.minDurationMs,
       rule.baseDurationMs
         + Math.floor(this.threat / 25) * rule.threatDurationStepMs
-        + this.overpressure * rule.overpressureDurationStepMs
         - returnRelief * 120,
     );
     const enemyCount = Math.max(
@@ -805,7 +779,6 @@ export class ExpeditionRunSystem {
       rule.baseEnemyCount
         + this.depth
         + Math.floor(this.threat / rule.threatPerEnemy)
-        + Math.floor(this.overpressure / rule.overpressurePerEnemy)
         - Math.floor(returnRelief / 4),
     );
     this.addThreat(rule.threatCost);
@@ -824,15 +797,13 @@ export class ExpeditionRunSystem {
         locationId: rule.locationId,
         depth: Math.max(1, this.depth),
         threat: this.threat,
-        overpressure: this.overpressure,
+        overpressure: 0,
         enemyCount,
-        eliteCount: Math.floor(this.threat / 35)
-          + Math.floor(this.overpressure / 25),
+        eliteCount: Math.floor(this.threat / 40),
         reinforcementIntervalMs: Math.max(
           1200,
           rule.reinforcementBaseMs
-            - this.depth * rule.reinforcementDepthStepMs
-            - this.overpressure * rule.reinforcementPressureStepMs,
+            - this.depth * rule.reinforcementDepthStepMs,
         ),
         returnPressureReduction: returnRelief,
       },
@@ -865,7 +836,7 @@ export class ExpeditionRunSystem {
       reachedDepth: this.depth,
       extractedDepth: successful ? this.depth : 0,
       threat: this.threat,
-      overpressure: this.overpressure,
+      overpressure: 0,
       kills: this.pendingRewards.kills,
       // 背包物品进入局外仓库，不再同时自动折现；只有战斗现金奖励直接结算。
       coins: successful
@@ -911,17 +882,8 @@ export class ExpeditionRunSystem {
 
   addThreat(amount) {
     const delta = Math.floor(amount || 0);
-    if (delta < 0) {
-      let reduction = Math.abs(delta);
-      const pressureReduction = Math.min(this.overpressure, reduction);
-      this.overpressure -= pressureReduction;
-      reduction -= pressureReduction;
-      this.threat = Math.max(0, this.threat - reduction);
-      return this.threat;
-    }
-    const total = this.threat + delta;
-    this.threat = Math.max(0, Math.min(100, total));
-    if (total > 100) this.overpressure += total - 100;
+    this.threat = Math.max(0, Math.min(100, this.threat + delta));
+    this.overpressure = 0;
     return this.threat;
   }
 
@@ -941,33 +903,48 @@ export class ExpeditionRunSystem {
     return { success: true, message: this.lastAction, healRatio: 0.32 };
   }
 
+  getLootValue(item = {}) {
+    if (Number.isFinite(Number(item.score))) return Number(item.score);
+    return (Number(item.coins) || 0)
+      + (Number(item.crystals) || 0) * 35
+      + (Number(item.exp) || 0) * 2
+      + (Number(item.contractFragments) || 0) * 45
+      + (Number(item.deepMaterial) || 0) * 120;
+  }
+
   addLoot(item, { requireDecision = false, source = "legacy" } = {}) {
     if (this.backpack.length < this.backpackCapacity) {
       this.backpack.push(item);
       return { kept: true, discarded: null };
     }
 
-    if (requireDecision) {
-      this.lootChoiceSerial += 1;
-      const choice = {
-        id: `loot-choice-${this.runSerial}-${this.lootChoiceSerial}`,
-        incoming: { ...item },
-        source,
-        replaceOptions: this.backpack.map(existing => ({ ...existing })),
+    // 新掉落不再排队打断流程：只比较未保护物品，并自动保留价值更高的一件。
+    const replaceable = this.backpack
+      .map((existing, index) => ({ existing, index }))
+      .filter(({ existing }) => !existing.insured);
+    if (replaceable.length === 0) {
+      return {
+        kept: false,
+        discarded: item,
+        ...(requireDecision ? { autoDiscarded: true, source } : {}),
       };
-      if (this.pendingLootChoice) this.lootOverflowQueue.push(choice);
-      else this.pendingLootChoice = choice;
-      return { kept: false, discarded: null, pending: true, choice: { ...choice } };
     }
-
-    // 兼容旧调用：显式未要求决策时，保留历史的自动择优语义。
-    const lowestIndex = this.backpack.reduce((bestIndex, current, index, list) => (
-      current.score < list[bestIndex].score ? index : bestIndex
-    ), 0);
-    const lowest = this.backpack[lowestIndex];
-    if (item.score <= lowest.score) return { kept: false, discarded: item };
+    const { existing: lowest, index: lowestIndex } = replaceable.reduce((lowestEntry, entry) => (
+      this.getLootValue(entry.existing) < this.getLootValue(lowestEntry.existing) ? entry : lowestEntry
+    ));
+    if (this.getLootValue(item) <= this.getLootValue(lowest)) {
+      return {
+        kept: false,
+        discarded: item,
+        ...(requireDecision ? { autoDiscarded: true, source } : {}),
+      };
+    }
     this.backpack.splice(lowestIndex, 1, item);
-    return { kept: true, discarded: lowest };
+    return {
+      kept: true,
+      discarded: lowest,
+      ...(requireDecision ? { autoReplaced: true, source } : {}),
+    };
   }
 
   resolveLootChoice(actionOrOptions, replaceItemId = null) {
@@ -995,10 +972,8 @@ export class ExpeditionRunSystem {
     }
 
     const resolvedChoice = this.pendingLootChoice;
-    this.pendingLootChoice = this.lootOverflowQueue.shift() || null;
-    if (this.pendingLootChoice) {
-      this.pendingLootChoice.replaceOptions = this.backpack.map(existing => ({ ...existing }));
-    }
+    this.pendingLootChoice = null;
+    this.lootOverflowQueue = [];
     return {
       success: true,
       kept,
@@ -1032,7 +1007,7 @@ export class ExpeditionRunSystem {
   }
 
   generateLoot(qualityBonus = 0) {
-    const threatQuality = Math.floor(this.threat / 25) * 0.018 + Math.min(0.08, this.overpressure * 0.002);
+    const threatQuality = Math.floor(this.threat / 25) * 0.018;
     const roll = this.random() + Math.max(0, qualityBonus) * 0.055 + this.depth * 0.016 + threatQuality;
     const rarity = roll >= 1.02
       ? "epic"
@@ -1098,9 +1073,9 @@ export class ExpeditionRunSystem {
       depth,
       threat: effectiveThreat,
       rawThreat: this.threat,
-      overpressure: this.overpressure,
+      overpressure: 0,
       enemyCount: boss ? 4 : elite ? 4 + Math.floor(depth / 2) : ambush ? 3 + Math.floor(depth / 3) : 3 + depth,
-      eliteCount: boss ? 1 : elite ? 2 : Math.floor(effectiveThreat / 45) + Math.floor(this.overpressure / 30),
+      eliteCount: boss ? 1 : elite ? 2 : Math.floor(effectiveThreat / 45),
       boss,
       playerAdvantage: advantage ? { ...advantage } : null,
       rewardMultiplier: this.getThreatRewardMultiplier(),
@@ -1113,18 +1088,18 @@ export class ExpeditionRunSystem {
   }
 
   getThreatTier() {
-    const tier = Math.min(4, Math.floor(this.threat / 25));
-    const thresholds = [0, 25, 50, 75, 100];
+    const tier = Math.min(3, Math.floor(this.threat / 25));
+    const thresholds = [0, 25, 50, 75];
     return {
       tier,
-      label: ["警戒", "追踪", "围猎", "封锁", "极限通缉"][tier],
+      label: ["隐蔽", "警戒", "围猎", "通缉"][tier],
       threshold: thresholds[tier],
-      nextThreshold: tier < 4 ? thresholds[tier + 1] : null,
+      nextThreshold: tier < 3 ? thresholds[tier + 1] : null,
     };
   }
 
   getThreatRewardMultiplier() {
-    return Number((1 + Math.floor(this.threat / 25) * 0.12 + Math.min(0.6, this.overpressure * 0.01)).toFixed(2));
+    return Number((1 + this.getThreatTier().tier * 0.12).toFixed(2));
   }
 
   getThreatPreview() {
@@ -1132,15 +1107,13 @@ export class ExpeditionRunSystem {
     const nextThreat = tier.nextThreshold;
     const currentMultiplier = this.getThreatRewardMultiplier();
     const nextMultiplier = nextThreat === null
-      ? Number((currentMultiplier + 0.1).toFixed(2))
+      ? currentMultiplier
       : Number((1 + Math.floor(nextThreat / 25) * 0.12).toFixed(2));
     return {
       ...tier,
       currentRewardMultiplier: currentMultiplier,
       nextRewardMultiplier: nextMultiplier,
-      threatToNext: nextThreat === null ? 10 : Math.max(0, nextThreat - this.threat),
-      overpressure: this.overpressure,
-      overpressureRule: "威胁 100 后继续累积超限压力：提高精英数量、撤离压力与奖励倍率",
+      threatToNext: nextThreat === null ? 0 : Math.max(0, nextThreat - this.threat),
     };
   }
 
@@ -1204,7 +1177,7 @@ export class ExpeditionRunSystem {
 
   getRunSaveData() {
     return {
-      version: 3,
+      version: 4,
       config: {
         maxDepth: this.maxDepth,
         minExtractionDepth: this.minExtractionDepth,
@@ -1224,8 +1197,6 @@ export class ExpeditionRunSystem {
         phase: this.phase,
         depth: this.depth,
         threat: this.threat,
-        overpressure: this.overpressure,
-        exposure: this.exposure,
         supplies: this.supplies,
         backpackCapacity: this.backpackCapacity,
         backpack: this.backpack,
@@ -1262,7 +1233,7 @@ export class ExpeditionRunSystem {
     const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
     const scalarKeys = [
       "runSerial", "nodeSerial", "lootSerial", "lootChoiceSerial", "active", "phase", "depth", "threat",
-      "overpressure", "exposure", "supplies", "backpackCapacity", "insuredSlotCount",
+      "supplies", "backpackCapacity", "insuredSlotCount",
       "stealthCharges", "bossDefeated", "searchSerial", "activeExtractionType", "lastAction",
     ];
     for (const key of scalarKeys) if (Object.hasOwn(saved, key)) this[key] = saved[key];
@@ -1272,23 +1243,35 @@ export class ExpeditionRunSystem {
       "activeSearch", "searchedContainerIds", "searchMetrics", "lastSettlement",
     ];
     for (const key of objectKeys) if (Object.hasOwn(saved, key)) this[key] = clone(saved[key]);
-    this.overpressure = Math.max(0, Math.floor(this.overpressure || 0));
-    this.exposure = Math.max(0, Math.floor(this.exposure || 0));
+    const legacyPressure = Math.max(0, Math.floor(Number(saved.overpressure) || 0));
+    this.threat = Math.max(0, Math.min(100, Math.floor(Number(saved.threat) || 0) + legacyPressure));
+    this.overpressure = 0;
+    this.exposure = 0;
     this.insuredSlotCount = Math.max(0, Math.floor(this.insuredSlotCount ?? 1));
-    this.lootOverflowQueue ||= [];
+    this.lootOverflowQueue = Array.isArray(this.lootOverflowQueue) ? this.lootOverflowQueue : [];
+    // 旧存档保留第一个手动待选物品，其余历史队列立即按新规则自动整理，避免恢复后连续弹窗。
+    for (const queuedChoice of this.lootOverflowQueue) {
+      if (queuedChoice?.incoming) this.addLoot(queuedChoice.incoming, { source: queuedChoice.source || "legacy-queue" });
+    }
+    this.lootOverflowQueue = [];
+    if (this.pendingLootChoice) {
+      this.pendingLootChoice.replaceOptions = this.backpack.map(existing => ({ ...existing }));
+    }
     this.worldEventState ||= { lootQualityBonus: 0, lootCountBonus: 0, returnPressureReduction: 0 };
     this.searchSerial = Math.max(0, Math.floor(this.searchSerial || 0));
     this.searchedContainerIds = Array.isArray(this.searchedContainerIds)
       ? [...new Set(this.searchedContainerIds.map(String))]
       : [];
     if (this.activeSearch) {
-      const profile = SEARCH_PROFILES[this.activeSearch.profileId || this.activeSearch.mode];
+      const normalizedMode = this.normalizeSearchMode(this.activeSearch.profileId || this.activeSearch.mode);
+      const profile = this.getSearchProfile(normalizedMode);
       const validNode = this.currentNode && this.currentNode.id === this.activeSearch.nodeId;
       if (!profile || !validNode || this.phase !== "search") {
         this.activeSearch = null;
       } else {
         this.activeSearch.profileId = profile.id;
         this.activeSearch.mode = profile.id;
+        this.activeSearch.completeNodeOnFinish = true;
         this.activeSearch.durationMs = profile.durationSeconds * 1000;
         this.activeSearch.elapsedMs = Math.max(
           0,
@@ -1297,7 +1280,10 @@ export class ExpeditionRunSystem {
         this.activeSearch.searchBonuses = this.normalizeSearchBonuses(this.activeSearch.searchBonuses);
       }
     }
-    this.searchMetrics ||= { timeSeconds: 0, exposure: 0, suppliesSpent: 0 };
+    this.searchMetrics = {
+      timeSeconds: Math.max(0, Number(this.searchMetrics?.timeSeconds) || 0),
+      suppliesSpent: Math.max(0, Math.floor(Number(this.searchMetrics?.suppliesSpent) || 0)),
+    };
     if (!EXTRACTION_RULES[this.activeExtractionType]) this.activeExtractionType = null;
     return { success: true, message: "远征进度已恢复", state: this.getState() };
   }
@@ -1312,8 +1298,7 @@ export class ExpeditionRunSystem {
       maxDepth: this.maxDepth,
       minExtractionDepth: this.minExtractionDepth,
       threat: this.threat,
-      overpressure: this.overpressure,
-      exposure: this.exposure,
+      overpressure: 0,
       threatPreview: this.getThreatPreview(),
       supplies: this.supplies,
       backpackCapacity: this.backpackCapacity,

@@ -8,28 +8,28 @@
 
 import { getGameCoreInstance } from "./modules/game-core.js?v=world-exploration-20260712b";
 import { getResourceSystemInstance } from "./modules/resource-system.js";
-import { getPlayerSystemInstance } from "./modules/player-system.js?v=review-fixes-20260722a";
-import { getCombatSystemInstance } from "./modules/combat-system.js?v=review-fixes-20260722a";
+import { getPlayerSystemInstance } from "./modules/player-system.js?v=expedition-simplification-20260723b";
+import { getCombatSystemInstance } from "./modules/combat-system.js?v=expedition-simplification-20260723b";
 import { getSaveSystemInstance } from "./modules/save-system.js?v=review-fixes-20260722a";
 import { getUISystemInstance } from "./modules/ui-system.js";
-import { getPetSystemInstance } from "./modules/pet-system.js?v=review-fixes-20260722a";
+import { getPetSystemInstance } from "./modules/pet-system.js?v=expedition-simplification-20260723b";
 import { getTerritorySystemInstance } from "./modules/territory-system.js?v=territory-expedition-entry-20260723a";
 import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
 import { getProgressionSystemInstance } from "./modules/progression-system.js?v=growth-onboarding-20260720a";
 import { getAchievementSystemInstance } from "./modules/achievement-system.js?v=achievement-ui-v3-20260714a";
-import { ExpeditionMetaSystem } from "./modules/expedition-meta-system.js?v=duckov-phase1-20260721b";
+import { ExpeditionMetaSystem } from "./modules/expedition-meta-system.js?v=expedition-simplification-20260723b";
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
 import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-ui-v3-20260714a";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=expedition-layout-20260722b";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=expedition-simplification-20260723b";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=fate-toast-top-right-20260715a";
 import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-command-ui-v1-20260714a";
 import { OrientationController } from "./controllers/orientation-controller.js?v=experience-ux-20260722a";
 import { PlayerModalController } from "./controllers/player-modal-controller.js?v=command-modals-v1-20260714a";
 import { SettingsController } from "./controllers/settings-controller.js?v=command-modals-v1-20260714a";
 import { ShopRecommendationController } from "./controllers/shop-recommendation-controller.js?v=territory-expedition-entry-20260723a";
-import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=stable-actions-20260721c";
+import { TerritorySceneController } from "./controllers/territory-scene-controller.js?v=expedition-simplification-20260723b";
 
 export class Game {
   constructor() {
@@ -480,12 +480,23 @@ export class Game {
     if (!overlay || !dialog) return false;
 
     const runActive = Boolean(this.combatSystem?.runSystem?.active);
+    const runPhase = this.combatSystem?.runSystem?.phase || "briefing";
+    const dangerousExit = runPhase === "combat" || runPhase === "extracting";
+    const atRiskLoadout = this.battleSceneController?.getAtRiskLoadoutItems?.(
+      this.expeditionMetaSystem?.getState?.(),
+    ) || [];
+    const loadoutRiskSuffix = atRiskLoadout.length
+      ? `另会遗失未保险配装：${atRiskLoadout.map((item) => item.name || "未命名装备").join("、")}。`
+      : "";
     if (message) {
       message.textContent = runActive
-        ? "确认退出会按主动放弃结算本局：未保护战利品将丢失，仅保留安全袋、30% 金币与 40% 经验，不获得水晶。"
+        ? dangerousExit
+          ? `当前正处于战斗或撤离守点。确认退出会按战败结算：未保护战利品将丢失，仅保留安全袋、10% 金币与 20% 经验，不获得水晶。${loadoutRiskSuffix}`
+          : `确认退出会按安全止损结算本局：未保护战利品将丢失，仅保留安全袋、30% 金币与 40% 经验，不获得水晶。${loadoutRiskSuffix}`
         : "当前尚未开始行动，确认后将结束整备并返回领地。";
     }
     overlay.dataset.runActive = runActive ? "true" : "false";
+    overlay.dataset.exitRisk = dangerousExit ? "defeated" : runActive ? "abandoned" : "briefing";
     overlay.hidden = false;
     this.expeditionExitOpen = true;
     this.battleSceneController?.clearControlInput?.();

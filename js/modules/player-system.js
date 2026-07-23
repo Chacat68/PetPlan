@@ -13,6 +13,53 @@ import {
 
 let instance = null;
 const PLAYER_ASSET_VERSION = CHARACTER_ART_VERSION;
+const PLAYER_SPRITE_SCALE = 2.1;
+const PLAYER_SPRITE_VERTICAL_OFFSET_RATIO = 0.18;
+const PLAYER_HEALTH_BAR_WIDTH = 50;
+const PLAYER_HEALTH_BAR_HEIGHT = 6;
+const PLAYER_HEALTH_BAR_OFFSET_Y = 15;
+
+export function getPlayerSpriteBounds(player = {}) {
+    const x = Number.isFinite(Number(player.x)) ? Number(player.x) : 0;
+    const y = Number.isFinite(Number(player.y)) ? Number(player.y) : 0;
+    const width = Math.max(1, Number(player.width) || 40);
+    const height = Math.max(1, Number(player.height) || 40);
+    const size = Math.max(width, height) * PLAYER_SPRITE_SCALE;
+    const left = x + width / 2 - size / 2;
+    const top = y + height / 2 - size / 2 - height * PLAYER_SPRITE_VERTICAL_OFFSET_RATIO;
+
+    return {
+        left,
+        top,
+        right: left + size,
+        bottom: top + size,
+        width: size,
+        height: size
+    };
+}
+
+export function getPlayerVisualBounds(player = {}) {
+    const x = Number.isFinite(Number(player.x)) ? Number(player.x) : 0;
+    const y = Number.isFinite(Number(player.y)) ? Number(player.y) : 0;
+    const width = Math.max(1, Number(player.width) || 40);
+    const height = Math.max(1, Number(player.height) || 40);
+    const sprite = getPlayerSpriteBounds({ x, y, width, height });
+    const healthLeft = x + (width - PLAYER_HEALTH_BAR_WIDTH) / 2;
+    const healthTop = y - PLAYER_HEALTH_BAR_OFFSET_Y;
+    const left = Math.min(sprite.left, healthLeft);
+    const top = Math.min(sprite.top, healthTop);
+    const right = Math.max(sprite.right, healthLeft + PLAYER_HEALTH_BAR_WIDTH);
+    const bottom = Math.max(sprite.bottom, healthTop + PLAYER_HEALTH_BAR_HEIGHT);
+
+    return {
+        left,
+        top,
+        right,
+        bottom,
+        width: right - left,
+        height: bottom - top
+    };
+}
 
 export class PlayerSystem {
     constructor() {
@@ -413,13 +460,11 @@ export class PlayerSystem {
             };
         }
 
-        const spriteSize = Math.max(width, height) * 2.1;
-        const spriteX = x + width / 2 - spriteSize / 2;
-        const spriteY = y + height / 2 - spriteSize / 2 - height * 0.18;
+        const sprite = getPlayerSpriteBounds(this.player);
 
         return {
-            x: spriteX + spriteSize * 0.825,
-            y: spriteY + spriteSize * 0.35
+            x: sprite.left + sprite.width * 0.825,
+            y: sprite.top + sprite.height * 0.35
         };
     }
     
@@ -460,13 +505,11 @@ export class PlayerSystem {
 
             this.renderSpriteFrame(ctx, activeSprite, frameIndex, x, y, width, height);
         } else if (imageReady) {
-            const spriteSize = Math.max(width, height) * 2.1;
-            const spriteX = x + width / 2 - spriteSize / 2;
-            const spriteY = y + height / 2 - spriteSize / 2 - height * 0.18;
+            const sprite = getPlayerSpriteBounds(this.player);
 
             ctx.save();
             ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(this.playerImage, spriteX, spriteY, spriteSize, spriteSize);
+            ctx.drawImage(this.playerImage, sprite.left, sprite.top, sprite.width, sprite.height);
             ctx.restore();
         } else {
             // 图片未加载时保留简单占位，避免战斗空角色。
@@ -486,10 +529,10 @@ export class PlayerSystem {
         if (this.combatSystem?.mode === 'towerDefense') return;
         
         // 绘制生命条
-        const barWidth = 50;
-        const barHeight = 6;
+        const barWidth = PLAYER_HEALTH_BAR_WIDTH;
+        const barHeight = PLAYER_HEALTH_BAR_HEIGHT;
         const barX = x + (width - barWidth) / 2;
-        const barY = y - 15;
+        const barY = y - PLAYER_HEALTH_BAR_OFFSET_Y;
         
         // 背景
         ctx.fillStyle = '#333';
@@ -507,9 +550,7 @@ export class PlayerSystem {
     }
 
     renderSpriteFrame(ctx, sprite, frameIndex, x, y, width, height) {
-        const spriteSize = Math.max(width, height) * 2.1;
-        const spriteX = x + width / 2 - spriteSize / 2;
-        const spriteY = y + height / 2 - spriteSize / 2 - height * 0.18;
+        const bounds = getPlayerSpriteBounds({ x, y, width, height });
 
         ctx.save();
         ctx.imageSmoothingEnabled = false;
@@ -519,10 +560,10 @@ export class PlayerSystem {
             0,
             sprite.frameSize || this.spriteFrameSize,
             sprite.frameSize || this.spriteFrameSize,
-            spriteX,
-            spriteY,
-            spriteSize,
-            spriteSize
+            bounds.left,
+            bounds.top,
+            bounds.width,
+            bounds.height
         );
         ctx.restore();
     }

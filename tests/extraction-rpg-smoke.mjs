@@ -296,17 +296,15 @@ test("远征状态机完成路线、搜索、战斗节点和撤离幂等结算",
   assert.equal(run.chooseNode(searchNode.id).success, true);
   assert.equal(run.getState().phase, "search");
 
-  const missingPet = run.resolveSearch("pet", { hasPet: false });
-  assert.equal(missingPet.success, false);
-  assert.equal(run.getState().backpack.length, 0);
-
-  const searchResult = run.resolveSearch("pet", { hasPet: true });
+  assert.equal(run.getSearchProfile("pet").id, "thorough");
+  const searchResult = run.resolveSearch("pet", { hasPet: false });
   assert.equal(searchResult.success, true);
+  assert.equal(searchResult.searchProfile.id, "thorough");
   assert.equal(searchResult.ambushed, false);
   assert.equal(run.getState().phase, "route");
   assert.equal(run.getState().depth, 1);
-  assert.equal(run.getState().threat, 8);
-  assert.equal(run.getState().backpack.length, 2);
+  assert.equal(run.getState().threat, 10);
+  assert.equal(run.getState().backpack.length, 3);
   assert.equal(run.canExtract(), false);
   assert.equal(
     run.resolveSearch("quick").success,
@@ -336,7 +334,7 @@ test("远征状态机完成路线、搜索、战斗节点和撤离幂等结算",
   const extraction = run.startExtraction();
   assert.equal(extraction.success, true);
   assert.equal(run.getState().phase, "extracting");
-  assert.ok(extraction.durationMs >= 8000);
+    assert.ok(extraction.durationMs >= 6000);
 
   const expectedCoins = beforeExtraction.pendingRewards.coins;
   const expectedCrystals = beforeExtraction.pendingRewards.crystals;
@@ -411,7 +409,7 @@ test("宠物探索天赋只强化匹配的搜索方式并受规则上限约束",
   });
 
   assert.equal(searchResult.success, true);
-  assert.equal(searchResult.gainedLoot.length, 3, "旧同步入口按整个普通地点 2 件基础产量结算，额外数量仍封顶为 1");
+  assert.equal(searchResult.gainedLoot.length, 2, "旧同步入口也遵循快速拿取 1 件基础产量，额外数量仍封顶为 1");
   assert.equal(run.getState().threat, 0, "威胁减免应在应用后保持非负");
   assert.equal(searchResult.supplyFound, true);
   assert.equal(searchResult.ambushed, false);

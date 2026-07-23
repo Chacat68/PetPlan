@@ -33,3 +33,23 @@ test("世界边缘的镜头约束仍保持合法", () => {
   assert.equal(state.x, 300);
   assert.equal(state.y, 200);
 });
+
+test("平滑追踪按完整角色绘制范围保留安全边距", () => {
+  const camera = new CameraSystem({
+    worldWidth: 3000,
+    worldHeight: 1900,
+    viewportWidth: 240,
+    viewportHeight: 180,
+    smoothing: 0.05,
+  });
+  camera.snapTo(280, 950);
+
+  const insets = { left: 42, right: 42, top: 49.2, bottom: 34.8 };
+  camera.follow(1800, 1200, 16, insets);
+  const screen = camera.worldToScreen(1800, 1200);
+
+  assert.ok(screen.x - insets.left >= 3 - 1e-7);
+  assert.ok(screen.x + insets.right <= 237 + 1e-7);
+  assert.ok(screen.y - insets.top >= 3 - 1e-7);
+  assert.ok(screen.y + insets.bottom <= 177 + 1e-7);
+});

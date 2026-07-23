@@ -1116,6 +1116,39 @@
                 "松开 D 后角色没有回到 idle 序列",
               );
 
+              const boundaryActor = game.playerSystem.player;
+              const boundaryOrigin = { x: boundaryActor.x, y: boundaryActor.y };
+              const world = game.combatSystem.worldSystem;
+              const boundaryWorldSave = world.getRunSaveData();
+              const canvas = frame.contentDocument.getElementById("gameCanvas");
+              const boundaryCases = [
+                { name: "left", x: 18, y: world.height / 2, inputX: -1, inputY: 0 },
+                { name: "right", x: world.width - boundaryActor.width - 18, y: world.height / 2, inputX: 1, inputY: 0 },
+                { name: "top", x: 120, y: 18, inputX: 0, inputY: -1 },
+                { name: "bottom", x: 120, y: world.height - boundaryActor.height - 18, inputX: 0, inputY: 1 },
+              ];
+              boundaryCases.forEach((edge) => {
+                boundaryActor.x = edge.x;
+                boundaryActor.y = edge.y;
+                game.combatSystem.setMovementInput(edge.inputX, edge.inputY);
+                game.combatSystem.updateHeroMovement(boundaryActor, 100);
+                game.combatSystem.clearMovementInput();
+                const center = game.combatSystem.getHeroCenter();
+                game.combatSystem.cameraSystem.snapTo(center.x, center.y);
+                const camera = game.combatSystem.cameraSystem.getState();
+                const visual = game.combatSystem.getHeroVisualBounds(boundaryActor);
+                assert(visual.left - camera.x >= 0, `${edge.name}: 角色左侧走出屏幕`);
+                assert(visual.top - camera.y >= 0, `${edge.name}: 角色顶部走出屏幕`);
+                assert(visual.right - camera.x <= canvas.width, `${edge.name}: 角色右侧走出屏幕`);
+                assert(visual.bottom - camera.y <= canvas.height, `${edge.name}: 角色底部走出屏幕`);
+              });
+              world.loadRunSaveData(boundaryWorldSave);
+              boundaryActor.x = boundaryOrigin.x;
+              boundaryActor.y = boundaryOrigin.y;
+              game.combatSystem.updateWorldAwareness();
+              const restoredCenter = game.combatSystem.getHeroCenter();
+              game.combatSystem.cameraSystem.snapTo(restoredCenter.x, restoredCenter.y);
+
               const firstRoute = frame.contentDocument.querySelector(
                 "#battle-route-list [data-route-id]",
               );
@@ -1187,7 +1220,8 @@
               const after = game.combatSystem.getBattleState();
               assert(after.depth === 1, `搜索地点完成后深度异常：${after.depth}`);
               assert(
-                frame.contentDocument.getElementById("battle-threat-display")?.textContent === `${after.threat}%`,
+                frame.contentDocument.getElementById("battle-threat-display")?.textContent ===
+                  `${game.battleSceneController.getThreatTierLabel(after)} · ${after.threat}`,
                 "威胁 HUD 未更新",
               );
               assert(
@@ -1215,9 +1249,11 @@
                 return candidate && !candidate.hidden ? candidate : null;
               }, "行动中退出确认打开");
               assert(overlay.dataset.runActive === "true", "行动中退出确认缺少风险状态");
+              assert(overlay.dataset.exitRisk === "abandoned", "安全行进阶段退出风险分类错误");
               assert(
-                doc.getElementById("expedition-exit-message")?.textContent.includes("主动放弃"),
-                "行动中退出确认未说明放弃规则",
+                doc.getElementById("expedition-exit-message")?.textContent.includes("安全止损")
+                  && doc.getElementById("expedition-exit-message")?.textContent.includes("30% 金币与 40% 经验"),
+                "安全行进阶段退出确认未说明准确止损规则",
               );
               assert(game.combatSystem.isPaused, "确认退出界面没有暂停战斗");
 

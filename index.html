@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=expedition-immersive-exit-20260723a" />
+    <link rel="stylesheet" href="css/style.css?v=expedition-simplification-20260723b" />
   </head>
   <body>
     <div class="game-container">
@@ -42,9 +42,9 @@
               </div>
 
               <div class="extraction-run-status" aria-live="polite">
-              <span class="run-stat stat-depth">探索 <b id="battle-depth-display">0%</b></span>
+              <span class="run-stat stat-depth">已清理 <b id="battle-depth-display">0 / 8</b></span>
               <span class="run-stat stat-survival">生命 <b id="battle-hp-display">--/--</b></span>
-              <span class="run-stat stat-threat">威胁 <b id="battle-threat-display">0%</b></span>
+              <span class="run-stat stat-threat">威胁 <b id="battle-threat-display">警戒 · 0</b></span>
               <span class="run-stat stat-bag">背包 <b id="battle-bag-display">0/8</b></span>
               <span class="run-stat stat-guard">护卫 <b id="battle-guard-display">0/0</b></span>
               <span class="run-stat stat-enemies">敌人 <b id="battle-enemy-display">0</b></span>
@@ -69,7 +69,7 @@
               </section>
               <div class="battle-map-location" id="battle-location-display">自由探索</div>
               <output class="battle-nearby-prompt" id="battle-nearby-prompt" aria-live="polite" hidden></output>
-              <div class="battle-skill-dock" id="battle-skill-dock" aria-label="宠物主动技能"></div>
+              <div class="battle-skill-dock" id="battle-skill-dock" aria-label="队伍协同技"></div>
               <div class="battle-world-controls" id="battle-world-controls" hidden>
                 <div class="battle-move-pad" aria-label="角色移动方向">
                   <button type="button" class="battle-move-btn move-up" data-move-direction="up" aria-label="向上移动" aria-pressed="false">▲</button>
@@ -83,12 +83,9 @@
                   <span id="battle-interact-detail">WASD / 方向键移动</span>
                 </button>
                 <div class="battle-fire-controls" aria-label="武器操作">
-                  <button type="button" class="battle-reload-btn" id="battle-reload-btn" aria-label="换弹">
-                    R · 换弹
-                  </button>
                   <button type="button" class="battle-fire-btn" id="battle-fire-btn" aria-label="按住射击" aria-pressed="false">
                     <strong>射击</strong>
-                    <span>瞄准后按住</span>
+                    <span>按住 · 自动换弹</span>
                   </button>
                 </div>
               </div>
@@ -99,7 +96,7 @@
           <aside class="battle-upgrade-panel upgrade-panel" id="upgrade-panel" style="display: none">
             <output class="sr-only" id="battle-terminal-status" aria-live="polite"></output>
             <button class="battle-terminal-toggle" id="battle-terminal-toggle" type="button" aria-expanded="true" aria-controls="upgrade-panel">
-              <span>终端</span><b aria-hidden="true">›</b>
+              <span>终端 <small>Tab / M</small></span><b aria-hidden="true">›</b>
             </button>
             <header class="battle-terminal-header">
               <div>
@@ -145,10 +142,9 @@
                 <b id="battle-threat-tier-label">警戒 · 收益 ×1.00</b>
               </div>
               <div class="expedition-risk-grid">
-                <span>下档威胁 <b id="battle-threat-next">25（还差 25）</b></span>
-                <span>返程压力 <b id="battle-return-pressure">未启动</b></span>
-                <span>成功撤离 <b id="battle-success-preview">0 金币 / 0 水晶</b></span>
-                <span>主动撤退 <b id="battle-failure-preview">0 金币 / 安全袋 0 件</b></span>
+                <span>下一警戒档 <b id="battle-threat-next">25（还差 25）</b></span>
+                <span>成功撤离 <b id="battle-success-preview">总价值 0</b></span>
+                <span><span id="battle-failure-preview-label">安全止损</span> <b id="battle-failure-preview">保底价值 0</b></span>
               </div>
             </section>
 
@@ -187,14 +183,12 @@
 
               <div class="expedition-action-group" id="battle-search-actions" hidden>
                 <button type="button" class="expedition-action-btn" data-search-mode="quick">
-                  快速搜索 <span data-search-preview>低风险</span>
+                  快速拿取 <span data-search-preview>低风险</span>
                 </button>
                 <button type="button" class="expedition-action-btn" data-search-mode="thorough">
-                  仔细搜刮 <span data-search-preview>高收益</span>
+                  彻底搜刮 <span data-search-preview>高收益</span>
                 </button>
-                <button type="button" class="expedition-action-btn" data-search-mode="pet">
-                  宠物侦察 <span data-search-preview>稳妥</span>
-                </button>
+                <small class="expedition-search-pet-bonus" id="battle-search-pet-bonus">宠物侦察被动：未生效</small>
               </div>
 
               <section class="expedition-search-progress" id="battle-search-progress" aria-live="polite" hidden>
@@ -798,7 +792,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=expedition-immersive-exit-20260723a";
+        var moduleSrc = "js/main.js?v=expedition-simplification-20260723b";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

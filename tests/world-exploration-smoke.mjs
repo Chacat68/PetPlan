@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { CameraSystem } from "../js/modules/camera-system.js";
 import { ExpeditionWorldSystem } from "../js/modules/expedition-world-system.js";
+import { getPlayerVisualBounds } from "../js/modules/player-system.js";
 
 globalThis.Image = class ImageStub {
   constructor() {
@@ -199,6 +200,74 @@ test("世界移动限制边界，斜向输入等速，障碍碰撞允许沿墙�
     playerSystem.player.y - start.y,
   );
   assertClose(diagonalDistance, cardinalDistance, 1e-7, "斜向移动不能比单轴移动更快");
+});
+
+test("角色撞到世界四边时完整贴图仍保留在画面内", () => {
+  const viewports = [
+    [750, 900],
+    [1280, 720],
+    [390, 844],
+    [1600, 500],
+    [500, 1600],
+  ];
+  const directions = [
+    { name: "left", x: 18, y: 760, inputX: -1, inputY: 0 },
+    { name: "right", x: 2942, y: 760, inputX: 1, inputY: 0 },
+    { name: "top", x: 120, y: 18, inputX: 0, inputY: -1 },
+    { name: "bottom", x: 120, y: 1842, inputX: 0, inputY: 1 },
+  ];
+
+  viewports.forEach(([width, height]) => {
+    const { combat, playerSystem } = createCombatHarness();
+    assert.equal(combat.startRun().success, true);
+    combat.worldSystem.obstacles = [];
+    combat.setViewportSize(width, height);
+
+    directions.forEach((direction) => {
+      const hero = playerSystem.player;
+      hero.x = direction.x;
+      hero.y = direction.y;
+      combat.setMovementInput(direction.inputX, direction.inputY);
+      combat.updateHeroMovement(hero, 100);
+      combat.clearMovementInput();
+
+      const center = combat.getHeroCenter();
+      combat.cameraSystem.snapTo(center.x, center.y);
+      const camera = combat.cameraSystem.getState();
+      const visual = getPlayerVisualBounds(hero);
+      const screenBounds = {
+        left: visual.left - camera.x,
+        top: visual.top - camera.y,
+        right: visual.right - camera.x,
+        bottom: visual.bottom - camera.y,
+      };
+      const label = `${direction.name} @ ${width}x${height}`;
+
+      assert.ok(screenBounds.left >= -1e-7, `${label}: 角色左侧越出画面 ${screenBounds.left}`);
+      assert.ok(screenBounds.top >= -1e-7, `${label}: 角色顶部越出画面 ${screenBounds.top}`);
+      assert.ok(screenBounds.right <= width + 1e-7, `${label}: 角色右侧越出画面 ${screenBounds.right}`);
+      assert.ok(screenBounds.bottom <= height + 1e-7, `${label}: 角色底部越出画面 ${screenBounds.bottom}`);
+    });
+  });
+});
+
+test("调整视口不会传送世界边界内的角色", () => {
+  const { combat, playerSystem } = createCombatHarness();
+  assert.equal(combat.startRun().success, true);
+  const hero = playerSystem.player;
+  hero.x = 72;
+  hero.y = 84;
+  combat.worldSystem.obstacles = [
+    { id: "legacy-overlap", x: 70, y: 80, width: 80, height: 80, type: "ruin" },
+  ];
+
+  combat.setViewportSize(390, 844);
+
+  assert.deepEqual(
+    { x: hero.x, y: hero.y },
+    { x: 72, y: 84 },
+    "视口变化只能修复世界越界坐标，不能把合法位置传送回营地",
+  );
 });
 
 test("每个确定性种子都保留出生点东向出口和通往地图东侧的可行通道", () => {

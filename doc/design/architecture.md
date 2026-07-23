@@ -42,7 +42,7 @@ index.html
 | 控制器 | 责任 |
 | --- | --- |
 | `achievement-controller.js` | 里程碑模态、分类筛选、HUD 徽标和领取交互 |
-| `battle-scene-controller.js` | WASD/方向键/屏幕 D-pad、`E` 与按钮交互、路线追踪、三种搜索、安全屋、补给、宠物技能、撤离/放弃、Canvas 锁敌、面板刷新和结算反馈 |
+| `battle-scene-controller.js` | WASD/方向键/屏幕 D-pad、鼠标/触摸瞄准射击、`E` 情境交互、`Q` 队伍技能、路线追踪、两种搜索、安全屋、补给、撤离/放弃、终端显隐、面板刷新和结算反馈 |
 | `settings-controller.js` | 设置模态、显示设置、快捷存档/读档和存档状态 |
 | `player-modal-controller.js` | 玩家属性模态、属性升级和升级按钮状态 |
 | `pet-modal-controller.js` | 宠物编队、背包、图鉴以及解锁/上阵操作 |
@@ -118,7 +118,7 @@ GameCore.render()
 
 `CombatSystem` 是三者的协调门面：路线卡只调用 `trackLocation()`，玩家进入 POI 近距范围后，`interactWithNearbyLocation()` 才调用规则层的 `chooseNode()`。战斗实体始终使用世界坐标，Canvas 点击经镜头转换后锁敌。撤离信标固定在入口，倒计时只有玩家位于信标圈内时才推进。最终奖励仍只在整局结束时发放一次。
 
-远征世界坐标、探索网格、地点状态、路线、生命、补给、威胁、背包、怪物和撤离倒计时都是瞬时状态。切换场景只暂停 `CombatSystem` 并清空移动输入，刷新或载入存档会丢弃当前远征；存档仅记录最深探索、成功撤离和失败次数。
+远征世界坐标、探索网格、地点状态、路线、生命、补给、警戒、背包、怪物、弹药和撤离倒计时都会进入活动远征快照。切换场景只暂停 `CombatSystem` 并清空移动输入；页面隐藏时自动保存，刷新后按 Meta → Combat 的顺序恢复当前远征。活动远征期间禁止快速读档，避免复制战利品。
 
 Canvas 视口和世界尺寸必须保持独立。`GameCore` 在 resize 或固定分辨率切换时调用 `CombatSystem.setViewportSize()`，该方法只更新视口与镜头，不缩放世界或夹取玩家到屏幕范围。
 

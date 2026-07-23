@@ -168,7 +168,7 @@ const worldPoint = camera.screenToWorld(screenX, screenY);
 - `restAtCamp()` / `leaveCamp()`：处理安全屋选择。
 - `requestExtraction()`：要求玩家位于西侧入口信标附近，再启动倒计时和世界坐标追兵遭遇。
 - `useSupply()`：恢复独立的远征生命。
-- `usePetSkill(instanceId)`：释放上阵宠物主动技能并进入冷却。
+- `usePetSkill(instanceId)`：只允许释放本局队长宠物的队伍技能并进入冷却；其他上阵宠物提供被动支持。
 - `selectTargetAt(x, y)`：默认接收 Canvas 坐标，经 `screenToWorld()` 转换后把附近敌人设为优先目标；`selectTargetAtWorld()` 接收世界坐标。
 - `abandonRun()`：按失败规则结算当前局；二次点击确认由控制器负责。
 - `renderExplorationFrame(ctx)`：在同一帧中分别渲染屏幕背景、镜头偏移后的世界层，以及迷雾、导航箭头、小地图、撤离进度和横幅等屏幕层。
@@ -309,4 +309,4 @@ focusManager.release(modal);
 
 `SaveSystem` 会读取旧键 `petplan_save_slot<slot>`，并将旧版顶层的 `resources` / `pets` 映射到当前 `data.resource` / `data.pet` 结构。只有通过完整归一化校验的导入文件才会覆盖目标槽位。
 
-`data.combat` 只保存远征长期记录 `{ mode, meta }`。玩家世界坐标、镜头、地点状态、探索网格、当前路线、阶段、生命、补给、威胁、背包、敌人、技能冷却和撤离倒计时不持久化。加载旧塔防存档时，`bestWave`、`victories`、`defeats` 会分别迁移为 `bestDepth`、`extractions`、`losses`。
+`data.combat` 同时保存远征长期记录与活动局快照，包括世界坐标、地点和探索网格、路线阶段、生命、补给、警戒、背包、敌人、弹药、技能冷却与撤离倒计时；`data.expeditionMeta` 保存仓库、配装、合约、活动配装快照和幂等结算账本。恢复顺序为先 Meta、后 Combat，活动远征期间禁止快速读档。加载旧塔防存档时，`bestWave`、`victories`、`defeats` 会分别迁移为 `bestDepth`、`extractions`、`losses`。
