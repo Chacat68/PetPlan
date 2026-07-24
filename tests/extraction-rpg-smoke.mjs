@@ -195,6 +195,7 @@ function createCombatHarness() {
   combat.setTerritorySystem(territorySystem);
   combat.setPetSystem(petSystem);
   combat.resetBattle();
+  combat.isPaused = false;
 
   return {
     combat,
@@ -305,7 +306,7 @@ test("远征状态机完成路线、搜索、战斗节点和撤离幂等结算",
   assert.equal(run.getState().depth, 1);
   assert.equal(run.getState().threat, 10);
   assert.equal(run.getState().backpack.length, 3);
-  assert.equal(run.canExtract(), false);
+  assert.equal(run.canExtract(), true, "入口撤离应在开局即可用");
   assert.equal(
     run.resolveSearch("quick").success,
     false,
@@ -325,6 +326,9 @@ test("远征状态机完成路线、搜索、战斗节点和撤离幂等结算",
     ).success,
     true,
   );
+  while (run.pendingLootChoice) {
+    assert.equal(run.resolveLootChoice("leave").success, true);
+  }
 
   const beforeExtraction = run.getState();
   assert.equal(beforeExtraction.depth, 2);
@@ -334,7 +338,7 @@ test("远征状态机完成路线、搜索、战斗节点和撤离幂等结算",
   const extraction = run.startExtraction();
   assert.equal(extraction.success, true);
   assert.equal(run.getState().phase, "extracting");
-    assert.ok(extraction.durationMs >= 6000);
+  assert.ok(extraction.durationMs >= 3500);
 
   const expectedCoins = beforeExtraction.pendingRewards.coins;
   const expectedCrystals = beforeExtraction.pendingRewards.crystals;
@@ -409,14 +413,14 @@ test("宠物探索天赋只强化匹配的搜索方式并受规则上限约束",
   });
 
   assert.equal(searchResult.success, true);
-  assert.equal(searchResult.gainedLoot.length, 2, "旧同步入口也遵循快速拿取 1 件基础产量，额外数量仍封顶为 1");
+  assert.equal(searchResult.gainedLoot.length, 3, "快速搜索候选数量封顶为 3");
   assert.equal(run.getState().threat, 0, "威胁减免应在应用后保持非负");
   assert.equal(searchResult.supplyFound, true);
   assert.equal(searchResult.ambushed, false);
   assert.match(searchResult.message, /火焰犬·灼热嗅觉生效/);
 });
 
-test("背包满载时拒绝低价值物品并用高价值物品替换最低项", () => {
+test("背包满载时由玩家显式决定替换项，不按价值自动整理", () => {
   const run = new ExpeditionRunSystem({
     random: fixedRandom,
     backpackCapacity: 3,
@@ -428,14 +432,15 @@ test("背包满载时拒绝低价值物品并用高价值物品替换最低项",
   assert.equal(run.addLoot(createLoot("high", 30)).kept, true);
 
   const rejected = run.addLoot(createLoot("too-low", 5));
-  assert.deepEqual(rejected, {
-    kept: false,
-    discarded: createLoot("too-low", 5),
-  });
+  assert.equal(rejected.kept, false);
+  assert.equal(rejected.pending, true);
+  assert.equal(run.pendingLootChoice.incoming.id, "too-low");
+  assert.equal(run.resolveLootChoice("leave").success, true);
 
   const upgraded = run.addLoot(createLoot("top", 40));
-  assert.equal(upgraded.kept, true);
-  assert.equal(upgraded.discarded.id, "low");
+  assert.equal(upgraded.kept, false);
+  assert.equal(upgraded.pending, true);
+  assert.equal(run.resolveLootChoice("replace", "low").success, true);
   assert.deepEqual(
     run
       .getState()
@@ -450,6 +455,7 @@ test("CombatSystem 遭遇生成、宠物技能冷却和主角承伤可回归", (
   const monster = startCombatEncounter(combat);
   const monsterHpBefore = monster.hp;
 
+  combat.config.petAcquireRange = 5000;
   const skillResult = combat.usePetSkill(101);
   assert.equal(skillResult.success, true);
   assert.ok(monster.hp < monsterHpBefore, "火系宠物技能应对敌人造成伤害");
@@ -536,9 +542,9 @@ test("CombatSystem 撤离成功的资源、经验和长期记录只结算一次"
   });
   assert.equal(experience.total, firstSettlement.exp);
   assert.equal(combat.meta.extractions, 1);
-  assert.equal(firstSettlement.petBond.totalGain, 2);
-  assert.equal(firstSettlement.petBond.pets[0].gain, 2);
-  assert.equal(petSystem.equippedPets[0].friendship, 2);
+  assert.equal(firstSettlement.petBond.totalGain, 4);
+  assert.equal(firstSettlement.petBond.pets[0].gain, 4);
+  assert.equal(petSystem.equippedPets[0].friendship, 4);
 
   const secondSettlement = combat.finishExpedition(true, "duplicate-call");
   assert.deepEqual(secondSettlement, firstSettlement);
@@ -548,7 +554,7 @@ test("CombatSystem 撤离成功的资源、经验和长期记录只结算一次"
   });
   assert.equal(experience.total, firstSettlement.exp);
   assert.equal(combat.meta.extractions, 1);
-  assert.equal(petSystem.equippedPets[0].friendship, 2, "重复结算不能重复增加羁绊");
+  assert.equal(petSystem.equippedPets[0].friendship, 4, "重复结算不能重复增加羁绊");
 });
 
 test("CombatSystem 失败仅发放保底收益且重复失败不会再次发奖", () => {

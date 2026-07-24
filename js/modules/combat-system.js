@@ -4,8 +4,8 @@
  * ExpeditionRunSystem 负责路线和结算，本类负责战斗实体、主动技能与 Canvas 渲染。
  */
 
-import { ExpeditionRunSystem } from './expedition-run-system.js?v=expedition-simplification-20260723b';
-import { ExpeditionWorldSystem } from './expedition-world-system.js?v=expedition-simplification-20260723b';
+import { ExpeditionRunSystem } from './expedition-run-system.js?v=duckov-continuous-20260724a';
+import { ExpeditionWorldSystem } from './expedition-world-system.js?v=duckov-continuous-20260724a';
 import { CameraSystem } from './camera-system.js?v=expedition-simplification-20260723b';
 import { getPlayerVisualBounds } from './player-system.js?v=expedition-simplification-20260723b';
 import { TargetingSystem } from './targeting-system.js?v=tower-defense-20260710b';
@@ -119,7 +119,13 @@ export class CombatSystem {
         this.lastNearbyLocationId = null;
         this.worldRevision = 0;
         this.runPreparation = { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
-        this.runLoadoutEffects = { armorDefense: 0, petGuard: 0, consumableSupplies: 0, consumed: [] };
+        this.runLoadoutEffects = {
+            armorDefense: 0,
+            petGuard: 0,
+            consumableSupplies: 0,
+            ammoReserve: 0,
+            consumed: []
+        };
 
         this.monsters = [];
         this.bullets = [];
@@ -131,8 +137,16 @@ export class CombatSystem {
         this.encounterRewardsCommitted = false;
         this.nextMonsterId = 1;
         this.nextBulletId = 1;
+        this.nextEncounterId = 1;
+        this.nextAmmoPickupId = 1;
         this.encounterSpawnTimer = 0;
+        this.ambientPatrolQueue = [];
+        this.ambientSpawnTimer = 0;
+        this.noiseEvents = [];
+        this.ammoPickups = [];
         this.attackTimer = 0;
+        this.fallbackAttackTimer = 0;
+        this.petAutoDamageTimer = 0;
         this.uiNotifyTimer = 0;
         this.extractionTimer = 0;
         this.extractionTotalDuration = 0;
@@ -235,7 +249,29 @@ export class CombatSystem {
             weaponSwapLockMs: 350,
             bossDamageRadius: 145,
             bossWarningRadius: 150,
-            monsterHitboxVisualCoverage: 0.75
+            monsterHitboxVisualCoverage: 0.75,
+            monsterVisionRange: 410,
+            monsterVisionBossBonus: 90,
+            monsterHearingRange: 650,
+            monsterLoseSightMs: 1800,
+            monsterSearchMs: 4800,
+            monsterPatrolRadius: 170,
+            monsterReturnRadius: 72,
+            monsterLeashRange: 760,
+            monsterAlertShareRadius: 240,
+            ambientPatrolCount: 6,
+            ambientSpawnDelayMs: 1200,
+            ambientSpawnIntervalMs: 650,
+            ambientMonsterCap: 8,
+            gunshotNoiseRadius: 650,
+            searchNoiseRadius: 340,
+            fallbackAttackRange: 82,
+            fallbackAttackIntervalMs: 780,
+            fallbackAttackDamageMultiplier: 0.34,
+            ammoPickupRadius: 58,
+            ammoDropChance: 0.32,
+            petAutoDamageMultiplier: 0.36,
+            petAutoSharedCooldownMs: 640
         };
 
         this.mapWidth = 750;
@@ -505,6 +541,219 @@ export class CombatSystem {
         }
     }
 
+    emitNoise(x, y, radius = this.config.monsterHearingRange, {
+        durationMs = 1200,
+        type = 'generic'
+    } = {}) {
+        const safeX = Number(x);
+        const safeY = Number(y);
+        const safeRadius = Math.max(0, Number(radius) || 0);
+        if (!Number.isFinite(safeX) || !Number.isFinite(safeY) || safeRadius <= 0) return null;
+        const event = {
+            x: safeX,
+            y: safeY,
+            radius: safeRadius,
+            remainingMs: Math.max(100, Number(durationMs) || 1200),
+            type: String(type || 'generic')
+        };
+        this.noiseEvents.push(event);
+        if (this.noiseEvents.length > 8) this.noiseEvents.splice(0, this.noiseEvents.length - 8);
+        return { ...event };
+    }
+
+    updateNoiseEvents(deltaTime) {
+        const safeDelta = Math.max(0, Number(deltaTime) || 0);
+        this.noiseEvents = this.noiseEvents
+            .map(event => ({
+                ...event,
+                remainingMs: Math.max(0, (Number(event.remainingMs) || 0) - safeDelta)
+            }))
+            .filter(event => event.remainingMs > 0);
+    }
+
+    getAudibleNoise(monster) {
+        if (!monster || this.noiseEvents.length === 0) return null;
+        const center = this.getEntityCenter(monster);
+        const hearingMultiplier = monster.isBoss ? 1.2 : monster.isElite ? 1.1 : 1;
+        return this.noiseEvents
+            .map(event => ({
+                event,
+                distance: Math.hypot(center.x - event.x, center.y - event.y)
+            }))
+            .filter(({ event, distance }) => (
+                distance <= Math.min(
+                    Number(event.radius) || 0,
+                    this.config.monsterHearingRange * hearingMultiplier
+                )
+            ))
+            .sort((left, right) => (
+                right.event.remainingMs - left.event.remainingMs
+                || left.distance - right.distance
+            ))[0]?.event || null;
+    }
+
+    setMonsterAwarenessState(monster, state, target = null) {
+        if (!monster) return;
+        const next = ['patrol', 'investigate', 'combat', 'search-return'].includes(state)
+            ? state
+            : 'patrol';
+        monster.aiState = next;
+        monster.alerted = next !== 'patrol';
+        if (target && Number.isFinite(Number(target.x)) && Number.isFinite(Number(target.y))) {
+            monster.lastKnownHero = { x: Number(target.x), y: Number(target.y) };
+            if (next === 'investigate') monster.investigateTarget = { ...monster.lastKnownHero };
+        }
+        if (next === 'combat') {
+            monster.lostSightTimer = 0;
+            monster.searchTimer = this.config.monsterSearchMs;
+        } else if (next === 'search-return') {
+            monster.searchTimer = Math.max(
+                0,
+                Number(monster.searchTimer) || this.config.monsterSearchMs
+            );
+        }
+    }
+
+    hasAlertedEnemies() {
+        return this.monsters.some(monster => (
+            monster.hp > 0
+            && (
+                monster.aiState === 'combat'
+                || monster.aiState === 'investigate'
+                || (
+                    monster.aiState === 'search-return'
+                    && (Number(monster.searchTimer) || 0) > 0
+                )
+            )
+        ));
+    }
+
+    getNearbyThreatCount(radius = 720) {
+        const hero = this.getHeroCenter();
+        const safeRadius = Math.max(0, Number(radius) || 0);
+        return this.monsters.filter(monster => {
+            if (monster.hp <= 0) return false;
+            const center = this.getEntityCenter(monster);
+            return Math.hypot(center.x - hero.x, center.y - hero.y) <= safeRadius;
+        }).length;
+    }
+
+    queueAmbientPatrols() {
+        const count = Math.max(0, Math.floor(this.config.ambientPatrolCount || 0));
+        const anchors = [
+            [0.30, 0.28],
+            [0.48, 0.72],
+            [0.72, 0.32],
+            [0.82, 0.74]
+        ];
+        const templates = ['slime', 'bat', 'goblin', 'skeleton'];
+        this.ambientPatrolQueue = Array.from({ length: count }, (_, index) => {
+            const anchor = anchors[Math.floor(index / 2) % anchors.length];
+            const spread = index % 2 === 0 ? -62 : 62;
+            const x = Math.max(120, Math.min(
+                this.worldSystem.width - 120,
+                this.worldSystem.width * anchor[0] + spread
+            ));
+            const y = Math.max(120, Math.min(
+                this.worldSystem.height - 120,
+                this.worldSystem.height * anchor[1] + spread * 0.55
+            ));
+            return {
+                templateId: templates[index % templates.length],
+                depth: Math.max(1, Math.min(4, 1 + Math.floor(index / 2))),
+                ambient: true,
+                spawnPosition: { x, y },
+                homePosition: { x, y }
+            };
+        });
+        this.ambientSpawnTimer = this.config.ambientSpawnDelayMs;
+        return this.ambientPatrolQueue.length;
+    }
+
+    updateAmbientPatrolSpawns(deltaTime) {
+        if (
+            !this.runSystem.active
+            || this.ambientPatrolQueue.length === 0
+            || ['combat', 'extracting'].includes(this.runSystem.phase)
+        ) return null;
+        const ambientCount = this.monsters.filter(monster => monster.origin === 'ambient').length;
+        if (ambientCount >= this.config.ambientMonsterCap) return null;
+        this.ambientSpawnTimer -= Math.max(0, Number(deltaTime) || 0);
+        if (this.ambientSpawnTimer > 0) return null;
+        const spec = this.ambientPatrolQueue.shift();
+        const monster = this.spawnMonster(spec, spec.depth);
+        this.ambientSpawnTimer = this.config.ambientSpawnIntervalMs;
+        return monster;
+    }
+
+    seedAmmoPickups() {
+        const anchors = [
+            { x: this.worldSystem.width * 0.42, y: this.worldSystem.height * 0.22 },
+            { x: this.worldSystem.width * 0.68, y: this.worldSystem.height * 0.78 }
+        ];
+        anchors.forEach((anchor, index) => {
+            const position = this.worldSystem.findOpenPositionNear(anchor, 0, index * Math.PI, 24);
+            this.spawnAmmoPickup({
+                x: position.x + 12,
+                y: position.y + 12,
+                weaponId: this.lockedWeaponId || this.activeWeaponId,
+                amount: this.getAmmoPickupAmount(this.lockedWeaponId || this.activeWeaponId)
+            });
+        });
+    }
+
+    getAmmoPickupAmount(weaponId = this.activeWeaponId) {
+        const amounts = { rifle: 12, shotgun: 4, marksman: 3 };
+        return amounts[weaponId] || 6;
+    }
+
+    spawnAmmoPickup({
+        x,
+        y,
+        weaponId = this.lockedWeaponId || this.activeWeaponId,
+        amount = this.getAmmoPickupAmount(weaponId)
+    } = {}) {
+        if (!this.getWeaponConfig(weaponId)) weaponId = this.activeWeaponId;
+        const safeX = Number(x);
+        const safeY = Number(y);
+        if (!Number.isFinite(safeX) || !Number.isFinite(safeY)) return null;
+        const pickup = {
+            id: `ammo-${this.nextAmmoPickupId++}`,
+            x: Math.max(20, Math.min(this.worldSystem.width - 20, safeX)),
+            y: Math.max(20, Math.min(this.worldSystem.height - 20, safeY)),
+            weaponId,
+            amount: Math.max(1, Math.floor(Number(amount) || 1)),
+            collected: false
+        };
+        this.ammoPickups.push(pickup);
+        return { ...pickup };
+    }
+
+    collectNearbyAmmoPickups() {
+        if (!this.runSystem.active || this.ammoPickups.length === 0) return [];
+        const hero = this.getHeroCenter();
+        const collected = [];
+        this.ammoPickups = this.ammoPickups.filter(pickup => {
+            const distance = Math.hypot(hero.x - pickup.x, hero.y - pickup.y);
+            if (distance > this.config.ammoPickupRadius) return true;
+            const state = this.weaponStates[pickup.weaponId];
+            if (!state) return true;
+            state.reserve += pickup.amount;
+            collected.push({ ...pickup });
+            this.addStatusText(hero.x, hero.y - 44, `弹药 +${pickup.amount}`, '#72d7ff');
+            return false;
+        });
+        if (collected.length > 0) {
+            this.worldRevision += 1;
+            this.syncLegacyShotCooldownTimer();
+        }
+        return collected;
+    }
+
+    getAmmoPickupState() {
+        return this.ammoPickups.map(pickup => ({ ...pickup }));
+    }
+
     createFreshWeaponStates() {
         return Object.fromEntries(Object.values(EXPEDITION_WEAPON_CONFIGS).map(weapon => [
             weapon.id,
@@ -574,6 +823,12 @@ export class CombatSystem {
             manualAim: this.manualAimEnabled,
             legacyAutoAim: this.legacyAutoAimEnabled,
             firing: this.firingHeld,
+            fallbackReady: Boolean(
+                this.runSystem.active
+                && (Number(this.weaponStates[this.activeWeaponId]?.magazine) || 0) <= 0
+                && (Number(this.weaponStates[this.activeWeaponId]?.reserve) || 0) <= 0
+                && this.fallbackAttackTimer <= 0
+            ),
             activeWeaponId: this.activeWeaponId,
             allowedWeaponIds: [...allowedWeaponIds],
             shotCooldownMs: Math.max(0, Number(this.weaponStates[this.activeWeaponId]?.shotCooldownRemainingMs) || 0),
@@ -769,6 +1024,7 @@ export class CombatSystem {
             this.worldRevision += 1;
             if (nearby) this.addStatusText(center.x, center.y - 54, `发现：${nearby.name}`, nearby.color || '#ffd167');
         }
+        this.collectNearbyAmmoPickups();
         return nearby;
     }
 
@@ -790,12 +1046,6 @@ export class CombatSystem {
     trackLocation(nodeId) {
         const result = this.worldSystem.trackLocation(nodeId);
         if (result.success) {
-            const center = this.getHeroCenter();
-            const distance = this.worldSystem.getDistanceToLocation(result.location.id, center.x, center.y);
-            const displayName = result.location.discovered || result.location.known || result.location.kind === 'extraction'
-                ? result.location.name
-                : '未知信号';
-            result.message = `已追踪 ${displayName}，距离 ${Math.round(distance)} 米`;
             this.worldRevision += 1;
             this.notifyStateChange();
         }
@@ -868,14 +1118,11 @@ export class CombatSystem {
                 this.worldSystem.activeLocationId,
                 { includeFinished: false }
             )?.[0] || null;
-            const distance = targetContainer
-                ? Math.max(0, Math.round(Math.hypot(targetContainer.x - center.x, targetContainer.y - center.y)))
-                : null;
             return {
                 available: false,
                 label: '靠近搜索点',
                 detail: targetContainer
-                    ? `继续向地点内的容器移动 · ${distance}m`
+                    ? '继续向地点内的容器移动'
                     : '当前地点没有可用的搜索点',
                 location: targetContainer ? { ...targetContainer } : null
             };
@@ -885,7 +1132,9 @@ export class CombatSystem {
             return {
                 available: false,
                 label: '靠近地点后交互',
-                detail: target ? `追踪 ${target.name} · ${target.distance}m` : 'WASD / 方向键移动',
+                detail: target
+                    ? `追踪 ${target.name} · ${target.guidance || [target.directionLabel, target.distanceBandLabel].filter(Boolean).join(' · ')}`
+                    : 'WASD / 方向键移动',
                 location: null
             };
         }
@@ -939,7 +1188,13 @@ export class CombatSystem {
         this.runHp = this.runMaxHp;
         this.runSnapshot = null;
         this.runPreparation = { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
-        this.runLoadoutEffects = { armorDefense: 0, petGuard: 0, consumableSupplies: 0, consumed: [] };
+        this.runLoadoutEffects = {
+            armorDefense: 0,
+            petGuard: 0,
+            consumableSupplies: 0,
+            ammoReserve: 0,
+            consumed: []
+        };
         this.skillCooldowns.clear();
         this.guardTimer = 0;
         this.supplyCooldownTimer = 0;
@@ -979,14 +1234,25 @@ export class CombatSystem {
         const metaLoadout = this.expeditionMetaSystem?.getLoadout?.() || null;
         const equippedConsumables = (metaLoadout?.consumables || [])
             .map((item, index) => ({ item, index }))
-            .filter(({ item }) => item && Number(item.supplyValue) > 0);
+            .filter(({ item }) => (
+                item
+                && (
+                    Number(item.supplyValue) > 0
+                    || Number(item.ammoPackValue) > 0
+                )
+            ));
         const consumableSupplies = equippedConsumables.reduce(
             (sum, { item }) => sum + Math.max(0, Math.floor(Number(item.supplyValue) || 0)),
             0
         );
+        const capacity = this.expeditionMetaSystem?.getCapacityState?.() || {};
+        const backpackCapacity = Math.max(3, Math.floor(Number(capacity.backpackCapacity) || 8));
+        const safetyBagCapacity = Math.max(0, Math.floor(Number(capacity.safetyBagCapacity) || 1));
         const result = this.runSystem.startRun({
             supplies: 2 + (permanentBonuses.supplyBonus || 0) + (preparedBonuses.supplies || 0) + consumableSupplies,
-            backpackCapacity: 8
+            backpackCapacity,
+            insuredSlotCount: safetyBagCapacity,
+            safetyBagCapacity
         });
         if (!result.success) return result;
         const consumedPreparation = this.territorySystem?.consumePreparedBonuses?.()
@@ -1001,6 +1267,7 @@ export class CombatSystem {
             armorDefense,
             petGuard: petGuardBonus,
             consumableSupplies,
+            ammoReserve: 0,
             consumed: []
         };
         this.runSnapshot = this.captureRunSnapshot(permanentBonuses, this.runPreparation);
@@ -1040,6 +1307,8 @@ export class CombatSystem {
         this.lastSettlement = null;
         this.settled = false;
         this.worldSystem.startRun(this.runSystem.getState().routeChoices);
+        this.queueAmbientPatrols();
+        this.seedAmmoPickups();
         const metaRaid = this.expeditionMetaSystem?.startRaid?.();
         if (metaRaid?.success) {
             this.runLoadoutEffects.consumed = equippedConsumables.map(({ item, index }) => {
@@ -1049,9 +1318,19 @@ export class CombatSystem {
                     name: item.name,
                     index,
                     quantity: used?.used || 0,
-                    supplyValue: Math.max(0, Math.floor(Number(item.supplyValue) || 0))
+                    supplyValue: Math.max(0, Math.floor(Number(item.supplyValue) || 0)),
+                    ammoPackValue: Math.max(0, Math.floor(Number(item.ammoPackValue) || 0))
                 };
             }).filter(item => item.quantity > 0);
+            const ammoPackUnits = this.runLoadoutEffects.consumed.reduce(
+                (sum, item) => sum + item.quantity * item.ammoPackValue,
+                0
+            );
+            const ammoReserve = ammoPackUnits * this.getAmmoPickupAmount(this.activeWeaponId);
+            if (ammoReserve > 0 && this.weaponStates[this.activeWeaponId]) {
+                this.weaponStates[this.activeWeaponId].reserve += ammoReserve;
+                this.runLoadoutEffects.ammoReserve = ammoReserve;
+            }
         }
         this.placeHeroAtCamp({ force: true });
         this.syncWorldWithRunState();
@@ -1069,9 +1348,24 @@ export class CombatSystem {
         if (requireProximity && this.nearbyLocation?.nodeId !== nodeId) {
             return { success: false, message: '请先走到目标地点附近' };
         }
+        if (this.worldSystem.initialized) {
+            const location = this.worldSystem.getLocationByNodeId(nodeId);
+            if (!location || !['available', 'visited'].includes(location.state)) {
+                return { success: false, message: '该地点当前无法进入' };
+            }
+        }
         const result = this.runSystem.chooseNode(nodeId);
         if (result.success) {
-            this.worldSystem.engageLocation(nodeId);
+            const worldResult = this.worldSystem.engageLocation(nodeId);
+            if (!worldResult?.success) {
+                this.runSystem.cancelNodeEntry?.(nodeId, worldResult?.message || '地点进入失败，已返回大地图探索。');
+                this.notifyStateChange();
+                return {
+                    success: false,
+                    message: worldResult?.message || '地点进入失败',
+                    code: 'world-entry-failed'
+                };
+            }
             this.worldRevision += 1;
             if (result.encounter) this.beginEncounter(result.encounter);
         }
@@ -1104,6 +1398,15 @@ export class CombatSystem {
         });
         if (!result.success && containerResult?.success) {
             this.worldSystem.cancelContainerSearch?.(context.containerId, 'start-failed');
+        }
+        if (result.success) {
+            const source = containerResult?.container || this.getHeroCenter();
+            this.emitNoise(
+                Number(source.x) || this.getHeroCenter().x,
+                Number(source.y) || this.getHeroCenter().y,
+                this.config.searchNoiseRadius,
+                { durationMs: Math.max(900, Number(result.search?.durationMs) || 900), type: 'search' }
+            );
         }
         this.notifyStateChange();
         return result;
@@ -1355,7 +1658,7 @@ export class CombatSystem {
         const settlement = this.finishExpedition(false, dangerousExit ? 'defeated' : 'abandoned');
         return {
             success: true,
-            message: dangerousExit ? '战斗中撤退，按战败结算' : '已放弃本局并结算保底收益',
+            message: dangerousExit ? '战斗中撤退，按战败结算' : '已主动撤退，仅回收安全袋物品',
             settlement
         };
     }
@@ -1422,16 +1725,22 @@ export class CombatSystem {
         if (this.runSystem.active && !this.isPaused) {
             this.updateWeaponTimers(safeDelta);
             this.updateRunRegeneration(safeDelta);
-            this.updateActiveSearch(safeDelta);
+            this.fallbackAttackTimer = Math.max(0, this.fallbackAttackTimer - safeDelta);
+            this.petAutoDamageTimer = Math.max(0, this.petAutoDamageTimer - safeDelta);
+            this.updateNoiseEvents(safeDelta);
+            this.updateAmbientPatrolSpawns(safeDelta);
         }
 
-        if (this.isCombatActive()) {
+        if (this.runSystem.active && !this.isPaused) {
             // 宠物技能只在真实战斗时间推进，路线规划/切场景不能白等冷却。
-            this.updateSkillCooldowns(safeDelta);
+            if (this.isCombatActive()) this.updateSkillCooldowns(safeDelta);
             this.updateEncounterSpawns(safeDelta);
             this.updateAttack(safeDelta);
             this.updateMonsters(safeDelta);
             this.updateBullets(safeDelta);
+            this.collectNearbyAmmoPickups();
+            // 威胁先结算，再推进搜索计时：同一帧受击时不能先完成搜索结算。
+            this.updateActiveSearch(safeDelta);
 
             if (this.runSystem.phase === 'extracting') {
                 const inZone = this.isHeroInExtractionZone();
@@ -1449,10 +1758,10 @@ export class CombatSystem {
             } else if (
                 this.runSystem.phase === 'combat' &&
                 this.currentEncounter &&
-                this.encounterQueue.length === 0 &&
-                this.monsters.length === 0
+                this.encounterQueue.length === 0
             ) {
-                this.finishEncounter();
+                if (!this.hasCurrentEncounterEnemies()) this.finishEncounter();
+                else if (!this.hasAlertedEnemies()) this.disengageEncounter();
             }
         }
 
@@ -1471,6 +1780,61 @@ export class CombatSystem {
             this.uiNotifyTimer %= 250;
             this.notifyStateChange();
         }
+    }
+
+    hasCurrentEncounterEnemies() {
+        if (!this.currentEncounter) return false;
+        const encounterId = this.currentEncounter.encounterId || null;
+        if (encounterId) {
+            return this.monsters.some(monster => (
+                monster.hp > 0
+                && monster.encounterId === encounterId
+            ));
+        }
+        // 旧存档没有 encounterId；环境巡逻不应阻塞旧遭遇结算。
+        return this.monsters.some(monster => (
+            monster.hp > 0
+            && monster.origin !== 'ambient'
+        ));
+    }
+
+    disengageEncounter() {
+        if (!this.currentEncounter || this.runSystem.phase !== 'combat') return null;
+        const encounterId = this.currentEncounter.encounterId || null;
+        const survivors = this.monsters.filter(monster => (
+            monster.hp > 0
+            && (
+                encounterId
+                    ? monster.encounterId === encounterId
+                    : monster.origin !== 'ambient'
+            )
+        ));
+        if (survivors.length === 0 || this.hasAlertedEnemies()) return null;
+        this.commitEncounterRewards();
+        survivors.forEach(monster => {
+            const center = this.getEntityCenter(monster);
+            monster.origin = 'ambient';
+            monster.encounterId = null;
+            monster.homeX = center.x;
+            monster.homeY = center.y;
+            monster.searchTimer = 0;
+            monster.lastKnownHero = null;
+            monster.investigateTarget = null;
+            monster.patrolTarget = null;
+            this.setMonsterAwarenessState(monster, 'patrol');
+        });
+        const nodeId = this.currentEncounter.nodeId || this.runSystem.currentNode?.id || null;
+        this.worldSystem.disengageActiveLocation?.(nodeId);
+        this.currentEncounter = null;
+        this.encounterQueue = [];
+        this.encounterRewards = this.createEmptyRewards();
+        this.encounterRewardsCommitted = true;
+        this.runSystem.phase = 'route';
+        this.runSystem.lastAction = '已脱离敌方搜索，地点尚未清理，可继续探索或稍后返回。';
+        this.addBannerText('已脱离交战', '#72d7ff');
+        this.worldRevision += 1;
+        this.notifyStateChange();
+        return { success: true, disengaged: true, nodeId, survivors: survivors.length };
     }
 
     isHeroInExtractionZone() {
@@ -1509,7 +1873,9 @@ export class CombatSystem {
             this.spawnMonster({
                 templateId: available[Math.floor(this.random() * available.length)],
                 elite: threat >= 70 && index === 0,
-                depth
+                depth,
+                origin: 'extraction',
+                encounterId: this.currentEncounter?.encounterId || null
             }, depth);
         }
         this.extractionReinforcementTimer = Math.max(
@@ -1519,12 +1885,25 @@ export class CombatSystem {
     }
 
     beginEncounter(spec = {}) {
-        this.monsters = [];
-        this.bullets = [];
-        this.explosions = [];
         this.focusTargetId = null;
-        this.currentEncounter = { ...spec };
-        this.encounterQueue = this.buildEncounterQueue(spec);
+        const encounterId = spec.encounterId || `encounter-${this.nextEncounterId++}`;
+        const nodeId = spec.nodeId || this.runSystem.currentNode?.id || null;
+        this.currentEncounter = { ...spec, encounterId, nodeId };
+        const persistentSurvivors = nodeId
+            ? this.monsters.filter(monster => monster.hp > 0 && monster.homeNodeId === nodeId)
+            : [];
+        if (persistentSurvivors.length > 0) {
+            const hero = this.getHeroCenter();
+            persistentSurvivors.forEach(monster => {
+                monster.origin = spec.type === 'extraction' ? 'extraction' : 'encounter';
+                monster.encounterId = encounterId;
+                monster.lastKnownHero = { ...hero };
+                this.setMonsterAwarenessState(monster, 'combat', hero);
+            });
+            this.encounterQueue = [];
+        } else {
+            this.encounterQueue = this.buildEncounterQueue(this.currentEncounter);
+        }
         this.encounterRewards = this.createEmptyRewards();
         this.encounterRewardsCommitted = false;
         this.encounterSpawnTimer = 0;
@@ -1538,6 +1917,13 @@ export class CombatSystem {
         this.firstStrikeBonus = Math.max(0, Math.min(1, Number(spec.playerAdvantage?.firstStrikeBonus) || 0));
         this.firstStrikePending = this.firstStrikeBonus > 0;
         this.uiNotifyTimer = 0;
+        const location = this.worldSystem.getLocation(this.worldSystem.activeLocationId);
+        if (location) {
+            this.emitNoise(location.x, location.y, this.config.searchNoiseRadius, {
+                durationMs: 1500,
+                type: 'encounter'
+            });
+        }
         this.addBannerText(this.getEncounterTitle(spec.type), spec.boss ? '#ff7043' : '#ffd167');
     }
 
@@ -1555,10 +1941,22 @@ export class CombatSystem {
             queue.push({
                 templateId: available[Math.floor(this.random() * available.length)],
                 elite: index < eliteCount,
-                depth
+                depth,
+                origin: spec.type === 'extraction' ? 'extraction' : 'encounter',
+                encounterId: spec.encounterId || null,
+                homeNodeId: spec.nodeId || null
             });
         }
-        if (spec.boss) queue.push({ templateId: 'dragon', boss: true, depth });
+        if (spec.boss) {
+            queue.push({
+                templateId: 'dragon',
+                boss: true,
+                depth,
+                origin: spec.type === 'extraction' ? 'extraction' : 'encounter',
+                encounterId: spec.encounterId || null,
+                homeNodeId: spec.nodeId || null
+            });
+        }
         return queue;
     }
 
@@ -1590,12 +1988,23 @@ export class CombatSystem {
         const spawnOrigin = activeLocation
             ? { x: activeLocation.x, y: activeLocation.y }
             : hero;
+        const requestedSpawn = normalizedSpec.spawnPosition;
+        const hasRequestedSpawn = Number.isFinite(Number(requestedSpawn?.x))
+            && Number.isFinite(Number(requestedSpawn?.y));
         const spawnPosition = this.worldSystem.findOpenPositionNear(
-            spawnOrigin,
-            260 + this.random() * 170,
-            this.random() * Math.PI * 2,
+            hasRequestedSpawn
+                ? { x: Number(requestedSpawn.x), y: Number(requestedSpawn.y) }
+                : spawnOrigin,
+            hasRequestedSpawn ? 0 : 260 + this.random() * 170,
+            hasRequestedSpawn ? 0 : this.random() * Math.PI * 2,
             size
         );
+        const isAmbient = Boolean(normalizedSpec.ambient || normalizedSpec.origin === 'ambient');
+        const origin = isAmbient
+            ? 'ambient'
+            : String(normalizedSpec.origin || (this.runSystem.phase === 'extracting' ? 'extraction' : 'encounter'));
+        const encounterId = normalizedSpec.encounterId
+            || (!isAmbient ? this.currentEncounter?.encounterId || null : null);
 
         const monster = {
             id: this.nextMonsterId++,
@@ -1633,14 +2042,26 @@ export class CombatSystem {
             animationStateTime: 0,
             combatState: 'move',
             progress: 0,
-            rewardGranted: false
+            rewardGranted: false,
+            origin,
+            encounterId,
+            homeNodeId: normalizedSpec.homeNodeId || this.currentEncounter?.nodeId || this.runSystem.currentNode?.id || null,
+            homeX: Number(normalizedSpec.homePosition?.x) || spawnPosition.x + size / 2,
+            homeY: Number(normalizedSpec.homePosition?.y) || spawnPosition.y + size / 2,
+            patrolTarget: null,
+            aiState: isAmbient ? 'patrol' : 'combat',
+            alerted: !isAmbient,
+            lastKnownHero: isAmbient ? null : { ...hero },
+            investigateTarget: null,
+            lostSightTimer: 0,
+            searchTimer: this.config.monsterSearchMs
         };
         this.monsters.push(monster);
         return monster;
     }
 
     updateAttack(deltaTime) {
-        if (!this.playerSystem || this.isPaused) return;
+        if (!this.playerSystem || this.isPaused || !this.runSystem.active || this.settled) return;
         if (!this.legacyAutoAimEnabled) {
             if (!this.firingHeld || this.getActiveFireBlockMs() > 0) return;
             this.fireCurrentWeapon();
@@ -1659,7 +2080,10 @@ export class CombatSystem {
         if (!this.playerSystem) return;
         const weaponState = this.weaponStates[this.activeWeaponId];
         if (consumeAmmo && (!weaponState || weaponState.reloadRemainingMs > 0 || weaponState.magazine <= 0)) {
-            if (weaponState?.magazine <= 0) this.reloadWeapon();
+            if (weaponState?.magazine <= 0) {
+                if ((Number(weaponState.reserve) || 0) > 0) this.reloadWeapon();
+                else this.performFallbackAttack();
+            }
             return;
         }
         const livePlayer = this.playerSystem.player;
@@ -1728,7 +2152,7 @@ export class CombatSystem {
     }
 
     fireCurrentWeapon() {
-        if (!this.playerSystem || !this.isCombatActive()) {
+        if (!this.playerSystem || !this.runSystem.active || this.settled) {
             return { success: false, code: 'inactive', message: '当前无法开火' };
         }
         const weapon = this.getWeaponConfig();
@@ -1752,6 +2176,7 @@ export class CombatSystem {
         }
         if (state.reloadRemainingMs > 0) return { success: false, code: 'reloading', message: '正在换弹' };
         if (state.magazine <= 0) {
+            if (state.reserve <= 0) return this.performFallbackAttack();
             const reload = this.reloadWeapon();
             return { success: false, code: 'empty', message: reload.success ? '弹匣为空，自动换弹' : reload.message };
         }
@@ -1810,6 +2235,10 @@ export class CombatSystem {
         state.shotCooldownRemainingMs = weapon.fireIntervalMs / attackSpeed;
         this.syncLegacyShotCooldownTimer();
         this.playerSystem.playAttackAnimation?.();
+        this.emitNoise(originCenter.x, originCenter.y, this.config.gunshotNoiseRadius, {
+            durationMs: 1250,
+            type: 'gunshot'
+        });
         return {
             success: true,
             weaponId: weapon.id,
@@ -1817,6 +2246,72 @@ export class CombatSystem {
             magazine: state.magazine,
             reserve: state.reserve,
             firstStrike: firstStrikeMultiplier > 1
+        };
+    }
+
+    performFallbackAttack() {
+        if (!this.playerSystem || !this.runSystem.active || this.settled) {
+            return { success: false, code: 'inactive', message: '当前无法攻击' };
+        }
+        if (this.fallbackAttackTimer > 0) {
+            return {
+                success: false,
+                code: 'fallback-cooldown',
+                message: '近战尚未准备好',
+                remainingMs: this.fallbackAttackTimer
+            };
+        }
+        const weapon = this.getWeaponConfig();
+        const weaponState = this.weaponStates[this.activeWeaponId];
+        const origin = this.getHeroCenter();
+        const direction = this.getCurrentAimDirection(origin);
+        const target = this.monsters
+            .filter(monster => {
+                if (monster.hp <= 0) return false;
+                const point = this.getEntityCenter(monster);
+                const dx = point.x - origin.x;
+                const dy = point.y - origin.y;
+                const distance = Math.hypot(dx, dy);
+                if (distance > this.config.fallbackAttackRange || this.isLineBlocked(origin, point, 2)) return false;
+                if (distance <= 0.001) return true;
+                return (dx / distance) * direction.x + (dy / distance) * direction.y >= 0.1;
+            })
+            .sort((left, right) => {
+                const a = this.getEntityCenter(left);
+                const b = this.getEntityCenter(right);
+                return Math.hypot(a.x - origin.x, a.y - origin.y)
+                    - Math.hypot(b.x - origin.x, b.y - origin.y);
+            })[0] || null;
+        const targetId = target?.id ?? null;
+        const damage = Math.max(
+            2,
+            Math.floor(this.getWeaponShotDamage(weapon) * this.config.fallbackAttackDamageMultiplier)
+        );
+        const hit = target ? this.applyDamage(target, damage) : false;
+        if (target && hit && target.hp > 0) {
+            this.setMonsterAwarenessState(target, 'combat', origin);
+            const point = this.getEntityCenter(target);
+            this.explosions.push({ x: point.x, y: point.y, radius: 9, life: 180, color: '#d7e0e8' });
+        }
+        this.fallbackAttackTimer = this.config.fallbackAttackIntervalMs;
+        if (weaponState) {
+            weaponState.shotCooldownRemainingMs = Math.max(
+                Number(weaponState.shotCooldownRemainingMs) || 0,
+                this.config.fallbackAttackIntervalMs
+            );
+        }
+        this.syncLegacyShotCooldownTimer();
+        this.playerSystem.playAttackAnimation?.();
+        this.emitNoise(origin.x, origin.y, 180, { durationMs: 500, type: 'melee' });
+        return {
+            success: true,
+            code: 'fallback',
+            fallback: true,
+            hit: Boolean(hit),
+            targetId,
+            damage: hit ? damage : 0,
+            magazine: 0,
+            reserve: 0
         };
     }
 
@@ -1906,10 +2401,87 @@ export class CombatSystem {
         };
     }
 
+    normalizeMonsterAwareness(monster) {
+        if (!monster) return monster;
+        const center = this.getEntityCenter(monster);
+        if (!monster.origin) monster.origin = 'encounter';
+        if (!['patrol', 'investigate', 'combat', 'search-return'].includes(monster.aiState)) {
+            monster.aiState = monster.origin === 'ambient' ? 'patrol' : 'combat';
+        }
+        monster.alerted = monster.aiState !== 'patrol';
+        if (!Number.isFinite(Number(monster.homeX))) monster.homeX = center.x;
+        if (!Number.isFinite(Number(monster.homeY))) monster.homeY = center.y;
+        if (!Number.isFinite(Number(monster.lostSightTimer))) monster.lostSightTimer = 0;
+        if (!Number.isFinite(Number(monster.searchTimer))) monster.searchTimer = this.config.monsterSearchMs;
+        if (monster.aiState === 'combat' && !monster.lastKnownHero) {
+            monster.lastKnownHero = { ...this.getHeroCenter() };
+        }
+        return monster;
+    }
+
+    canMonsterSeeHero(monster, hero = this.getHeroCenter()) {
+        if (!monster || monster.hp <= 0 || !hero) return false;
+        const center = this.getEntityCenter(monster);
+        const visionRange = this.config.monsterVisionRange
+            + (monster.isBoss ? this.config.monsterVisionBossBonus : monster.isElite ? 40 : 0);
+        return Math.hypot(hero.x - center.x, hero.y - center.y) <= visionRange
+            && !this.isLineBlocked(center, hero, 3);
+    }
+
+    alertNearbyMonsters(source, target) {
+        if (!source || !target) return;
+        const center = this.getEntityCenter(source);
+        this.monsters.forEach(monster => {
+            if (monster === source || monster.hp <= 0) return;
+            this.normalizeMonsterAwareness(monster);
+            if (monster.aiState === 'combat') return;
+            const other = this.getEntityCenter(monster);
+            if (Math.hypot(other.x - center.x, other.y - center.y) > this.config.monsterAlertShareRadius) return;
+            this.setMonsterAwarenessState(monster, 'investigate', target);
+        });
+    }
+
+    chooseMonsterPatrolTarget(monster) {
+        const angle = this.random() * Math.PI * 2;
+        const distance = this.config.monsterPatrolRadius * (0.35 + this.random() * 0.65);
+        const point = this.worldSystem.findOpenPositionNear(
+            { x: monster.homeX, y: monster.homeY },
+            distance,
+            angle,
+            Math.max(monster.width || 0, monster.height || 0)
+        );
+        monster.patrolTarget = {
+            x: point.x + (monster.width || 0) / 2,
+            y: point.y + (monster.height || 0) / 2
+        };
+        return monster.patrolTarget;
+    }
+
+    moveMonsterToward(monster, target, deltaTime, speedMultiplier = 1) {
+        if (!monster || !target) return { distance: Infinity, moved: false };
+        const center = this.getEntityCenter(monster);
+        const dx = target.x - center.x;
+        const dy = target.y - center.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= 0.001) return { distance, moved: false };
+        const speed = Math.max(0, Number(monster.speed) || 0)
+            * Math.max(0, Number(monster.slowFactor) || 1)
+            * Math.max(0, Number(speedMultiplier) || 0);
+        const travel = Math.min(distance, speed * Math.max(0, Number(deltaTime) || 0) / 1000);
+        const result = this.moveMonsterWithAvoidance(
+            monster,
+            dx / distance,
+            dy / distance,
+            travel
+        );
+        return { distance, ...result };
+    }
+
     updateMonsters(deltaTime) {
         const dt = deltaTime / 1000;
         const hero = this.getHeroCenter();
         this.monsters.slice().forEach(monster => {
+            this.normalizeMonsterAwareness(monster);
             monster.animationStateTime = Math.max(0, Number(monster.animationStateTime) || 0) + deltaTime;
             monster.slowTimer = Math.max(0, (monster.slowTimer || 0) - deltaTime);
             monster.stunTimer = Math.max(0, (monster.stunTimer || 0) - deltaTime);
@@ -1958,11 +2530,103 @@ export class CombatSystem {
                 return;
             }
 
-            const center = this.getEntityCenter(monster);
+            let center = this.getEntityCenter(monster);
+            const canSeeHero = this.canMonsterSeeHero(monster, hero);
+            const audibleNoise = this.getAudibleNoise(monster);
+            if (canSeeHero) {
+                const wasCombat = monster.aiState === 'combat';
+                this.setMonsterAwarenessState(monster, 'combat', hero);
+                monster.lastKnownHero = { ...hero };
+                monster.lostSightTimer = 0;
+                if (!wasCombat) this.alertNearbyMonsters(monster, hero);
+            } else if (audibleNoise && monster.aiState !== 'combat') {
+                this.setMonsterAwarenessState(monster, 'investigate', audibleNoise);
+            }
+
+            if (monster.aiState === 'patrol') {
+                const target = monster.patrolTarget || this.chooseMonsterPatrolTarget(monster);
+                const distance = Math.hypot(center.x - target.x, center.y - target.y);
+                if (distance <= this.config.monsterReturnRadius * 0.45) {
+                    monster.patrolTarget = null;
+                    this.setMonsterCombatState(monster, 'idle');
+                } else {
+                    this.moveMonsterToward(monster, target, deltaTime, 0.45);
+                    this.setMonsterCombatState(monster, 'move');
+                }
+                return;
+            }
+
+            if (monster.aiState === 'investigate') {
+                const target = monster.investigateTarget || monster.lastKnownHero;
+                if (!target) {
+                    this.setMonsterAwarenessState(monster, 'search-return');
+                    return;
+                }
+                const distance = Math.hypot(center.x - target.x, center.y - target.y);
+                if (distance <= this.config.monsterReturnRadius * 0.6) {
+                    monster.searchTimer = this.config.monsterSearchMs;
+                    this.setMonsterAwarenessState(monster, 'search-return', target);
+                    this.setMonsterCombatState(monster, 'idle');
+                } else {
+                    this.moveMonsterToward(monster, target, deltaTime, 0.72);
+                    this.setMonsterCombatState(monster, 'move');
+                }
+                return;
+            }
+
+            if (monster.aiState === 'search-return') {
+                if (audibleNoise) {
+                    this.setMonsterAwarenessState(monster, 'investigate', audibleNoise);
+                    this.moveMonsterToward(monster, audibleNoise, deltaTime, 0.72);
+                    this.setMonsterCombatState(monster, 'move');
+                    return;
+                }
+                monster.searchTimer = Math.max(0, (Number(monster.searchTimer) || 0) - deltaTime);
+                const searching = monster.searchTimer > 0 && monster.lastKnownHero;
+                const target = searching
+                    ? monster.lastKnownHero
+                    : { x: monster.homeX, y: monster.homeY };
+                const distance = Math.hypot(center.x - target.x, center.y - target.y);
+                if (!searching && distance <= this.config.monsterReturnRadius) {
+                    monster.lastKnownHero = null;
+                    monster.investigateTarget = null;
+                    monster.patrolTarget = null;
+                    this.setMonsterAwarenessState(monster, 'patrol');
+                    this.setMonsterCombatState(monster, 'idle');
+                } else if (distance > this.config.monsterReturnRadius * 0.45) {
+                    this.moveMonsterToward(monster, target, deltaTime, searching ? 0.58 : 0.65);
+                    this.setMonsterCombatState(monster, 'move');
+                } else {
+                    this.setMonsterCombatState(monster, 'idle');
+                }
+                return;
+            }
+
+            center = this.getEntityCenter(monster);
             const dx = hero.x - center.x;
             const dy = hero.y - center.y;
             const distance = Math.hypot(dx, dy);
             monster.progress = Math.max(0, Math.min(1, 1 - distance / Math.max(1, this.worldSystem.width)));
+
+            if (!canSeeHero) {
+                monster.lostSightTimer += deltaTime;
+                const homeDistance = Math.hypot(center.x - monster.homeX, center.y - monster.homeY);
+                if (
+                    monster.lostSightTimer >= this.config.monsterLoseSightMs
+                    || homeDistance >= this.config.monsterLeashRange
+                ) {
+                    monster.searchTimer = this.config.monsterSearchMs;
+                    this.setMonsterAwarenessState(monster, 'search-return', monster.lastKnownHero);
+                    return;
+                }
+                if (monster.lastKnownHero) {
+                    this.moveMonsterToward(monster, monster.lastKnownHero, deltaTime, 0.82);
+                    this.setMonsterCombatState(monster, 'move');
+                } else {
+                    this.setMonsterCombatState(monster, 'idle');
+                }
+                return;
+            }
 
             if (monster.isBoss) {
                 monster.bossAbilityTimer -= deltaTime;
@@ -1987,7 +2651,6 @@ export class CombatSystem {
                 }
             }
 
-            const hasLineOfSight = !this.isLineBlocked(center, hero);
             const ranged = monster.combatStyle === 'ranged';
             const engageRange = ranged ? monster.rangedRange : monster.engageRange;
             if (ranged && distance < 125) {
@@ -2003,13 +2666,10 @@ export class CombatSystem {
                 return;
             }
 
-            if (distance > engageRange || (ranged && !hasLineOfSight)) {
+            if (distance > engageRange) {
                 const safeDistance = distance || 1;
                 const maxTravel = monster.speed * (monster.slowFactor || 1) * dt;
-                const desiredDistance = ranged && !hasLineOfSight
-                    ? maxTravel
-                    : Math.max(0, distance - engageRange);
-                const travel = Math.min(desiredDistance, maxTravel);
+                const travel = Math.min(Math.max(0, distance - engageRange), maxTravel);
                 this.moveMonsterWithAvoidance(
                     monster,
                     dx / safeDistance,
@@ -2334,21 +2994,61 @@ export class CombatSystem {
     }
 
     applyPetDamage(monster, damage, isCrit = false) {
-        return this.applyDamage(monster, damage, { isCrit });
+        if (this.petAutoDamageTimer > 0) return false;
+        this.petAutoDamageTimer = this.config.petAutoSharedCooldownMs;
+        return this.applyDamage(
+            monster,
+            Math.max(1, Number(damage) * this.config.petAutoDamageMultiplier),
+            { isCrit }
+        );
     }
 
     onMonsterKilled(monster) {
         if (!monster || monster.rewardGranted) return;
         monster.rewardGranted = true;
-        this.encounterRewards.coins += monster.coinReward || 0;
-        this.encounterRewards.crystals += monster.crystalReward || 0;
-        this.encounterRewards.exp += monster.expReward || 0;
-        this.encounterRewards.kills += 1;
+        const currentEncounterId = this.currentEncounter?.encounterId || null;
+        const belongsToEncounter = Boolean(this.currentEncounter) && (
+            currentEncounterId
+                ? monster.encounterId === currentEncounterId
+                : monster.origin !== 'ambient'
+        );
+        const reward = {
+            coins: monster.coinReward || 0,
+            crystals: monster.crystalReward || 0,
+            exp: monster.expReward || 0,
+            kills: 1
+        };
+        if (belongsToEncounter) {
+            this.encounterRewards.coins += reward.coins;
+            this.encounterRewards.crystals += reward.crystals;
+            this.encounterRewards.exp += reward.exp;
+            this.encounterRewards.kills += 1;
+        } else if (this.runSystem.active) {
+            const multiplier = this.getThreatRewardMultiplier();
+            this.runSystem.addPendingRewards({
+                coins: Math.floor(reward.coins * multiplier),
+                crystals: Math.floor(reward.crystals * multiplier),
+                exp: Math.floor(reward.exp * multiplier),
+                kills: 1
+            });
+            if (monster.origin === 'ambient') this.runSystem.addThreat?.(monster.isElite ? 2 : 1);
+        }
         if (monster.isBoss) {
             this.meta.bossKills += 1;
             this.runBossKills += 1;
         }
         if (monster.isElite) this.runEliteKills += 1;
+        if (
+            this.runSystem.active
+            && (monster.isBoss || monster.isElite || this.random() < this.config.ammoDropChance)
+        ) {
+            const center = this.getEntityCenter(monster);
+            this.spawnAmmoPickup({
+                x: center.x,
+                y: center.y,
+                weaponId: this.lockedWeaponId || this.activeWeaponId
+            });
+        }
         this.explosions.push({
             x: monster.x + monster.width / 2,
             y: monster.y + monster.height / 2,
@@ -2369,7 +3069,6 @@ export class CombatSystem {
         this.encounterRewardsCommitted = true;
         this.currentEncounter = null;
         this.encounterQueue = [];
-        this.bullets = [];
         this.addBannerText(type === 'boss' ? '核心守卫已击败' : '区域清理完成', '#8dffb5');
         this.worldSystem.completeActiveLocation();
         this.syncWorldWithRunState();
@@ -2470,14 +3169,26 @@ export class CombatSystem {
         this.monsters = [];
         this.bullets = [];
         this.encounterQueue = [];
+        this.ambientPatrolQueue = [];
+        this.noiseEvents = [];
+        this.ammoPickups = [];
         this.currentEncounter = null;
         this.extractionTimer = 0;
         this.extractionTotalDuration = 0;
         this.extractionOutOfZoneTimer = 0;
         this.extractionReinforcementTimer = 0;
         this.extractionReinforcementIntervalMs = 0;
+        this.ambientSpawnTimer = 0;
+        this.fallbackAttackTimer = 0;
+        this.petAutoDamageTimer = 0;
         this.runPreparation = { attack: 0, defense: 0, supplies: 0, expBonus: 0 };
-        this.runLoadoutEffects = { armorDefense: 0, petGuard: 0, consumableSupplies: 0, consumed: [] };
+        this.runLoadoutEffects = {
+            armorDefense: 0,
+            petGuard: 0,
+            consumableSupplies: 0,
+            ammoReserve: 0,
+            consumed: []
+        };
         this.runSnapshot = null;
         this.clearMovementInput();
         this.worldSystem.completeActiveLocation();
@@ -2497,8 +3208,16 @@ export class CombatSystem {
         this.encounterRewardsCommitted = false;
         this.nextMonsterId = 1;
         this.nextBulletId = 1;
+        this.nextEncounterId = 1;
+        this.nextAmmoPickupId = 1;
         this.encounterSpawnTimer = 0;
+        this.ambientPatrolQueue = [];
+        this.ambientSpawnTimer = 0;
+        this.noiseEvents = [];
+        this.ammoPickups = [];
         this.attackTimer = 0;
+        this.fallbackAttackTimer = 0;
+        this.petAutoDamageTimer = 0;
         this.extractionTimer = 0;
         this.extractionTotalDuration = 0;
         this.extractionOutOfZoneTimer = 0;
@@ -2581,7 +3300,9 @@ export class CombatSystem {
     }
 
     isCombatActive() {
-        return this.runSystem.phase === 'combat' || this.runSystem.phase === 'extracting';
+        return this.runSystem.phase === 'combat'
+            || this.runSystem.phase === 'extracting'
+            || this.hasAlertedEnemies();
     }
 
     isWaveActive() {
@@ -2629,6 +3350,10 @@ export class CombatSystem {
             phaseLabel: this.getPhaseLabel(phase),
             depth: run.depth,
             maxDepth: run.maxDepth,
+            exploredCount: Array.isArray(run.completedNodeIds) ? run.completedNodeIds.length : 0,
+            hotspotCount: Array.isArray(run.hotspots) && run.hotspots.length > 0
+                ? run.hotspots.length
+                : Array.isArray(run.routeChoices) ? run.routeChoices.length : 0,
             currentWave: run.depth,
             totalWaves: run.maxDepth,
             hp: this.runHp,
@@ -2655,6 +3380,9 @@ export class CombatSystem {
             energy: run.supplies,
             activeEnemies: this.monsters.length,
             queuedEnemies: this.encounterQueue.length,
+            raidThreatActive: this.hasAlertedEnemies(),
+            nearbyThreats: this.getNearbyThreatCount(),
+            canFire: Boolean(run.active && !this.settled),
             backpack: run.backpack,
             backpackCount: run.backpack.length,
             backpackCapacity: run.backpackCapacity,
@@ -2674,7 +3402,8 @@ export class CombatSystem {
                     moving: Math.hypot(this.movementInput.x, this.movementInput.y) > 0.01
                 },
                 camera,
-                canMove: this.canMoveHero()
+                canMove: this.canMoveHero(),
+                ammoPickups: this.getAmmoPickupState()
             },
             interaction,
             weapon: this.getWeaponState(),
@@ -2723,6 +3452,7 @@ export class CombatSystem {
                 canExtract: Boolean(nearExtractionAvailability?.canExtract),
                 canInteract: interaction.available,
                 canMove: this.canMoveHero(),
+                canFire: Boolean(run.active && !this.settled),
                 canHeal: run.active && run.supplies > 0 && this.runHp < this.runMaxHp
                     && this.supplyCooldownTimer <= 0
                     && (!this.isCombatActive() || this.timeSinceDamage >= this.config.supplyCombatSafeWindowMs),
@@ -2975,10 +3705,31 @@ export class CombatSystem {
     }
 
     renderWorld(ctx) {
+        this.renderAmmoPickups(ctx);
         this.renderFocusTarget(ctx);
         this.monsters.forEach(monster => this.renderMonster(ctx, monster));
         this.bullets.forEach(bullet => this.renderBullet(ctx, bullet));
         this.explosions.forEach(explosion => this.renderExplosion(ctx, explosion));
+    }
+
+    renderAmmoPickups(ctx) {
+        this.ammoPickups.forEach(pickup => {
+            ctx.save();
+            ctx.translate(pickup.x, pickup.y);
+            ctx.rotate(Math.PI / 4);
+            ctx.fillStyle = 'rgba(114, 215, 255, 0.24)';
+            ctx.fillRect(-12, -12, 24, 24);
+            ctx.strokeStyle = '#72d7ff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-10, -10, 20, 20);
+            ctx.rotate(-Math.PI / 4);
+            ctx.fillStyle = '#eaf9ff';
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('AM', 0, 0);
+            ctx.restore();
+        });
     }
 
     renderFloatingTexts(ctx, { screenSpace = false } = {}) {
@@ -3552,6 +4303,16 @@ export class CombatSystem {
             encounterRewardsCommitted: this.encounterRewardsCommitted,
             monsters: this.monsters.map(monster => ({ ...monster })),
             bullets: this.bullets.map(bullet => ({ ...bullet })),
+            ambientPatrolQueue: this.ambientPatrolQueue.map(item => ({
+                ...item,
+                spawnPosition: item.spawnPosition ? { ...item.spawnPosition } : null,
+                homePosition: item.homePosition ? { ...item.homePosition } : null
+            })),
+            ambientSpawnTimer: this.ambientSpawnTimer,
+            noiseEvents: this.noiseEvents.map(event => ({ ...event })),
+            ammoPickups: this.ammoPickups.map(pickup => ({ ...pickup })),
+            fallbackAttackTimer: this.fallbackAttackTimer,
+            petAutoDamageTimer: this.petAutoDamageTimer,
             activeWeaponId: this.activeWeaponId,
             lockedWeaponId: this.lockedWeaponId,
             weaponStates: Object.fromEntries(Object.entries(this.weaponStates).map(([id, state]) => [id, { ...state }])),
@@ -3568,6 +4329,8 @@ export class CombatSystem {
             firstStrikeBonus: this.firstStrikeBonus,
             nextMonsterId: this.nextMonsterId,
             nextBulletId: this.nextBulletId,
+            nextEncounterId: this.nextEncounterId,
+            nextAmmoPickupId: this.nextAmmoPickupId,
             settled: this.settled
         } : null;
         return {
@@ -3648,6 +4411,22 @@ export class CombatSystem {
         this.encounterRewardsCommitted = Boolean(active.encounterRewardsCommitted);
         this.monsters = Array.isArray(active.monsters) ? active.monsters.map(monster => ({ ...monster })) : [];
         this.bullets = Array.isArray(active.bullets) ? active.bullets.map(bullet => ({ ...bullet })) : [];
+        this.ambientPatrolQueue = Array.isArray(active.ambientPatrolQueue)
+            ? active.ambientPatrolQueue.map(item => ({
+                ...item,
+                spawnPosition: item.spawnPosition ? { ...item.spawnPosition } : null,
+                homePosition: item.homePosition ? { ...item.homePosition } : null
+            }))
+            : [];
+        this.ambientSpawnTimer = Math.max(0, Number(active.ambientSpawnTimer) || 0);
+        this.noiseEvents = Array.isArray(active.noiseEvents)
+            ? active.noiseEvents.map(event => ({ ...event }))
+            : [];
+        this.ammoPickups = Array.isArray(active.ammoPickups)
+            ? active.ammoPickups.map(pickup => ({ ...pickup }))
+            : [];
+        this.fallbackAttackTimer = Math.max(0, Number(active.fallbackAttackTimer) || 0);
+        this.petAutoDamageTimer = Math.max(0, Number(active.petAutoDamageTimer) || 0);
         const restoredWeaponId = String(active.lockedWeaponId || active.activeWeaponId || '');
         this.activeWeaponId = this.getWeaponConfig(restoredWeaponId) ? restoredWeaponId : this.weaponOrder[0];
         this.lockedWeaponId = this.activeWeaponId;
@@ -3689,6 +4468,24 @@ export class CombatSystem {
         this.firstStrikeBonus = Math.max(0, Math.min(1, Number(active.firstStrikeBonus) || 0));
         this.nextMonsterId = Math.max(1, Number(active.nextMonsterId) || 1);
         this.nextBulletId = Math.max(1, Number(active.nextBulletId) || 1);
+        this.nextEncounterId = Math.max(1, Number(active.nextEncounterId) || 1);
+        this.nextAmmoPickupId = Math.max(1, Number(active.nextAmmoPickupId) || 1);
+        if (this.currentEncounter && !this.currentEncounter.encounterId) {
+            this.currentEncounter.encounterId = `encounter-${this.nextEncounterId++}`;
+        }
+        if (this.currentEncounter?.encounterId) {
+            this.encounterQueue = this.encounterQueue.map(item => ({
+                ...item,
+                origin: item.origin || 'encounter',
+                encounterId: item.encounterId || this.currentEncounter.encounterId
+            }));
+            this.monsters.forEach(monster => {
+                if (monster.origin === 'ambient') return;
+                monster.origin = monster.origin || 'encounter';
+                monster.encounterId = monster.encounterId || this.currentEncounter.encounterId;
+            });
+        }
+        this.monsters.forEach(monster => this.normalizeMonsterAwareness(monster));
         this.settled = Boolean(active.settled);
         this.battleInitialized = true;
         if (this.runSystem.active && !this.expeditionMetaSystem?.getState?.()?.activeRaid) {

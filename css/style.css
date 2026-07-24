@@ -537,9 +537,9 @@
   display: none;
 }
 
-#battle-scene[data-combat-active="false"] .battle-fire-controls,
-#battle-scene[data-combat-active="false"] .battle-weapon-hud,
-#battle-scene[data-combat-active="false"] .battle-skill-dock,
+#battle-scene[data-raid-active="false"] .battle-fire-controls,
+#battle-scene[data-raid-active="false"] .battle-weapon-hud,
+#battle-scene[data-raid-active="false"] .battle-skill-dock,
 #battle-scene[data-combat-active="true"] .battle-interact-btn {
   display: none !important;
 }
@@ -4025,6 +4025,8 @@ body[data-scene="dungeon"] .game-hud-controls {
 .expedition-loadout-panel[data-raid-active="true"] .expedition-section-row,
 .expedition-loadout-panel[data-raid-active="true"] .expedition-loadout-summary,
 .expedition-loadout-panel[data-raid-active="true"] .expedition-equipped-items,
+.expedition-loadout-panel[data-raid-active="true"] .expedition-workbench-panel,
+.expedition-loadout-panel[data-raid-active="true"] .expedition-facility-panel,
 .expedition-loadout-panel[data-raid-active="true"] .expedition-stash-list,
 .expedition-loadout-panel[data-raid-active="true"] .expedition-contract-list {
   display: none;
@@ -4371,6 +4373,13 @@ body[data-scene="dungeon"] .game-hud-controls {
   line-height: 1.25;
 }
 
+.expedition-loot-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.expedition-loot-mark,
 .expedition-loot-insure {
   flex: 0 0 auto;
   min-width: 42px;
@@ -4384,12 +4393,14 @@ body[data-scene="dungeon"] .game-hud-controls {
   font-weight: 900;
 }
 
+.expedition-loot-mark[aria-pressed="true"],
 .expedition-loot-insure[aria-pressed="true"] {
   border-color: #ffd167;
   background: #3d3216;
   color: #fff1a7;
 }
 
+.expedition-loot-mark:disabled,
 .expedition-loot-insure:disabled {
   opacity: 0.46;
   cursor: not-allowed;
@@ -4581,29 +4592,6 @@ body[data-scene="dungeon"] .game-hud-controls {
   pointer-events: none;
 }
 
-.battle-nearby-prompt {
-  position: absolute;
-  left: 50%;
-  bottom: clamp(142px, 10.5vw, 184px);
-  z-index: 8;
-  max-width: min(58%, 440px);
-  transform: translateX(-50%);
-  padding: clamp(7px, 0.65vw, 11px) clamp(12px, 1.1vw, 20px);
-  overflow: hidden;
-  border: 2px solid #ffd167;
-  border-radius: 6px;
-  background: rgba(9, 11, 17, 0.9);
-  color: #fff1a7;
-  font-size: clamp(10px, 0.82vw, 15px);
-  font-weight: 900;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  box-shadow: 2px 2px 0 #000;
-  pointer-events: none;
-}
-
-.battle-nearby-prompt[hidden],
 .battle-world-controls[hidden] {
   display: none !important;
 }
@@ -4614,62 +4602,6 @@ body[data-scene="dungeon"] .game-hud-controls {
   z-index: 7;
   pointer-events: none;
 }
-
-.battle-move-pad {
-  position: absolute;
-  left: clamp(88px, 7vw, 132px);
-  bottom: clamp(76px, 6vw, 102px);
-  display: grid;
-  grid-template-columns: repeat(3, clamp(44px, 3.5vw, 54px));
-  grid-template-rows: repeat(3, clamp(44px, 3.5vw, 54px));
-  gap: 3px;
-  pointer-events: none;
-}
-
-.battle-move-btn,
-.battle-move-center {
-  display: grid;
-  place-items: center;
-  border-radius: 7px;
-}
-
-.battle-move-btn {
-  border: 2px solid #f4a545;
-  background: rgba(17, 18, 25, 0.9);
-  color: #fff1a7;
-  font-size: clamp(14px, 1.25vw, 22px);
-  font-weight: 900;
-  box-shadow: inset 0 0 0 2px rgba(255, 209, 103, 0.12), 2px 2px 0 #000;
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.battle-move-btn:hover:not(:disabled),
-.battle-move-btn[aria-pressed="true"] {
-  transform: translateY(-1px);
-  background: #ffd167;
-  color: #24120a;
-  box-shadow: inset 0 0 0 2px #fff1a7, 2px 2px 0 #000;
-}
-
-.battle-move-btn:disabled {
-  opacity: 0.32;
-  cursor: not-allowed;
-}
-
-.battle-move-center {
-  grid-column: 2;
-  grid-row: 2;
-  border: 2px solid #353945;
-  background: rgba(5, 7, 12, 0.72);
-  color: #59616c;
-  font-size: clamp(15px, 1.35vw, 24px);
-}
-
-.battle-move-btn.move-up { grid-column: 2; grid-row: 1; }
-.battle-move-btn.move-left { grid-column: 1; grid-row: 2; }
-.battle-move-btn.move-right { grid-column: 3; grid-row: 2; }
-.battle-move-btn.move-down { grid-column: 2; grid-row: 3; }
 
 .battle-interact-btn {
   position: absolute;
@@ -4798,12 +4730,6 @@ body[data-scene="dungeon"] .game-hud-controls {
   .battle-map-location,
   .battle-event-feed {
     display: none;
-  }
-
-  .battle-move-pad {
-    grid-template-columns: repeat(3, 44px);
-    grid-template-rows: repeat(3, 44px);
-    bottom: 58px;
   }
 
   .battle-interact-btn {
@@ -5074,43 +5000,6 @@ body[data-scene="dungeon"] .game-hud-controls {
   background: rgba(17, 19, 23, 0.86);
   box-shadow: none;
   backdrop-filter: blur(7px);
-}
-
-.battle-nearby-prompt {
-  bottom: clamp(96px, 8vw, 132px);
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 199, 102, 0.78);
-  border-radius: 7px;
-  color: #ffe7b5;
-  font-size: clamp(10px, 0.78vw, 14px);
-  background: rgba(29, 24, 17, 0.9);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
-}
-
-.battle-move-pad {
-  left: clamp(94px, 7.5vw, 136px);
-  bottom: clamp(16px, 1.35vw, 24px);
-  grid-template-columns: repeat(3, clamp(39px, 3.2vw, 50px));
-  grid-template-rows: repeat(3, clamp(39px, 3.2vw, 50px));
-  gap: 3px;
-}
-
-.battle-move-btn,
-.battle-move-center {
-  border-radius: 7px;
-}
-
-.battle-move-btn {
-  border: 1px solid rgba(255, 199, 102, 0.72);
-  color: #ffe1a7;
-  background: rgba(18, 23, 31, 0.88);
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.24);
-}
-
-.battle-move-center {
-  border: 1px solid var(--exp-line);
-  color: #506270;
-  background: rgba(7, 14, 23, 0.72);
 }
 
 .battle-interact-btn {
@@ -5784,13 +5673,6 @@ body[data-scene="dungeon"] .game-hud-controls {
     left: 12px;
   }
 
-  .battle-move-pad {
-    left: 12px;
-    bottom: 12px;
-    grid-template-columns: repeat(3, 38px);
-    grid-template-rows: repeat(3, 38px);
-  }
-
   .battle-fire-controls {
     right: 12px;
     bottom: 12px;
@@ -5836,10 +5718,6 @@ body[data-scene="dungeon"] .game-hud-controls {
     display: none;
   }
 
-  .battle-nearby-prompt {
-    bottom: 86px;
-    max-width: 54%;
-  }
 }
 
 #territory-scene {
@@ -12220,7 +12098,7 @@ body[data-scene="dungeon"] .game-hud-controls {
 }
 
 .expedition-loadout-panel[data-raid-active="true"]::before {
-  content: "本局锁定武器 · 自动换弹";
+  content: "本局锁定武器 · R 换弹";
 }
 
 .expedition-loadout-panel[data-raid-active="true"] .expedition-weapon-slots {
@@ -12454,9 +12332,89 @@ body[data-scene="dungeon"] .game-hud-controls {
 }
 
 .battle-prep-details .expedition-equipped-items,
+.battle-prep-details .expedition-workbench-panel,
+.battle-prep-details .expedition-facility-panel,
 .battle-prep-details .expedition-stash-list,
 .battle-prep-details .expedition-contract-list {
   margin-top: 8px;
+}
+
+.expedition-workbench-panel,
+.expedition-facility-panel {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(121, 221, 255, 0.2);
+  border-radius: 7px;
+  background: rgba(7, 14, 23, 0.58);
+}
+
+.expedition-workbench-panel .expedition-section-row,
+.expedition-facility-panel .expedition-section-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #bcecff;
+}
+
+.expedition-workbench-panel .expedition-section-row small,
+.expedition-facility-panel .expedition-section-row small {
+  color: #7892a3;
+  font-size: 10px;
+}
+
+.expedition-crafting-list,
+.expedition-facility-list {
+  display: grid;
+  gap: 5px;
+}
+
+.expedition-meta-action-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, auto) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 7px;
+  border-left: 3px solid #72d7ff;
+  background: rgba(5, 7, 12, 0.66);
+  color: #dfe2e8;
+  font-size: 11px;
+}
+
+.expedition-meta-action-card > div {
+  display: grid;
+  gap: 2px;
+}
+
+.expedition-meta-action-card small,
+.expedition-meta-action-card > span {
+  color: #8da2af;
+  font-size: 10px;
+}
+
+.expedition-meta-action-card button {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid #4f6675;
+  border-radius: 4px;
+  background: #1c2b34;
+  color: #dff7ff;
+  font-weight: 900;
+}
+
+.expedition-meta-action-card button:disabled {
+  opacity: 0.42;
+}
+
+@media (max-width: 700px) {
+  .expedition-meta-action-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .expedition-meta-action-card > span {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 }
 
 .battle-prep-actions {
@@ -12872,5 +12830,309 @@ body[data-scene="dungeon"] .game-hud-controls {
   .battle-context-dock,
   .battle-pack-drawer {
     scroll-behavior: auto;
+  }
+}
+
+/* ==================== 远征战斗布局 v4 ==================== */
+/* 顶部只承载战况与目标，底部只承载当前可用动作，避免控件散落在画布四周。 */
+#battle-scene .battle-arena-surface {
+  isolation: isolate;
+}
+
+.battle-command-header {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: clamp(158px, 15vw, 220px);
+  z-index: 12;
+  display: grid;
+  grid-template-columns: minmax(190px, max-content) minmax(150px, 260px);
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px 12px;
+  pointer-events: none;
+}
+
+#battle-scene[data-raid-active="false"] .battle-command-header {
+  display: none;
+}
+
+#battle-scene .battle-command-header .battle-scorebar {
+  position: static;
+  inset: auto;
+  min-width: 0;
+  min-height: 42px;
+  transform: none;
+  padding: 7px 10px;
+}
+
+.battle-command-header .battle-map-location {
+  position: static;
+  inset: auto;
+  width: 100%;
+  max-width: 260px;
+  min-height: 42px;
+  justify-self: end;
+  justify-items: end;
+  padding: 7px 10px;
+  white-space: normal;
+  pointer-events: auto;
+}
+
+.battle-command-header .extraction-run-status,
+#battle-scene[data-raid-active="true"] .battle-command-header .extraction-run-status {
+  position: static;
+  inset: auto;
+  grid-column: 1 / -1;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 5px;
+  pointer-events: none;
+}
+
+.battle-command-header .extraction-run-status > .run-stat {
+  min-height: 36px;
+  padding: 6px 8px;
+  background: rgba(7, 14, 23, 0.9);
+}
+
+#battle-scene[data-combat-active="true"] .battle-command-header .battle-map-location {
+  display: none !important;
+}
+
+#battle-scene .battle-world-controls {
+  position: absolute;
+  inset: auto 14px 14px auto;
+  z-index: 11;
+  width: auto;
+  max-width: calc(100% - 28px);
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(121, 221, 255, 0.34);
+  border-radius: 12px;
+  background: rgba(7, 14, 23, 0.88);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+#battle-scene .battle-world-controls[hidden],
+#battle-scene[data-context-active="true"] .battle-world-controls {
+  display: none !important;
+}
+
+#battle-scene .battle-world-controls > * {
+  pointer-events: auto;
+}
+
+#battle-scene .battle-world-controls .battle-interact-btn,
+#battle-scene .battle-world-controls .battle-supply-btn,
+#battle-scene .battle-world-controls .battle-fire-controls,
+#battle-scene .battle-world-controls .battle-skill-dock {
+  position: static;
+  inset: auto;
+  transform: none;
+}
+
+#battle-scene .battle-world-controls .battle-interact-btn {
+  width: clamp(190px, 24vw, 320px);
+  min-height: 58px;
+  padding: 8px 14px;
+}
+
+#battle-scene .battle-world-controls .battle-skill-dock {
+  width: auto;
+  flex: 0 1 auto;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#battle-scene .battle-world-controls .battle-skill-dock:empty {
+  display: none !important;
+}
+
+#battle-scene .battle-world-controls .expedition-skill-btn {
+  min-width: clamp(82px, 7vw, 118px);
+  min-height: 58px;
+}
+
+#battle-scene .battle-world-controls .battle-supply-btn {
+  min-width: 78px;
+  min-height: 58px;
+}
+
+#battle-scene .battle-world-controls .battle-fire-controls {
+  display: grid;
+  grid-template-columns: clamp(58px, 5vw, 74px) clamp(88px, 7vw, 108px);
+  gap: 7px;
+  align-items: stretch;
+}
+
+#battle-scene .battle-world-controls .battle-reload-btn,
+#battle-scene .battle-world-controls .battle-fire-btn {
+  min-width: 88px;
+  min-height: 58px;
+  padding: 7px 10px;
+}
+
+#battle-scene .battle-world-controls .battle-reload-btn {
+  min-width: 58px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+}
+
+#battle-scene .battle-event-feed {
+  left: 14px;
+  right: auto;
+  bottom: 14px;
+  width: min(440px, calc(100% - 560px));
+  transform: none;
+  text-align: left;
+}
+
+#battle-scene .battle-weapon-hud {
+  top: auto;
+  left: 14px;
+  bottom: 56px;
+  min-width: min(230px, calc(100% - 28px));
+}
+
+.battle-resource-strip[hidden],
+.battle-prep-actions > [hidden],
+.battle-context-actions [hidden] {
+  display: none !important;
+}
+
+@media (max-width: 900px) and (max-height: 600px),
+       (max-height: 520px) {
+  .battle-command-header {
+    top: 10px;
+    left: 10px;
+    right: 150px;
+    grid-template-columns: auto minmax(120px, 220px);
+    gap: 6px 8px;
+  }
+
+  #battle-scene .battle-command-header .battle-scorebar {
+    min-height: 36px;
+    padding: 5px 8px;
+  }
+
+  .battle-command-header .battle-scorebar-brand {
+    display: none;
+  }
+
+  .battle-command-header .battle-scorebar .score-dollar {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .battle-command-header .battle-map-location {
+    min-height: 36px;
+    padding: 5px 8px;
+  }
+
+  .battle-command-header .extraction-run-status,
+  #battle-scene[data-raid-active="true"] .battle-command-header .extraction-run-status {
+    grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+    gap: 4px;
+  }
+
+  .battle-command-header .extraction-run-status > .run-stat {
+    min-height: 31px;
+    padding: 4px 6px;
+  }
+
+  #battle-scene .battle-world-controls {
+    right: 10px;
+    bottom: 10px;
+    max-width: calc(100% - 20px);
+    gap: 6px;
+    padding: 6px;
+  }
+
+  #battle-scene .battle-world-controls .battle-interact-btn {
+    width: clamp(170px, 26vw, 250px);
+    min-height: 50px;
+  }
+
+  #battle-scene .battle-world-controls .expedition-skill-btn,
+  #battle-scene .battle-world-controls .battle-supply-btn,
+  #battle-scene .battle-world-controls .battle-reload-btn,
+  #battle-scene .battle-world-controls .battle-fire-btn {
+    min-height: 50px;
+  }
+
+  #battle-scene .battle-event-feed {
+    display: none;
+  }
+
+  #battle-scene .battle-weapon-hud {
+    top: auto;
+    left: 10px;
+    bottom: 10px;
+  }
+
+  .battle-context-dock {
+    bottom: 10px;
+    width: min(620px, calc(100% - 20px));
+    min-width: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .battle-command-header {
+    top: 10px;
+    left: 10px;
+    right: 160px;
+    grid-template-columns: minmax(90px, auto) minmax(110px, 1fr);
+  }
+
+  .battle-command-header .extraction-run-status,
+  #battle-scene[data-raid-active="true"] .battle-command-header .extraction-run-status {
+    grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  }
+
+  #battle-scene .battle-world-controls {
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: none;
+  }
+
+  #battle-scene .battle-world-controls .battle-interact-btn {
+    width: 100%;
+  }
+
+  #battle-scene .battle-world-controls .battle-skill-dock {
+    flex: 1 1 auto;
+  }
+
+  #battle-scene .battle-world-controls .expedition-skill-btn {
+    min-width: 52px;
+  }
+
+  #battle-scene .battle-world-controls .skill-name,
+  #battle-scene .battle-world-controls .battle-reload-btn span,
+  #battle-scene .battle-world-controls .battle-fire-btn span {
+    display: none;
+  }
+
+  #battle-scene .battle-weapon-hud {
+    bottom: 82px;
+  }
+
+  #battle-scene .battle-event-feed {
+    display: none;
+  }
+
+  .battle-context-dock {
+    bottom: 10px;
   }
 }

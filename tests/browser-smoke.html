@@ -1059,19 +1059,32 @@
                 const state = game.combatSystem.getBattleState();
                 return state.phase === "route" ? state : null;
               }, "远征路线生成");
-              assert(routeState.routeChoices.length === 2, "首层没有生成两条路线");
+              assert(routeState.routeChoices.length === 8, "开局没有生成完整的 8 个地图热点");
               assert(
                 routeState.world.width > game.gameCore.config.width,
                 "远征世界宽度没有与 Canvas 视口解耦",
               );
               assert(
                 frame.contentDocument.getElementById("battle-world-controls"),
-                "未渲染屏幕移动控件",
+                "未渲染局内操作区",
+              );
+              assert(
+                frame.contentDocument.querySelector(".battle-command-header"),
+                "未渲染顶部战况栏",
+              );
+              assert(
+                !frame.contentDocument.querySelector(".battle-move-pad, [data-move-direction]"),
+                "左下角屏幕方向键仍然存在",
               );
               const battleScene = frame.contentDocument.getElementById("battle-scene");
               const battleBoard = battleScene.querySelector(".battle-board-panel");
               const flowLayer = frame.contentDocument.getElementById("battle-flow-layer");
+              const routeInteractButton = frame.contentDocument.getElementById("battle-interact-btn");
+              const routeFireControls = frame.contentDocument.querySelector(".battle-fire-controls");
               assert(!frame.contentDocument.getElementById("battle-terminal-toggle"), "右侧远征终端仍然存在");
+              assert(battleScene.dataset.combatActive === "false", "整局可开火被误判成真实交战状态");
+              assert(frame.contentWindow.getComputedStyle(routeInteractButton).display !== "none", "大地图触屏交互入口被隐藏");
+              assert(frame.contentWindow.getComputedStyle(routeFireControls).display !== "none", "大地图自由开火入口被隐藏");
               assert(
                 battleBoard.getBoundingClientRect().width >= battleScene.getBoundingClientRect().width - 40,
                 "战斗画布没有占满远征场景",
@@ -1205,6 +1218,7 @@
 
               const interactButton = frame.contentDocument.getElementById("battle-interact-btn");
               assert(interactButton && !interactButton.disabled, "靠近地点后交互按钮不可用");
+              assert(frame.contentWindow.getComputedStyle(interactButton).display !== "none", "靠近地点后交互按钮仍不可见");
               interactButton.click();
               await waitFor(
                 () => game.combatSystem.getBattleState().phase === "search",
@@ -1247,7 +1261,7 @@
 
                 await waitFor(() => {
                   const state = game.combatSystem.getBattleState();
-                  return !state.activeSearch && state.backpackCount === index + 1;
+                  return !state.activeSearch && state.backpackCount >= 2 && state.backpackCount <= 3;
                 }, `第 ${index + 1} 个搜索容器结算`);
                 assert(
                   game.combatSystem.worldSystem.getContainer(container.id)?.state === "searched",
@@ -1257,6 +1271,7 @@
 
               const after = game.combatSystem.getBattleState();
               assert(after.depth === 1, `搜索地点完成后深度异常：${after.depth}`);
+              assert(after.exploredCount === 1 && after.hotspotCount === 8, "已探索计数没有按完整热点更新");
               assert(
                 frame.contentDocument.getElementById("battle-threat-display")?.textContent ===
                   `${game.battleSceneController.getThreatTierLabel(after)} · ${after.threat}`,
@@ -1296,9 +1311,10 @@
               assert(overlay.dataset.runActive === "true", "行动中退出确认缺少风险状态");
               assert(overlay.dataset.exitRisk === "abandoned", "安全行进阶段退出风险分类错误");
               assert(
-                doc.getElementById("expedition-exit-message")?.textContent.includes("安全止损")
-                  && doc.getElementById("expedition-exit-message")?.textContent.includes("30% 金币与 40% 经验"),
-                "安全行进阶段退出确认未说明准确止损规则",
+                doc.getElementById("expedition-exit-message")?.textContent.includes("主动放弃")
+                  && doc.getElementById("expedition-exit-message")?.textContent.includes("全部战斗收益")
+                  && doc.getElementById("expedition-exit-message")?.textContent.includes("仅回收安全袋物品"),
+                "安全行进阶段退出确认未说明准确损失规则",
               );
               assert(game.combatSystem.isPaused, "确认退出界面没有暂停战斗");
 

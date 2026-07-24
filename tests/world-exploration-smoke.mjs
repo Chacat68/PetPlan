@@ -323,9 +323,9 @@ test("POI 可追踪、进入发现范围并只允许近距离交互", () => {
   assert.equal(trackedState.name, "未知信号");
   assert.equal(trackedState.known, false, "追踪不能把未知地点提前标记为已知");
   assert.equal(
-    world.findNearbyLocation(world.spawnPoint.x, world.spawnPoint.y),
-    null,
-    "出生点不能隔空交互远处 POI",
+    world.findNearbyLocation(world.spawnPoint.x, world.spawnPoint.y)?.id,
+    "extraction-beacon",
+    "出生点只应就近发现开局可用的入口撤离，不能隔空交互远处 POI",
   );
 
   const nearby = world.updatePlayerPosition(location.x, location.y);
@@ -338,10 +338,18 @@ test("POI 可追踪、进入发现范围并只允许近距离交互", () => {
   assert.equal(world.getLocation(location.id).state, "engaged");
   assert.equal(
     world.getLocationByNodeId("route-search").state,
-    "missed",
-    "同深度另一分支应在地点交互后失效",
+    "available",
+    "进入一个热点不得让同深度的其他热点失效",
   );
-  assert.equal(world.engageLocation("route-combat").success, false, "POI 不得重复交互");
+  assert.equal(world.engageLocation("route-combat").success, false, "行动进行中不能重复触发");
+  const disengaged = world.disengageActiveLocation("route-combat");
+  assert.equal(disengaged.success, true);
+  assert.equal(world.getLocation(location.id).state, "available", "脱战地点必须重新进入近距交互集合");
+  assert.equal(world.activeLocationId, null);
+  assert.equal(world.engageLocation("route-combat").success, true, "脱战后可重返同一地点");
+  world.completeActiveLocation();
+  assert.equal(world.getLocation(location.id).state, "visited");
+  assert.equal(world.engageLocation("route-combat").revisited, true, "完成后的 POI 仍可回访");
 });
 
 test("迷雾只揭开走过的地图格，未发现地形不会提前暴露", () => {
@@ -552,7 +560,14 @@ test("从地图 POI 开战并完成战斗时，玩家世界坐标不会被传送
   assert.ok(combatNode, "首层路线应提供战斗 POI");
   const location = combat.worldSystem.getLocationByNodeId(combatNode.id);
   assert.ok(location);
-  assert.equal(combat.trackLocation(combatNode.id).success, true);
+  const trackedCombatNode = combat.trackLocation(combatNode.id);
+  assert.equal(trackedCombatNode.success, true);
+  assert.match(trackedCombatNode.message, /东|南|西|北/);
+  assert.doesNotMatch(trackedCombatNode.message, /\d+\s*(?:米|m)/i, "导航应使用方位与区域，不泄露精确距离");
+  assert.doesNotMatch(combat.getInteractionState().detail, /\d+\s*(?:米|m)/i);
+  playerSystem.player.x = 80;
+  playerSystem.player.y = 80;
+  combat.updateWorldAwareness();
   assert.equal(
     combat.interactWithNearbyLocation().success,
     false,
@@ -589,5 +604,5 @@ test("从地图 POI 开战并完成战斗时，玩家世界坐标不会被传送
     positionBeforeCombat,
     "完成遭遇后不得将玩家传回营地",
   );
-  assert.equal(combat.worldSystem.getLocation(location.id).state, "cleared");
+  assert.equal(combat.worldSystem.getLocation(location.id).state, "visited");
 });

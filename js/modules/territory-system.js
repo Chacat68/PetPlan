@@ -16,6 +16,8 @@ let instance = null;
 
 const TERRITORY_VERSION = 3;
 const PRODUCTION_EFFICIENCY = 0.5;
+// 工坊金币只保留为低强度离线补贴；其主要定位转为处理远征材料。
+const WORKSHOP_PRODUCTION_EFFICIENCY = 0.12;
 const ACTIVITY_COOLDOWN_MS = 5 * 60 * 1000;
 const MEANINGFUL_COLLECTION = { coins: 100, crystals: 10 };
 
@@ -64,12 +66,12 @@ export class TerritorySystem {
       workshop: {
         name: "工坊",
         icon: "🔨",
-        description: "制作远征补给并储备金币。",
+        description: "处理远征材料、制作行动物资，并少量储备金币。",
         baseCost: { coins: 450, crystals: 35 },
         costMultiplier: 1.5,
         maxLevel: 5,
         productionInterval: 60000,
-        effects: { type: "production", resource: "coins", value: 45 },
+        effects: { type: "production", resource: "coins", value: 45, crafting: true },
         activity: "supply",
       },
       barracks: {
@@ -712,6 +714,7 @@ export class TerritorySystem {
       worldWidth: this.getWorldWidth(),
       preparedBonuses: { ...this.preparedBonuses },
       production,
+      workshop: this.getWorkshopCapabilities(),
       legacyVeteranRank: this.legacyVeteranRank,
     };
   }
@@ -882,6 +885,23 @@ export class TerritorySystem {
     };
   }
 
+  getWorkshopCapabilities() {
+    const workshop = this.getBuildingByType("workshop");
+    const level = clampInt(workshop?.level, 0, this.buildingData.workshop.maxLevel);
+    const data = this.buildingData.workshop;
+    return {
+      unlocked: level > 0,
+      level,
+      role: "expedition-crafting",
+      queueSlots: level > 0 ? 1 + Math.floor((level - 1) / 2) : 0,
+      recipeTier: Math.min(3, level),
+      passiveCoinRatePerMinute: Number((
+        (data.effects?.value || 0) * level * WORKSHOP_PRODUCTION_EFFICIENCY
+      ).toFixed(2)),
+      productionEfficiency: WORKSHOP_PRODUCTION_EFFICIENCY,
+    };
+  }
+
   getProductionSnapshot(now = Date.now()) {
     const capMs = this.getRankConfig().storageHours * 60 * 60 * 1000;
     const totals = { coins: 0, crystals: 0 };
@@ -892,7 +912,10 @@ export class TerritorySystem {
       const elapsed = Math.max(0, now - (building.lastProduction || now));
       const cappedElapsed = Math.min(elapsed, capMs);
       const cycles = Math.floor(cappedElapsed / data.productionInterval);
-      const amount = Math.floor(data.effects.value * building.level * cycles * PRODUCTION_EFFICIENCY);
+      const efficiency = building.type === "workshop"
+        ? WORKSHOP_PRODUCTION_EFFICIENCY
+        : PRODUCTION_EFFICIENCY;
+      const amount = Math.floor(data.effects.value * building.level * cycles * efficiency);
       if (amount > 0) totals[data.effects.resource] += amount;
       buildings.push({
         type: building.type,
@@ -930,7 +953,10 @@ export class TerritorySystem {
       const data = this.buildingData[building.type];
       if (!data || data.effects?.type !== "production") continue;
       const cycles = Math.floor(duration / data.productionInterval);
-      gains[data.effects.resource] += Math.floor(data.effects.value * building.level * cycles * PRODUCTION_EFFICIENCY);
+      const efficiency = building.type === "workshop"
+        ? WORKSHOP_PRODUCTION_EFFICIENCY
+        : PRODUCTION_EFFICIENCY;
+      gains[data.effects.resource] += Math.floor(data.effects.value * building.level * cycles * efficiency);
     }
     return gains;
   }
@@ -1081,6 +1107,8 @@ export class TerritorySystem {
       crystalBonus: 0,
       supplyBonus: 0,
       petCooldownReduction: 0,
+      craftingQueueSlots: 0,
+      craftingRecipeTier: 0,
     };
     for (const building of this.buildings) {
       const data = this.buildingData[building.type];
@@ -1096,7 +1124,11 @@ export class TerritorySystem {
         bonuses.supplyBonus += Math.floor(building.level / 3);
       }
       if (building.type === "library") bonuses.expBonus += data.effects.value * building.level;
-      if (building.type === "workshop") bonuses.coinBonus += building.level * 3;
+      if (building.type === "workshop") {
+        bonuses.coinBonus += building.level * 3;
+        bonuses.craftingQueueSlots = 1 + Math.floor((building.level - 1) / 2);
+        bonuses.craftingRecipeTier = Math.min(3, building.level);
+      }
       if (building.type === "crystal_mine") bonuses.crystalBonus += building.level * 2;
     }
     bonuses.petCooldownReduction = Math.min(20, bonuses.petCooldownReduction);

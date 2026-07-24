@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=battle-context-ui-20260723b" />
+    <link rel="stylesheet" href="css/style.css?v=duckov-continuous-20260724a" />
   </head>
   <body>
     <div class="game-container">
@@ -13,16 +13,35 @@
         <!-- 宠物远征：单局 RPG 搜打撤 -->
         <div class="scene-container" id="battle-scene" style="display: none">
           <section class="battle-board-panel">
-            <div class="battle-scorebar">
-              <span class="battle-scorebar-brand">
-                <small>禁区行动</small>
-                <strong>PET EXPEDITION</strong>
-              </span>
-              <span class="score-dollar" id="battle-phase-badge">远征整备</span>
-            </div>
-
             <div class="battle-arena-surface">
-              <div class="battle-resource-strip">
+              <header class="battle-command-header" aria-label="远征状态与目标">
+                <div class="battle-scorebar">
+                  <span class="battle-scorebar-brand">
+                    <small>禁区行动</small>
+                    <strong>PET EXPEDITION</strong>
+                  </span>
+                  <span class="score-dollar" id="battle-phase-badge">远征整备</span>
+                </div>
+
+                <button type="button" class="battle-map-location" id="battle-target-cycle-btn">
+                  <span id="battle-location-display">自由探索</span>
+                  <small id="battle-target-cycle-hint">点击切换目标</small>
+                </button>
+
+                <div class="extraction-run-status" aria-live="polite">
+                  <span class="run-stat stat-depth">已探索 <b id="battle-depth-display">0 / 0</b></span>
+                  <span class="run-stat stat-survival">生命 <b id="battle-hp-display">--/--</b></span>
+                  <span class="run-stat stat-threat">威胁 <b id="battle-threat-display">警戒 · 0</b></span>
+                  <button type="button" class="run-stat stat-bag" id="battle-pack-toggle"
+                    aria-expanded="false" aria-controls="battle-pack-drawer">
+                    背包 <b id="battle-bag-display">0/8</b>
+                  </button>
+                  <span class="run-stat stat-guard">护卫 <b id="battle-guard-display">0/0</b></span>
+                  <span class="run-stat stat-enemies">敌人 <b id="battle-enemy-display">0</b></span>
+                </div>
+              </header>
+
+              <div class="battle-resource-strip" hidden>
                 <div class="battle-resource coins">
                   <span class="resource-label">金币</span>
                   <span class="resource-value" id="coins-display">1,000</span>
@@ -39,18 +58,6 @@
                   <span class="resource-label">战力</span>
                   <span class="resource-value" id="power-display">0</span>
                 </div>
-              </div>
-
-              <div class="extraction-run-status" aria-live="polite">
-              <span class="run-stat stat-depth">已清理 <b id="battle-depth-display">0 / 8</b></span>
-              <span class="run-stat stat-survival">生命 <b id="battle-hp-display">--/--</b></span>
-              <span class="run-stat stat-threat">威胁 <b id="battle-threat-display">警戒 · 0</b></span>
-              <button type="button" class="run-stat stat-bag" id="battle-pack-toggle"
-                aria-expanded="false" aria-controls="battle-pack-drawer">
-                背包 <b id="battle-bag-display">0/8</b>
-              </button>
-              <span class="run-stat stat-guard">护卫 <b id="battle-guard-display">0/0</b></span>
-              <span class="run-stat stat-enemies">敌人 <b id="battle-enemy-display">0</b></span>
               </div>
 
               <div class="battle-canvas-frame">
@@ -70,29 +77,21 @@
                   <progress id="battle-reload-progress" max="1" value="0"></progress>
                 </div>
               </section>
-              <button type="button" class="battle-map-location" id="battle-target-cycle-btn">
-                <span id="battle-location-display">自由探索</span>
-                <small id="battle-target-cycle-hint">点击切换目标</small>
-              </button>
-              <output class="battle-nearby-prompt" id="battle-nearby-prompt" aria-live="polite" hidden></output>
-              <div class="battle-skill-dock" id="battle-skill-dock" aria-label="队伍协同技"></div>
               <div class="battle-world-controls" id="battle-world-controls" hidden>
-                <div class="battle-move-pad" aria-label="角色移动方向">
-                  <button type="button" class="battle-move-btn move-up" data-move-direction="up" aria-label="向上移动" aria-pressed="false">▲</button>
-                  <button type="button" class="battle-move-btn move-left" data-move-direction="left" aria-label="向左移动" aria-pressed="false">◀</button>
-                  <span class="battle-move-center" aria-hidden="true">＋</span>
-                  <button type="button" class="battle-move-btn move-right" data-move-direction="right" aria-label="向右移动" aria-pressed="false">▶</button>
-                  <button type="button" class="battle-move-btn move-down" data-move-direction="down" aria-label="向下移动" aria-pressed="false">▼</button>
-                </div>
                 <button type="button" class="battle-interact-btn" id="battle-interact-btn" disabled>
                   <strong id="battle-interact-label">靠近地点后交互</strong>
                   <span id="battle-interact-detail">WASD / 方向键移动</span>
                 </button>
+                <div class="battle-skill-dock" id="battle-skill-dock" aria-label="队伍协同技"></div>
                 <button type="button" class="battle-supply-btn" id="battle-use-supply-btn" hidden>
                   <strong>补给</strong>
-                  <span id="battle-supply-heal-label">R · 恢复 32% 生命</span>
+                  <span id="battle-supply-heal-label">4 · 恢复 32% 生命</span>
                 </button>
                 <div class="battle-fire-controls" aria-label="武器操作">
+                  <button type="button" class="battle-reload-btn" id="battle-reload-btn" aria-label="手动换弹">
+                    <strong>换弹</strong>
+                    <span>R</span>
+                  </button>
                   <button type="button" class="battle-fire-btn" id="battle-fire-btn" aria-label="按住射击" aria-pressed="false">
                     <strong>射击</strong>
                     <span>按住 · 自动换弹</span>
@@ -121,7 +120,7 @@
               </section>
 
               <div class="battle-prep-summary" aria-label="本局摘要">
-                <div><span id="battle-summary-label-a">已清理</span><b id="battle-rooms-display">0 / 8</b></div>
+                <div><span id="battle-summary-label-a">已探索</span><b id="battle-rooms-display">0 / 0</b></div>
                 <div><span id="battle-summary-label-b">本局击杀</span><b id="battle-kills-display">0</b></div>
                 <div><span id="battle-summary-label-c">携带价值</span><b id="battle-reward-coins">0</b></div>
                 <div><span id="battle-summary-label-d">历史撤离</span><b id="battle-extractions-display">0</b></div>
@@ -140,6 +139,20 @@
                 <details class="battle-prep-details">
                   <summary>配装、仓库与委托</summary>
                   <div class="expedition-equipped-items" id="battle-equipped-items" aria-label="当前远征配装"></div>
+                  <section class="expedition-workbench-panel" aria-labelledby="battle-workbench-title">
+                    <div class="expedition-section-row">
+                      <strong id="battle-workbench-title">工坊制作</strong>
+                      <small>用带回物资准备下一局</small>
+                    </div>
+                    <div class="expedition-crafting-list" id="battle-crafting-list" aria-live="polite"></div>
+                  </section>
+                  <section class="expedition-facility-panel" aria-labelledby="battle-facility-title">
+                    <div class="expedition-section-row">
+                      <strong id="battle-facility-title">远征设施</strong>
+                      <small>扩充仓库、背包与安全袋</small>
+                    </div>
+                    <div class="expedition-facility-list" id="battle-facility-list" aria-live="polite"></div>
+                  </section>
                   <div class="expedition-stash-list" id="battle-stash-list" aria-live="polite"></div>
                   <div class="expedition-contract-list" id="battle-contract-list" aria-live="polite"></div>
                 </details>
@@ -153,7 +166,7 @@
                 <div class="expedition-risk-grid">
                   <span>下一警戒档 <b id="battle-threat-next">25（还差 25）</b></span>
                   <span>成功撤离 <b id="battle-success-preview">总价值 0</b></span>
-                  <span><span id="battle-failure-preview-label">安全止损</span> <b id="battle-failure-preview">保底价值 0</b></span>
+                  <span><span id="battle-failure-preview-label">主动退出</span> <b id="battle-failure-preview">仅回收安全袋</b></span>
                 </div>
               </section>
 
@@ -799,7 +812,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=battle-context-ui-20260723b";
+        var moduleSrc = "js/main.js?v=duckov-continuous-20260724a";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

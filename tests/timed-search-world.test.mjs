@@ -52,7 +52,7 @@ test("计时搜索完成前不产生掉落、威胁、伏击或资源消耗", ()
   assert.equal(completed.success, true);
   assert.equal(completed.completed, true);
   assert.equal(completed.nodeCompleted, true, "单个搜索点完成后应直接结算整个地点");
-  assert.equal(run.backpack.length, 1);
+  assert.ok(run.backpack.length >= 2 && run.backpack.length <= 3);
   assert.equal(run.threat, SEARCH_PROFILES.quick.threat);
   assert.equal(run.searchMetrics.timeSeconds, SEARCH_PROFILES.quick.durationSeconds);
   assert.equal(run.getState().phase, "route");

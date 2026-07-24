@@ -23,9 +23,10 @@ index.html
 | `controllers/` | 接收 DOM/Canvas 操作，调用系统能力并刷新所属场景或模态 |
 | `GameCore` | Canvas 帧循环、视口尺寸同步、远征整帧渲染入口、自动保存计时 |
 | `FateCoinSystem` | 命运资源、自动翻转、成长成本 |
-| `CombatSystem` | 远征战斗门面：规则/世界/镜头协调、玩家移动输入、POI 交互、世界坐标遭遇、远征生命、宠物技能、圈内撤离倒计时、Canvas 分层渲染与最终奖励发放 |
-| `ExpeditionRunSystem` | 单局远征规则：路线、节点、搜索、威胁、补给、背包、阶段流转与结算计算 |
-| `ExpeditionWorldSystem` | 单局大地图模型：`3000×1900` 世界、路线 POI、入口信标、障碍碰撞、探索网格、目标追踪与近距发现；不访问 DOM/Canvas |
+| `CombatSystem` | 远征战斗门面：规则/世界/镜头协调、持续敌人 AI 与视听感知、玩家移动/射击/换弹、世界弹药拾取、POI 交互、远征生命、宠物技能、圈内撤离倒计时、Canvas 分层渲染与最终奖励发放 |
+| `ExpeditionRunSystem` | 单局远征规则：8 个可回访热点、搜索候选、威胁、补给、手动背包取舍、安全袋、阶段流转与结算计算 |
+| `ExpeditionWorldSystem` | 单局大地图模型：`3000×1900` 世界、8 个热点 POI、入口/应急信标、障碍碰撞、探索网格、方向/距离区间导航与近距发现；不访问 DOM/Canvas |
+| `ExpeditionMetaSystem` | 远征局外仓库、物资用途、配装、工坊配方、容量升级、20% 装备保险、两段主线与支线刷新周期 |
 | `CameraSystem` | Canvas 视口、世界边界内平滑跟随，以及屏幕坐标与世界坐标互转 |
 | `SceneRouter` | 命运/战斗/领地显示状态、HUD 状态、`?scene=` URL |
 | `ModalFocusManager` | 模态初始焦点、Tab 限制、关闭后的焦点恢复 |
@@ -42,7 +43,7 @@ index.html
 | 控制器 | 责任 |
 | --- | --- |
 | `achievement-controller.js` | 里程碑模态、分类筛选、HUD 徽标和领取交互 |
-| `battle-scene-controller.js` | WASD/方向键/屏幕 D-pad、鼠标/触摸瞄准射击、`E` 情境交互、`Q` 队伍技能、`R` 补给、`M` 目标轮换、`B` 背包，以及整备/情境/结算三态刷新 |
+| `battle-scene-controller.js` | WASD/方向键、鼠标/触摸全阶段瞄准射击、`E` 情境交互、`Q` 队伍技能、`R` 换弹、`4` 补给、`M` 目标轮换、`B` 背包，以及整备/情境/结算三态刷新 |
 | `settings-controller.js` | 设置模态、显示设置、快捷存档/读档和存档状态 |
 | `player-modal-controller.js` | 玩家属性模态、属性升级和升级按钮状态 |
 | `pet-modal-controller.js` | 宠物编队、背包、图鉴以及解锁/上阵操作 |
@@ -74,7 +75,7 @@ Game 初始化
 ### 大地图远征数据流
 
 ```text
-键盘 / D-pad 输入
+键盘移动输入
   -> BattleSceneController 归一化方向
   -> CombatSystem.setMovementInput(x, y)
   -> PlayerSystem.updateBattleMovement(deltaTime)
@@ -85,7 +86,7 @@ Game 初始化
 顶部目标条 / M / E / 交互按钮
   -> BattleSceneController
   -> CombatSystem.trackLocation() / interactWithNearbyLocation()
-  -> ExpeditionWorldSystem（追踪、距离与 POI 状态）
+  -> ExpeditionWorldSystem（8 个热点、方向/距离区间与 POI 状态）
   -> 靠近 POI 后才调用 ExpeditionRunSystem.chooseNode()
 
 搜索情境条 / 安全屋情境条 / 撤离点 E 交互
@@ -101,7 +102,7 @@ GameCore 帧循环
   -> PlayerSystem.update(deltaTime) 处理玩家世界移动
   -> CombatSystem.update(deltaTime) 处理远征与遭遇
   -> PetSystem.update(deltaTime) 处理伙伴跟随与接敌
-  -> 世界发现、镜头、怪物、投射物、宠物技能冷却与圈内撤离倒计时
+  -> 世界发现、镜头、怪物巡逻/调查/战斗/搜索返程、投射物、弹药拾取、搜索中断、宠物技能冷却与圈内撤离倒计时
   -> 状态回调
   -> BattleSceneController.updateBattleDisplay(state)
 
@@ -114,13 +115,15 @@ GameCore.render()
   -> 迷雾 / 导航箭头 / 小地图 / 撤离条 / 阶段提示 / 横幅
 ```
 
-`ExpeditionRunSystem` 不访问 DOM、Canvas 或永久资源；它只计算 `briefing`、`route`、`search`、`camp`、`combat`、`extraction-ready`、`extracting`、`extracted`、`defeat` 的状态流。`route` 仍是规则阶段名，但在表现层代表可自由行进的大地图探索。`ExpeditionWorldSystem` 不复制规则，只把当前 `routeChoices` 映射为世界 POI，并维护地点、碰撞和发现状态；`CameraSystem` 只处理视口。
+`ExpeditionRunSystem` 不访问 DOM、Canvas 或永久资源；它只计算 `briefing`、`route`、`search`、`camp`、`combat`、`extraction-ready`、`extracting`、`extracted`、`defeat` 的状态流。`route` 仍是规则阶段名，但在表现层代表可自由行进的大地图探索；8 个热点在开局一次生成，节点完成状态与访问次数独立保存。`ExpeditionWorldSystem` 不复制规则，只把完整热点集映射为世界 POI，并维护地点、碰撞、发现状态与非精确导航；`CameraSystem` 只处理视口。
 
-`CombatSystem` 是三者的协调门面：顶部目标条或 `M` 只调用 `trackLocation()`，玩家进入 POI 近距范围后，`interactWithNearbyLocation()` 才调用规则层的 `chooseNode()`。战斗实体始终使用世界坐标，Canvas 点击经镜头转换后锁敌。撤离信标固定在入口，倒计时只有玩家位于信标圈内时才推进。最终奖励仍只在整局结束时发放一次。
+`CombatSystem` 是三者的协调门面：顶部目标条或 `M` 只调用 `trackLocation()`，玩家进入 POI 近距范围后，`interactWithNearbyLocation()` 才调用规则层的 `chooseNode()`。战斗实体始终使用世界坐标，Canvas 点击经镜头转换后锁敌；射击不再依赖 `combat` 阶段。环境敌人持续运行巡逻、调查、交战与搜索返程状态，视线和枪声写入各自感知记录，脱战后不会继续全图精确追踪。入口信标从开局可用，基础倒计时约 4 秒且只有玩家位于信标圈内时推进。最终奖励仍只在整局结束时发放一次。
 
-战斗表现层不再使用右侧管理栏。`briefing`、`extracted` 与 `defeat` 使用居中覆盖层；搜索和营地使用底部情境条；常规行动只有全宽 Canvas 与战斗 HUD。背包抽屉只在安全阶段允许打开，旧待选物品是唯一会强制打开它的兼容路径。
+战斗表现层不再使用右侧管理栏。`briefing`、`extracted` 与 `defeat` 使用居中覆盖层；搜索和营地使用底部情境条；常规行动只有全宽 Canvas 与战斗 HUD。背包抽屉在除搜索、待选取舍和撤离倒计时外的局内阶段可打开，但不暂停帧循环；满包待选项会强制打开取舍卡，且不得替换锁定物、任务物或安全袋物品。
 
-远征世界坐标、探索网格、地点状态、路线、生命、补给、警戒、背包、怪物、弹药和撤离倒计时都会进入活动远征快照。切换场景只暂停 `CombatSystem` 并清空移动输入；页面隐藏时自动保存，刷新后按 Meta → Combat 的顺序恢复当前远征。活动远征期间禁止快速读档，避免复制战利品。
+`ExpeditionMetaSystem` 是局外闭环的唯一事实来源。远征结算物先进入局外仓库，再按五种材料用途参与工坊和设施升级；配装、保险和容量在 `CombatSystem.startRun()` 时快照注入单局。两段主线由已完成历史决定下一条，不重复生成；支线委托板仅在远征结算推进周期。
+
+远征世界坐标、探索网格、8 个热点完成/回访状态、生命、补给、警戒、背包取舍队列、锁定与安全袋、怪物感知状态、弹药拾取、搜索和撤离倒计时都会进入活动远征快照。切换场景只暂停 `CombatSystem` 并清空移动输入；页面隐藏时自动保存，刷新后按 Meta → Combat 的顺序恢复当前远征。活动远征期间禁止快速读档，避免复制战利品。
 
 Canvas 视口和世界尺寸必须保持独立。`GameCore` 在 resize 或固定分辨率切换时调用 `CombatSystem.setViewportSize()`，该方法只更新视口与镜头，不缩放世界或夹取玩家到屏幕范围。
 
@@ -157,6 +160,7 @@ PetPlan/
 │   ├── combat-system.js
 │   ├── expedition-run-system.js
 │   ├── expedition-world-system.js
+│   ├── expedition-meta-system.js
 │   ├── camera-system.js
 │   ├── targeting-system.js
 │   ├── territory-system.js
@@ -184,8 +188,8 @@ PetPlan/
 4. 控制器依赖由 `Game` 显式注入，并为长驻监听和计时器提供可重复的绑定/销毁生命周期。
 5. 所有入口都指向主游戏，避免为控制器或子系统创建第二份资源、存档或进度状态。
 6. 影响成长节奏的常量只写入 `progression-config.js`，不得在 UI 推荐或领地模块中复制魔法数值。
-7. 单局远征规则优先放入 `ExpeditionRunSystem`；世界坐标、POI、障碍和发现状态放入 `ExpeditionWorldSystem`；视口转换放入 `CameraSystem`；DOM/输入操作留在 `BattleSceneController`；实体协调与 Canvas 表现留在 `CombatSystem`。
+7. 单局远征规则优先放入 `ExpeditionRunSystem`；局外仓库、配装、材料用途、工坊、容量、保险和合约放入 `ExpeditionMetaSystem`；世界坐标、POI、障碍和发现状态放入 `ExpeditionWorldSystem`；视口转换放入 `CameraSystem`；DOM/输入操作留在 `BattleSceneController`；实体协调与 Canvas 表现留在 `CombatSystem`。
 8. 世界坐标不得从 Canvas 尺寸派生。resize 只调用 `setViewportSize()`；点击或触摸命中世界实体前必须先执行 `screenToWorld()`。
 9. `route` 作为规则兼容阶段继续保留。UI 追踪地点不得直接调用 `chooseNode()`，实际进入节点必须通过近距交互门槛。
 10. 随机路线、搜索和掉落必须支持注入随机函数，测试使用固定随机源，避免概率用例不稳定。
-11. 自动化测试应区分规则门面、世界逻辑和真实交互：Node 测试可直接调用兼容接口验证状态机，并独立覆盖镜头坐标、边界、障碍滑动、斜向等速、POI 近距、撤离圈和非零镜头锁敌；浏览器测试至少覆盖视口/世界解耦、键盘移动、追踪不触发节点和近距交互。Canvas 像素、小地图/迷雾视觉、整图连续返程和真实 D-pad 手势仍需手工验收。
+11. 自动化测试应区分规则门面、世界逻辑和真实交互：Node 测试可直接调用兼容接口验证状态机，并独立覆盖镜头坐标、边界、障碍滑动、斜向等速、POI 近距、撤离圈和非零镜头锁敌；浏览器测试至少覆盖视口/世界解耦、键盘移动、追踪不触发节点和近距交互。Canvas 像素、小地图/迷雾视觉和整图连续返程仍需手工验收。

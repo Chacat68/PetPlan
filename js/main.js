@@ -9,20 +9,20 @@
 import { getGameCoreInstance } from "./modules/game-core.js?v=world-exploration-20260712b";
 import { getResourceSystemInstance } from "./modules/resource-system.js";
 import { getPlayerSystemInstance } from "./modules/player-system.js?v=expedition-simplification-20260723b";
-import { getCombatSystemInstance } from "./modules/combat-system.js?v=expedition-simplification-20260723b";
+import { getCombatSystemInstance } from "./modules/combat-system.js?v=duckov-continuous-20260724a";
 import { getSaveSystemInstance } from "./modules/save-system.js?v=review-fixes-20260722a";
 import { getUISystemInstance } from "./modules/ui-system.js";
 import { getPetSystemInstance } from "./modules/pet-system.js?v=expedition-simplification-20260723b";
-import { getTerritorySystemInstance } from "./modules/territory-system.js?v=territory-expedition-entry-20260723a";
+import { getTerritorySystemInstance } from "./modules/territory-system.js?v=duckov-continuous-20260724a";
 import { getFateCoinSystemInstance } from "./modules/fate-coin-system.js?v=fate-stability-20260711b";
 import { ModalFocusManager } from "./modules/modal-focus-manager.js?v=controllers-phase-two-20260711b";
 import { getProgressionSystemInstance } from "./modules/progression-system.js?v=growth-onboarding-20260720a";
 import { getAchievementSystemInstance } from "./modules/achievement-system.js?v=achievement-ui-v3-20260714a";
-import { ExpeditionMetaSystem } from "./modules/expedition-meta-system.js?v=expedition-simplification-20260723b";
+import { ExpeditionMetaSystem } from "./modules/expedition-meta-system.js?v=duckov-continuous-20260724a";
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
 import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-ui-v3-20260714a";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=battle-context-ui-20260723b";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=duckov-continuous-20260724a";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=fate-toast-top-right-20260715a";
 import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-command-ui-v1-20260714a";
 import { OrientationController } from "./controllers/orientation-controller.js?v=experience-ux-20260722a";
@@ -486,8 +486,7 @@ export class Game {
     if (!overlay || !dialog) return false;
 
     const runActive = Boolean(this.combatSystem?.runSystem?.active);
-    const runPhase = this.combatSystem?.runSystem?.phase || "briefing";
-    const dangerousExit = runPhase === "combat" || runPhase === "extracting";
+    const dangerousExit = Boolean(this.combatSystem?.isCombatActive?.());
     const atRiskLoadout = this.battleSceneController?.getAtRiskLoadoutItems?.(
       this.expeditionMetaSystem?.getState?.(),
     ) || [];
@@ -498,7 +497,7 @@ export class Game {
       message.textContent = runActive
         ? dangerousExit
           ? `当前正处于战斗或撤离守点。确认退出会按战败结算：未保护战利品将丢失，仅保留安全袋、10% 金币与 20% 经验，不获得水晶。${loadoutRiskSuffix}`
-          : `确认退出会按安全止损结算本局：未保护战利品将丢失，仅保留安全袋、30% 金币与 40% 经验，不获得水晶。${loadoutRiskSuffix}`
+          : `确认退出会主动放弃本局：未保护战利品和全部战斗收益都会丢失，仅回收安全袋物品。${loadoutRiskSuffix}`
         : "当前尚未开始行动，确认后将结束整备并返回领地。";
     }
     overlay.dataset.runActive = runActive ? "true" : "false";

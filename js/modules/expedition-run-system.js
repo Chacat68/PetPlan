@@ -8,28 +8,28 @@ export const SEARCH_PROFILES = Object.freeze({
   quick: {
     id: "quick",
     name: "快速搜索",
-    lootMin: 1,
-    lootMax: 1,
+    lootMin: 2,
+    lootMax: 3,
     quality: 0,
     threat: 2,
     ambushChance: 0.04,
     supplyChance: 0.08,
     durationSeconds: 2,
     supplyCost: 0,
-    role: "快速拿取 1 件战利品，警戒增长较低",
+    role: "快速查看 2–3 件候选战利品，警戒增长较低",
   },
   thorough: {
     id: "thorough",
     name: "彻底搜刮",
-    lootMin: 2,
-    lootMax: 3,
+    lootMin: 3,
+    lootMax: 4,
     quality: 2,
     threat: 10,
     ambushChance: 0.2,
     supplyChance: 0.24,
     durationSeconds: 5,
     supplyCost: 0,
-    role: "花费更多时间换取 2–3 件战利品，并显著提高警戒",
+    role: "花费更多时间查看 3–4 件候选战利品，并显著提高警戒",
   },
 });
 
@@ -72,11 +72,26 @@ const NODE_LIBRARY = Object.freeze({
   },
 });
 
-const LOOT_TABLE = Object.freeze({
+export const LOOT_TABLE = Object.freeze({
   common: [
     { name: "破旧钱袋", icon: "¤", type: "currency", use: "撤离后兑换金币", coins: 28, crystals: 0, exp: 4, score: 28 },
     { name: "能量零件", icon: "⚙", type: "component", use: "用于远征装备维护", coins: 20, crystals: 0, exp: 10, score: 30 },
     { name: "旧城区情报", icon: "▧", type: "intel", use: "用于解锁合约线索", coins: 16, crystals: 0, exp: 16, score: 32, contractFragments: 1 },
+    {
+      name: "通用弹药盒", icon: "▤", type: "ammo", category: "ammo",
+      ammoValue: 18, use: "撤离后补充远征武器弹药储备",
+      coins: 22, crystals: 0, exp: 6, score: 30,
+    },
+    {
+      name: "简易绷带", icon: "✚", type: "medical", category: "medical",
+      healValue: 18, use: "基础医疗物资，可用于制作战地补给",
+      coins: 18, crystals: 0, exp: 8, score: 28,
+    },
+    {
+      name: "旧铜线束", icon: "≋", type: "valuable", category: "valuable",
+      use: "没有战斗用途，但商人愿意按重量收购",
+      coins: 38, crystals: 0, exp: 2, score: 40,
+    },
   ],
   uncommon: [
     {
@@ -85,9 +100,25 @@ const LOOT_TABLE = Object.freeze({
       coins: 42, crystals: 0, exp: 18, score: 60,
     },
     {
+      name: "战地医疗包", icon: "✚", type: "medical", category: "medical",
+      healValue: 45, use: "高效医疗物资，可制作强化补给",
+      coins: 48, crystals: 0, exp: 16, score: 64,
+    },
+    {
       name: "完整机械芯", icon: "◉", type: "component", equipSlot: "armor",
       defenseBonus: 4, use: "装入护甲槽，本局获得 4 点防御",
       coins: 55, crystals: 0, exp: 12, score: 67,
+    },
+    {
+      name: "轻型护甲片", icon: "⬒", type: "equipment", category: "equipment", equipSlot: "armor",
+      defenseBonus: 3, use: "轻型防护装备，适合低负重远征",
+      coins: 58, crystals: 0, exp: 12, score: 70,
+    },
+    {
+      name: "封锁区通行证", icon: "▣", type: "quest-material", category: "quest",
+      questItem: true, marked: true, marker: "任务", tags: ["quest"],
+      use: "任务物品：用于确认封锁区补给路线",
+      coins: 24, crystals: 0, exp: 28, score: 76, contractFragments: 1,
     },
   ],
   rare: [
@@ -97,6 +128,17 @@ const LOOT_TABLE = Object.freeze({
       coins: 72, crystals: 2, exp: 22, score: 118,
     },
     { name: "异兽铭牌", icon: "✧", type: "trophy", use: "用于精英讨伐合约", coins: 96, crystals: 1, exp: 28, score: 132, contractFragments: 2 },
+    {
+      name: "复合防护背心", icon: "⬢", type: "equipment", category: "equipment", equipSlot: "armor",
+      defenseBonus: 7, use: "稀有防护装备，可显著降低远征承伤",
+      coins: 105, crystals: 1, exp: 24, score: 142,
+    },
+    {
+      name: "密封研究样本", icon: "◈", type: "quest-material", category: "quest",
+      questItem: true, locked: true, marked: true, marker: "锁定任务物", tags: ["quest", "locked"],
+      use: "锁定任务物：撤离后交给研究站，不参与自动整理",
+      coins: 70, crystals: 1, exp: 42, score: 150, contractFragments: 3,
+    },
   ],
   epic: [
     {
@@ -112,16 +154,16 @@ export const EXTRACTION_RULES = Object.freeze({
     id: "entry",
     locationId: "extraction-beacon",
     name: "入口撤离信标",
-    description: "沿原路返回入口，守点压力较低且不消耗补给。",
-    minDepth: 3,
+    description: "开局即可沿原路返回入口，守点时间较短且不消耗补给。",
+    minDepth: 0,
     supplyCost: 0,
-    threatCost: 3,
-    minDurationMs: 5000,
-    baseDurationMs: 6000,
-    threatDurationStepMs: 1000,
+    threatCost: 2,
+    minDurationMs: 3500,
+    baseDurationMs: 4000,
+    threatDurationStepMs: 500,
     overpressureDurationStepMs: 0,
-    baseEnemyCount: 2,
-    threatPerEnemy: 20,
+    baseEnemyCount: 1,
+    threatPerEnemy: 30,
     overpressurePerEnemy: 999,
     reinforcementBaseMs: 5500,
     reinforcementDepthStepMs: 100,
@@ -182,7 +224,7 @@ export class ExpeditionRunSystem {
     random = Math.random,
     seed = null,
     maxDepth = 8,
-    minExtractionDepth = 3,
+    minExtractionDepth = 0,
     backpackCapacity = 8,
   } = {}) {
     const requestedSeed = seed !== null && seed !== undefined && Number.isFinite(Number(seed))
@@ -201,7 +243,7 @@ export class ExpeditionRunSystem {
       return this.randomSource();
     };
     this.maxDepth = Math.max(4, Math.floor(maxDepth));
-    this.minExtractionDepth = Math.max(1, Math.floor(minExtractionDepth));
+    this.minExtractionDepth = Math.max(0, Math.floor(minExtractionDepth));
     this.defaultBackpackCapacity = Math.max(3, Math.floor(backpackCapacity));
     this.runSerial = 0;
     this.nodeSerial = 0;
@@ -228,6 +270,8 @@ export class ExpeditionRunSystem {
     this.nextEncounterAdvantage = null;
     this.worldEventState = { lootQualityBonus: 0, lootCountBonus: 0, returnPressureReduction: 0 };
     this.routeChoices = [];
+    this.hotspots = [];
+    this.completedNodeIds = [];
     this.currentNode = null;
     this.history = [];
     this.pendingRewards = this.createEmptyRewards();
@@ -246,7 +290,13 @@ export class ExpeditionRunSystem {
     return { coins: 0, crystals: 0, exp: 0, kills: 0 };
   }
 
-  startRun({ supplies = 2, backpackCapacity = this.defaultBackpackCapacity, seed = null } = {}) {
+  startRun({
+    supplies = 2,
+    backpackCapacity = this.defaultBackpackCapacity,
+    insuredSlotCount = 1,
+    safetyBagCapacity = insuredSlotCount,
+    seed = null,
+  } = {}) {
     if (this.active) {
       return { success: false, message: "当前远征尚未结束" };
     }
@@ -258,41 +308,54 @@ export class ExpeditionRunSystem {
     this.phase = "route";
     this.supplies = Math.max(0, Math.floor(supplies));
     this.backpackCapacity = Math.max(3, Math.floor(backpackCapacity));
-    this.routeChoices = this.buildRouteChoices();
-    this.lastAction = "远征开始。选择第一处区域，或在积累战利品后寻找撤离时机。";
+    this.insuredSlotCount = Math.max(
+      0,
+      Math.floor(Number(safetyBagCapacity ?? insuredSlotCount) || 0),
+    );
+    this.hotspots = this.buildMapHotspots();
+    this.routeChoices = this.hotspots.map((node) => ({ ...node }));
+    this.lastAction = "远征开始。整张地图的热点已生成；选择目标不会让其他区域失效，入口撤离随时可用。";
     return { success: true, message: "远征已开始", state: this.getState() };
   }
 
-  buildRouteChoices() {
-    const nextDepth = this.depth + 1;
-    if (nextDepth >= this.maxDepth) {
-      return [this.createNode("boss", nextDepth, 0)];
-    }
-
-    const primaryType = this.depth === 0
-      ? "search"
-      : this.pickWeighted([
-          ["search", 28],
-          ["combat", 32],
-          ["cache", 16],
-          ["elite", Math.min(18, 5 + this.depth * 2)],
-          ["camp", 12],
-        ]);
-    let secondaryType = this.pickWeighted([
-      ["combat", 35],
-      ["search", 22],
-      ["cache", 18],
-      ["elite", Math.min(22, 6 + this.depth * 2)],
-      ["camp", 13],
-    ]);
-    if (secondaryType === primaryType) {
-      secondaryType = primaryType === "combat" ? "search" : "combat";
-    }
-
-    return [
-      this.createNode(primaryType, nextDepth, 0),
-      this.createNode(secondaryType, nextDepth, 1),
+  buildMapHotspots() {
+    const maxDanger = Math.max(4, this.maxDepth);
+    const blueprints = [
+      ["search", 1, 0, "西侧补给带"],
+      ["combat", Math.min(2, maxDanger), 0, "北部巡逻线"],
+      ["camp", Math.min(2, maxDanger), 1, "南部安全屋"],
+      ["cache", Math.min(3, maxDanger), 0, "旧城仓储区"],
+      ["combat", Math.min(4, maxDanger), 1, "中部封锁线"],
+      ["elite", Math.min(5, maxDanger), 0, "东部高危区"],
+      ["search", Math.min(6, maxDanger), 1, "深区物资带"],
+      ["boss", maxDanger, 0, "核心守卫区"],
     ];
+    return blueprints.map(([type, depth, branch, region], mapIndex) => {
+      const node = this.createNode(type, depth, branch);
+      const isCoreVault = type === "cache" && region === "旧城仓储区";
+      return {
+        ...node,
+        ...(isCoreVault
+          ? {
+              id: "core-vault",
+              contractLocationId: "core-vault",
+              keyRoom: true,
+            }
+          : {}),
+        region,
+        mapIndex,
+        completed: false,
+        revisitable: true,
+        visitCount: 0,
+      };
+    });
+  }
+
+  buildRouteChoices() {
+    if (this.routeChoices.length > 0) {
+      return this.routeChoices.map((node) => ({ ...node }));
+    }
+    return this.buildMapHotspots();
   }
 
   createNode(type, depth, branch) {
@@ -315,8 +378,24 @@ export class ExpeditionRunSystem {
     const node = this.routeChoices.find((item) => item.id === nodeId);
     if (!node) return { success: false, message: "路线已失效，请重新选择" };
 
+    if (node.completed || this.completedNodeIds.includes(node.id)) {
+      this.lastAction = `返回${node.name}。这里已经结算过，但地点与通路仍可回访。`;
+      return {
+        success: true,
+        revisited: true,
+        message: this.lastAction,
+        node: { ...node, completed: true, revisitable: true },
+        encounter: null,
+      };
+    }
+
     this.currentNode = { ...node };
-    this.routeChoices = [];
+    this.routeChoices = this.routeChoices.map((item) => (
+      item.id === node.id
+        ? { ...item, engaged: true, visitCount: Math.max(0, Number(item.visitCount) || 0) + 1 }
+        : item
+    ));
+    this.hotspots = this.routeChoices.map((item) => ({ ...item }));
     if (node.type === "search" || node.type === "cache") this.phase = "search";
     else if (node.type === "camp") this.phase = "camp";
     else this.phase = "combat";
@@ -328,6 +407,22 @@ export class ExpeditionRunSystem {
       node: { ...this.currentNode },
       encounter: this.phase === "combat" ? this.getEncounterSpec(node.type) : null,
     };
+  }
+
+  cancelNodeEntry(nodeId = this.currentNode?.id, reason = "地点进入失败") {
+    if (!this.active || !this.currentNode || String(this.currentNode.id) !== String(nodeId)) {
+      return { success: false, message: "当前没有可取消的地点进入状态" };
+    }
+    this.routeChoices = this.routeChoices.map((item) => (
+      String(item.id) === String(nodeId)
+        ? { ...item, engaged: false }
+        : item
+    ));
+    this.hotspots = this.routeChoices.map((item) => ({ ...item }));
+    this.currentNode = null;
+    this.phase = "route";
+    this.lastAction = String(reason || "地点进入失败，已返回大地图探索。").trim();
+    return { success: true, message: this.lastAction };
   }
 
   normalizeSearchBonuses(searchBonuses = {}) {
@@ -486,9 +581,16 @@ export class ExpeditionRunSystem {
 
     const appliedBonuses = this.normalizeSearchBonuses(search.searchBonuses);
     const cacheBonus = this.currentNode.type === "cache" ? 1 : 0;
+    const dangerousPoint = cacheBonus > 0 || this.currentNode.type === "elite";
+    const pointLootMin = dangerousPoint ? 3 : 2;
+    const pointLootMax = dangerousPoint ? 4 : 3;
+    const profileBiasedMin = Math.min(
+      pointLootMax,
+      Math.max(pointLootMin, Number(profile.lootMin) || pointLootMin),
+    );
     const lootCount = Math.min(
-      profile.lootMax + appliedBonuses.lootCountBonus,
-      this.randomInt(profile.lootMin, profile.lootMax) + appliedBonuses.lootCountBonus,
+      pointLootMax,
+      this.randomInt(profileBiasedMin, pointLootMax) + appliedBonuses.lootCountBonus,
     );
     this.supplies -= profile.supplyCost;
     this.searchMetrics.timeSeconds += profile.durationSeconds;
@@ -666,16 +768,31 @@ export class ExpeditionRunSystem {
 
   completeCurrentNode(summary = {}) {
     if (!this.currentNode) return;
-    this.depth = Math.min(this.maxDepth, this.depth + 1);
-    this.history.push({ ...this.currentNode, ...summary });
+    const completedNode = { ...this.currentNode };
+    this.depth = Math.min(
+      this.maxDepth,
+      Math.max(this.depth, Math.max(1, Number(completedNode.depth) || 1)),
+    );
+    if (!this.completedNodeIds.includes(completedNode.id)) {
+      this.completedNodeIds.push(completedNode.id);
+    }
+    this.routeChoices = this.routeChoices.map((node) => (
+      node.id === completedNode.id
+        ? {
+            ...node,
+            completed: true,
+            engaged: false,
+            revisitable: true,
+            completedResult: summary.result || "completed",
+          }
+        : node
+    ));
+    this.hotspots = this.routeChoices.map((node) => ({ ...node }));
+    this.history.push({ ...completedNode, ...summary, completed: true, revisitable: true });
     this.currentNode = null;
-    if (this.depth >= this.maxDepth) {
-      this.phase = "extraction-ready";
-      this.routeChoices = [];
-      this.lastAction = "核心区域已清理。撤离信标已锁定，准备守住最后一段时间。";
-    } else {
-      this.phase = "route";
-      this.routeChoices = this.buildRouteChoices();
+    this.phase = "route";
+    if (this.completedNodeIds.length >= this.routeChoices.length) {
+      this.lastAction = `${this.lastAction} 地图热点已全部调查；你仍可回访区域，或选择任一可用撤离点离开。`;
     }
   }
 
@@ -691,7 +808,7 @@ export class ExpeditionRunSystem {
     if (!extractionType) return null;
     const baseRule = EXTRACTION_RULES[extractionType];
     const minDepth = extractionType === "entry"
-      ? this.minExtractionDepth
+      ? 0
       : Math.max(baseRule.minDepth, this.minExtractionDepth + 2);
     return { ...baseRule, minDepth };
   }
@@ -775,7 +892,7 @@ export class ExpeditionRunSystem {
         - returnRelief * 120,
     );
     const enemyCount = Math.max(
-      3,
+      extractionType === "entry" ? 1 : 3,
       rule.baseEnemyCount
         + this.depth
         + Math.floor(this.threat / rule.threatPerEnemy)
@@ -818,8 +935,8 @@ export class ExpeditionRunSystem {
     const abandoned = !successful && ["abandoned", "retreated", "manual-abandon"].includes(reason);
     const protectedLoot = successful ? [] : this.getProtectedLoot();
     const protectedRewards = this.getBackpackRewards(protectedLoot);
-    // 主动止损应优于被击败，避免玩家为了更高保底故意送死。
-    const pendingRate = abandoned ? { coins: 0.3, exp: 0.4 } : { coins: 0.1, exp: 0.2 };
+    // 主动放弃不等于成功撤离：战斗现金与经验全部作废，只回收显式放入保险格的物品。
+    const pendingRate = abandoned ? { coins: 0, exp: 0 } : { coins: 0.1, exp: 0.2 };
     const extractedContractFragments = successful
       ? this.backpack.reduce((sum, item) => sum + (item.contractFragments || 0), 0)
       : protectedLoot.reduce((sum, item) => sum + (item.contractFragments || 0), 0);
@@ -916,38 +1033,67 @@ export class ExpeditionRunSystem {
       + (Number(item.deepMaterial) || 0) * 120;
   }
 
+  createLootChoice(item, source = "legacy") {
+    this.lootChoiceSerial += 1;
+    return {
+      id: `loot-choice-${this.runSerial}-${this.lootChoiceSerial}`,
+      incoming: item,
+      source,
+      marked: Boolean(item?.marked || item?.questItem || item?.locked),
+      marker: item?.marker || (item?.locked ? "锁定" : item?.questItem ? "任务" : null),
+      replaceOptions: this.backpack.map((existing) => ({ ...existing })),
+      actions: {
+        canKeep: this.backpack.length < this.backpackCapacity,
+        canReplace: this.backpack.some((existing) => !existing.insured && !existing.locked),
+        canLeave: true,
+      },
+    };
+  }
+
+  refreshLootChoice(choice) {
+    if (!choice) return null;
+    return {
+      ...choice,
+      marked: Boolean(choice.incoming?.marked || choice.incoming?.questItem || choice.incoming?.locked),
+      marker: choice.incoming?.marker
+        || (choice.incoming?.locked ? "锁定" : choice.incoming?.questItem ? "任务" : choice.marker || null),
+      replaceOptions: this.backpack.map((existing) => ({ ...existing })),
+      actions: {
+        canKeep: this.backpack.length < this.backpackCapacity,
+        canReplace: this.backpack.some((existing) => !existing.insured && !existing.locked),
+        canLeave: true,
+      },
+    };
+  }
+
+  advanceLootChoice() {
+    const next = this.lootOverflowQueue.shift() || null;
+    this.pendingLootChoice = this.refreshLootChoice(next);
+    return this.pendingLootChoice;
+  }
+
   addLoot(item, { requireDecision = false, source = "legacy" } = {}) {
     if (this.backpack.length < this.backpackCapacity) {
       this.backpack.push(item);
       return { kept: true, discarded: null };
     }
 
-    // 新掉落不再排队打断流程：只比较未保护物品，并自动保留价值更高的一件。
-    const replaceable = this.backpack
-      .map((existing, index) => ({ existing, index }))
-      .filter(({ existing }) => !existing.insured);
-    if (replaceable.length === 0) {
-      return {
-        kept: false,
-        discarded: item,
-        ...(requireDecision ? { autoDiscarded: true, source } : {}),
-      };
+    // 背包满时绝不按 score 自动替换或丢弃。所有来源都进入显式取舍队列，
+    // requireDecision 仅作为旧调用方的兼容参数保留。
+    const choice = this.createLootChoice(item, source);
+    if (!this.pendingLootChoice) {
+      this.pendingLootChoice = choice;
+    } else {
+      this.lootOverflowQueue.push(choice);
     }
-    const { existing: lowest, index: lowestIndex } = replaceable.reduce((lowestEntry, entry) => (
-      this.getLootValue(entry.existing) < this.getLootValue(lowestEntry.existing) ? entry : lowestEntry
-    ));
-    if (this.getLootValue(item) <= this.getLootValue(lowest)) {
-      return {
-        kept: false,
-        discarded: item,
-        ...(requireDecision ? { autoDiscarded: true, source } : {}),
-      };
-    }
-    this.backpack.splice(lowestIndex, 1, item);
     return {
-      kept: true,
-      discarded: lowest,
-      ...(requireDecision ? { autoReplaced: true, source } : {}),
+      kept: false,
+      discarded: null,
+      pending: true,
+      queued: this.pendingLootChoice.id !== choice.id,
+      requireDecision: Boolean(requireDecision),
+      source,
+      choice: JSON.parse(JSON.stringify(choice)),
     };
   }
 
@@ -956,16 +1102,21 @@ export class ExpeditionRunSystem {
     const options = typeof actionOrOptions === "string"
       ? { action: actionOrOptions, replaceItemId }
       : (actionOrOptions || {});
-    const action = options.action || "discard";
+    const action = options.action || "leave";
     const incoming = this.pendingLootChoice.incoming;
+    if (!incoming) return { success: false, message: "待处理的战利品数据无效" };
     let discarded = null;
     let kept = false;
 
-    if (action === "replace" || action === "swap" || action === "keep") {
+    if (action === "keep" && this.backpack.length < this.backpackCapacity) {
+      this.backpack.push(incoming);
+      kept = true;
+    } else if (action === "replace" || action === "swap" || action === "keep") {
       const requestedId = options.replaceItemId || options.itemId;
       const index = this.backpack.findIndex(item => item.id === requestedId);
       if (index < 0) return { success: false, message: "请选择背包中要替换的物品" };
       if (this.backpack[index].insured) return { success: false, message: "保险格物品需先解除保护才能替换" };
+      if (this.backpack[index].locked) return { success: false, message: "已锁定物品需先解除标记才能替换" };
       discarded = this.backpack[index];
       this.backpack.splice(index, 1, incoming);
       kept = true;
@@ -977,14 +1128,15 @@ export class ExpeditionRunSystem {
 
     const resolvedChoice = this.pendingLootChoice;
     this.pendingLootChoice = null;
-    this.lootOverflowQueue = [];
+    this.advanceLootChoice();
     return {
       success: true,
       kept,
       discarded,
       resolvedChoiceId: resolvedChoice.id,
       pendingLootChoice: this.pendingLootChoice ? { ...this.pendingLootChoice } : null,
-      message: kept ? `已收纳 ${incoming.name}` : `已放弃 ${incoming.name}`,
+      remainingChoices: this.lootOverflowQueue.length + (this.pendingLootChoice ? 1 : 0),
+      message: kept ? `已收纳 ${incoming.name}` : `已留下 ${incoming.name}`,
     };
   }
 
@@ -1006,24 +1158,91 @@ export class ExpeditionRunSystem {
     return { success: true, item: { ...item } };
   }
 
+  setLootMark(itemId, {
+    marked = true,
+    locked = undefined,
+    marker = null,
+  } = {}) {
+    const item = this.backpack.find((entry) => entry.id === itemId);
+    if (!item) return { success: false, message: "未找到该战利品" };
+    item.marked = Boolean(marked);
+    if (locked !== undefined) item.locked = Boolean(locked);
+    item.marker = item.marked
+      ? String(marker || item.marker || (item.locked ? "锁定" : item.questItem ? "任务" : "标记"))
+      : null;
+    if (!item.marked && locked === undefined) item.locked = false;
+    if (this.pendingLootChoice) this.pendingLootChoice = this.refreshLootChoice(this.pendingLootChoice);
+    this.lootOverflowQueue = this.lootOverflowQueue.map((choice) => this.refreshLootChoice(choice));
+    return { success: true, item: { ...item } };
+  }
+
+  setLootLocked(itemId, locked = true) {
+    return this.setLootMark(itemId, {
+      marked: Boolean(locked),
+      locked: Boolean(locked),
+      marker: locked ? "锁定" : null,
+    });
+  }
+
   getProtectedLoot() {
     return this.backpack.filter(item => item.insured).slice(0, this.insuredSlotCount);
   }
 
   generateLoot(qualityBonus = 0) {
-    const threatQuality = Math.floor(this.threat / 25) * 0.018;
-    const roll = this.random() + Math.max(0, qualityBonus) * 0.055 + this.depth * 0.016 + threatQuality;
-    const rarity = roll >= 1.02
+    const dangerDepth = Math.max(
+      1,
+      Math.floor(Number(this.currentNode?.depth) || Number(this.depth) + 1 || 1),
+    );
+    const normalizedQuality = Math.max(0, Math.min(6, Number(qualityBonus) || 0));
+    const nodeType = String(this.currentNode?.type || "");
+    const isBossRoom = nodeType === "boss";
+    const isKeyRoom = Boolean(
+      this.currentNode?.keyRoom
+      || this.currentNode?.requiresKey
+      || this.currentNode?.lockedRoom,
+    );
+    const isHighAlertDeepZone = dangerDepth >= 5 && this.threat >= 60;
+
+    // 浅层的品质加成主要提高“优秀”掉落，不再越过门槛刷出大量史诗。
+    // 史诗只来自首领、钥匙房，或警戒已经拉高的深区。
+    const epicChance = isBossRoom
+      ? Math.min(0.24, 0.14 + normalizedQuality * 0.015)
+      : isKeyRoom
+        ? Math.min(0.1, 0.025 + normalizedQuality * 0.0125)
+        : isHighAlertDeepZone
+          ? Math.min(0.12, 0.02 + normalizedQuality * 0.01 + (this.threat - 60) * 0.0005)
+          : 0;
+    const shallowRareChance = Math.min(
+      0.055,
+      0.035 + Math.max(0, dangerDepth - 1) * 0.005 + normalizedQuality * 0.005,
+    );
+    const deepRareChance = Math.min(
+      0.2,
+      0.05
+        + Math.max(0, dangerDepth - 2) * 0.012
+        + normalizedQuality * 0.008
+        + Math.min(0.04, this.threat * 0.0005),
+    );
+    const rareChance = dangerDepth <= 2 ? shallowRareChance : deepRareChance;
+    const uncommonFloor = Math.max(
+      0.27,
+      0.45 - normalizedQuality * 0.025 - Math.max(0, dangerDepth - 1) * 0.008,
+    );
+    const roll = this.random();
+    const rarity = epicChance > 0 && roll >= 1 - epicChance
       ? "epic"
-      : roll >= 0.78
+      : roll >= 1 - epicChance - rareChance
         ? "rare"
-        : roll >= 0.45
+        : roll >= uncommonFloor
           ? "uncommon"
           : "common";
     const pool = LOOT_TABLE[rarity];
     const template = pool[this.randomInt(0, pool.length - 1)];
     this.lootSerial += 1;
-    const valueMultiplier = 1 + Math.max(0, this.depth - 1) * 0.045 + (this.getThreatRewardMultiplier() - 1) * 0.5;
+    const valueMultiplier = 1
+      + Math.max(0, dangerDepth - 1) * 0.045
+      + normalizedQuality * 0.025
+      + (this.getThreatRewardMultiplier() - 1) * 0.5;
     return {
       id: `loot-${this.runSerial}-${this.lootSerial}`,
       rarity,
@@ -1032,7 +1251,7 @@ export class ExpeditionRunSystem {
       coins: Math.floor((template.coins || 0) * valueMultiplier),
       exp: Math.floor((template.exp || 0) * valueMultiplier),
       score: Math.floor((template.score || 0) * valueMultiplier),
-      depthFound: this.depth + 1,
+      depthFound: dangerDepth,
       threatFound: this.threat,
     };
   }
@@ -1181,7 +1400,7 @@ export class ExpeditionRunSystem {
 
   getRunSaveData() {
     return {
-      version: 4,
+      version: 5,
       config: {
         maxDepth: this.maxDepth,
         minExtractionDepth: this.minExtractionDepth,
@@ -1211,6 +1430,8 @@ export class ExpeditionRunSystem {
         nextEncounterAdvantage: this.nextEncounterAdvantage,
         worldEventState: this.worldEventState,
         routeChoices: this.routeChoices,
+        hotspots: this.hotspots,
+        completedNodeIds: this.completedNodeIds,
         currentNode: this.currentNode,
         history: this.history,
         pendingRewards: this.pendingRewards,
@@ -1243,7 +1464,7 @@ export class ExpeditionRunSystem {
     for (const key of scalarKeys) if (Object.hasOwn(saved, key)) this[key] = saved[key];
     const objectKeys = [
       "backpack", "pendingLootChoice", "lootOverflowQueue", "nextEncounterAdvantage",
-      "worldEventState", "routeChoices", "currentNode", "history", "pendingRewards",
+      "worldEventState", "routeChoices", "hotspots", "completedNodeIds", "currentNode", "history", "pendingRewards",
       "activeSearch", "searchedContainerIds", "searchMetrics", "lastSettlement",
     ];
     for (const key of objectKeys) if (Object.hasOwn(saved, key)) this[key] = clone(saved[key]);
@@ -1252,15 +1473,29 @@ export class ExpeditionRunSystem {
     this.overpressure = 0;
     this.exposure = 0;
     this.insuredSlotCount = Math.max(0, Math.floor(this.insuredSlotCount ?? 1));
-    this.lootOverflowQueue = Array.isArray(this.lootOverflowQueue) ? this.lootOverflowQueue : [];
-    // 旧存档保留第一个手动待选物品，其余历史队列立即按新规则自动整理，避免恢复后连续弹窗。
-    for (const queuedChoice of this.lootOverflowQueue) {
-      if (queuedChoice?.incoming) this.addLoot(queuedChoice.incoming, { source: queuedChoice.source || "legacy-queue" });
+    this.completedNodeIds = Array.isArray(this.completedNodeIds)
+      ? [...new Set(this.completedNodeIds.map(String))]
+      : [];
+    if (this.completedNodeIds.length === 0 && Array.isArray(this.history)) {
+      this.completedNodeIds = [...new Set(this.history.map((node) => String(node?.id || "")).filter(Boolean))];
     }
-    this.lootOverflowQueue = [];
-    if (this.pendingLootChoice) {
-      this.pendingLootChoice.replaceOptions = this.backpack.map(existing => ({ ...existing }));
-    }
+    this.routeChoices = Array.isArray(this.routeChoices)
+      ? this.routeChoices.map((node) => ({
+          ...node,
+          completed: Boolean(node.completed || this.completedNodeIds.includes(String(node.id))),
+          revisitable: node.revisitable !== false,
+        }))
+      : [];
+    this.hotspots = Array.isArray(this.hotspots) && this.hotspots.length > 0
+      ? this.hotspots.map((node) => ({ ...node }))
+      : this.routeChoices.map((node) => ({ ...node }));
+    this.lootOverflowQueue = (Array.isArray(this.lootOverflowQueue) ? this.lootOverflowQueue : [])
+      .filter((choice) => choice?.incoming)
+      .map((choice) => this.refreshLootChoice(choice));
+    this.pendingLootChoice = this.pendingLootChoice?.incoming
+      ? this.refreshLootChoice(this.pendingLootChoice)
+      : null;
+    if (!this.pendingLootChoice && this.lootOverflowQueue.length > 0) this.advanceLootChoice();
     this.worldEventState ||= { lootQualityBonus: 0, lootCountBonus: 0, returnPressureReduction: 0 };
     this.searchSerial = Math.max(0, Math.floor(this.searchSerial || 0));
     this.searchedContainerIds = Array.isArray(this.searchedContainerIds)
@@ -1308,12 +1543,15 @@ export class ExpeditionRunSystem {
       backpackCapacity: this.backpackCapacity,
       backpack: this.backpack.map((item) => ({ ...item })),
       insuredSlotCount: this.insuredSlotCount,
+      safetyBagCapacity: this.insuredSlotCount,
       pendingLootChoice: this.pendingLootChoice ? JSON.parse(JSON.stringify(this.pendingLootChoice)) : null,
       lootOverflowQueue: this.lootOverflowQueue.map(choice => JSON.parse(JSON.stringify(choice))),
       decisionState: this.pendingLootChoice ? "loot-overflow" : null,
       hasPendingLootDecision: Boolean(this.pendingLootChoice),
       backpackRewards,
       routeChoices: this.routeChoices.map((node) => ({ ...node })),
+      hotspots: this.hotspots.map((node) => ({ ...node })),
+      completedNodeIds: [...this.completedNodeIds],
       currentNode: this.currentNode ? { ...this.currentNode } : null,
       pendingRewards: { ...this.pendingRewards },
       stealthCharges: this.stealthCharges,

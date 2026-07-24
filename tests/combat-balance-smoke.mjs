@@ -345,7 +345,7 @@ test("撤离守点中主动退出同样按战败结算", () => {
   assert.equal(result.settlement.abandonmentPenalty, false);
 });
 
-test("安全阶段主动放弃仍按保底撤退结算", () => {
+test("安全阶段主动放弃不会带出战局金币与经验", () => {
   const { combat, resources } = createHarness();
   assert.equal(combat.startRun().success, true);
   combat.runSystem.phase = "route";
@@ -355,6 +355,23 @@ test("安全阶段主动放弃仍按保底撤退结算", () => {
   assert.equal(result.success, true);
   assert.equal(result.settlement.reason, "abandoned");
   assert.equal(result.settlement.abandonmentPenalty, true);
-  assert.equal(result.settlement.coins, 30);
-  assert.deepEqual(resources, { coins: 30, crystals: 0 });
+  assert.equal(result.settlement.coins, 0);
+  assert.equal(result.settlement.exp, 0);
+  assert.deepEqual(resources, { coins: 0, crystals: 0 });
+});
+
+test("多宠自动攻击共享节流并压低伤害", () => {
+  const { combat } = createHarness();
+  assert.equal(combat.startRun().success, true);
+  combat.runSystem.phase = "combat";
+  const monster = combat.spawnMonster({ templateId: "skeleton", depth: 1 }, 1);
+  monster.hp = 100;
+  monster.maxHp = 100;
+
+  assert.equal(combat.applyPetDamage(monster, 20), true);
+  assert.equal(monster.hp, 93, "宠物自动伤害应使用压低后的倍率");
+  assert.equal(combat.applyPetDamage(monster, 20), false, "同一共享窗口内其余宠物不能重复倾泻自动伤害");
+  combat.petAutoDamageTimer = 0;
+  assert.equal(combat.applyPetDamage(monster, 20), true);
+  assert.equal(monster.hp, 86);
 });

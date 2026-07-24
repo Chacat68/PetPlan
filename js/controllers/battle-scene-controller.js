@@ -24,13 +24,13 @@ export class BattleSceneController {
     this.getCurrentScene = getCurrentScene;
     this.lastSettlementKey = null;
     this.pressedMovementKeys = new Set();
-    this.pointerDirections = new Map();
     this.firingPointerIds = new Set();
     this.lastWorldRevision = -1;
     this.lastActionPhase = null;
     this.backpackOpen = false;
     this.backpackForced = false;
     this.isSceneActive = false;
+    this.lastMetaRenderSignature = null;
     this.abortController = null;
   }
 
@@ -44,6 +44,7 @@ export class BattleSceneController {
       ["battle-rest-btn", () => this.combatSystem.restAtCamp()],
       ["battle-leave-camp-btn", () => this.combatSystem.leaveCamp()],
       ["battle-use-supply-btn", () => this.combatSystem.useSupply()],
+      ["battle-reload-btn", () => this.combatSystem.reloadWeapon?.()],
       ["battle-interact-btn", () => this.combatSystem.interactWithNearbyLocation()],
       ["battle-cancel-search-btn", () => this.combatSystem.cancelSearch?.("manual")],
       ["battle-restart-btn", () => this.combatSystem.resetBattle()],
@@ -81,9 +82,19 @@ export class BattleSceneController {
     }, { signal });
 
     document.getElementById("battle-loot-list")?.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-loot-insure]");
-      if (!button) return;
-      const result = this.combatSystem.toggleLootInsurance?.(button.dataset.lootInsure);
+      const insureButton = event.target.closest("[data-loot-insure]");
+      const markButton = event.target.closest("[data-loot-mark]");
+      if (!insureButton && !markButton) return;
+      let result = null;
+      if (insureButton) {
+        result = this.combatSystem.toggleLootInsurance?.(insureButton.dataset.lootInsure);
+      } else {
+        const itemId = markButton.dataset.lootMark;
+        const loot = this.combatSystem.runSystem?.backpack?.find((entry) => entry.id === itemId);
+        const wasLocked = Boolean(loot?.locked);
+        result = this.combatSystem.runSystem?.setLootLocked?.(itemId, !wasLocked);
+        if (result?.success) result.message = wasLocked ? "已取消物资锁定" : "已锁定物资，不会被替换";
+      }
       this.handleBattleActionResult(result);
     }, { signal });
 
@@ -122,12 +133,38 @@ export class BattleSceneController {
     }, { signal });
 
     document.getElementById("battle-equipped-items")?.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-loadout-unequip]");
+      const unequipButton = event.target.closest("[data-loadout-unequip]");
+      const insureButton = event.target.closest("[data-loadout-insure]");
+      const cancelInsuranceButton = event.target.closest("[data-loadout-uninsure]");
+      if (unequipButton) {
+        this.handleMetaActionResult(this.expeditionMetaSystem?.unequipItem?.(
+          unequipButton.dataset.loadoutUnequip,
+          { consumableIndex: Number(unequipButton.dataset.consumableIndex) || 0 }
+        ));
+      } else if (insureButton) {
+        this.handleMetaActionResult(this.purchaseLoadoutInsurance(insureButton.dataset.loadoutInsure));
+      } else if (cancelInsuranceButton) {
+        this.handleMetaActionResult(
+          this.expeditionMetaSystem?.cancelLoadoutInsurance?.(cancelInsuranceButton.dataset.loadoutUninsure)
+        );
+      }
+    }, { signal });
+
+    document.getElementById("battle-crafting-list")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-craft-recipe]");
       if (!button) return;
-      this.handleMetaActionResult(this.expeditionMetaSystem?.unequipItem?.(
-        button.dataset.loadoutUnequip,
-        { consumableIndex: Number(button.dataset.consumableIndex) || 0 }
-      ));
+      this.handleMetaActionResult(
+        this.expeditionMetaSystem?.craftRecipe?.(button.dataset.craftRecipe)
+      );
+    }, { signal });
+
+    document.getElementById("battle-facility-list")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-facility-upgrade]");
+      if (!button) return;
+      this.handleMetaActionResult(
+        this.expeditionMetaSystem?.upgradeFacility?.(button.dataset.facilityUpgrade)
+          || this.expeditionMetaSystem?.upgradeCapacity?.(button.dataset.facilityUpgrade)
+      );
     }, { signal });
 
     document.getElementById("battle-contract-list")?.addEventListener("click", (event) => {
@@ -268,6 +305,11 @@ export class BattleSceneController {
       }
       if (event.code === "KeyR" && !event.repeat) {
         event.preventDefault();
+        this.handleBattleActionResult(this.combatSystem.reloadWeapon?.());
+        return;
+      }
+      if (event.code === "Digit4" && !event.repeat) {
+        event.preventDefault();
         this.handleBattleActionResult(this.combatSystem.useSupply?.());
         return;
       }
@@ -298,38 +340,15 @@ export class BattleSceneController {
       if (document.hidden) this.clearControlInput();
     }, { signal });
 
-    document.querySelectorAll("[data-move-direction]").forEach((button) => {
-      const release = (event) => {
-        this.pointerDirections.delete(event.pointerId);
-        this.applyMovementInput();
-      };
-      button.addEventListener("pointerdown", (event) => {
-        if (this.getCurrentScene() !== "dungeon") return;
-        event.preventDefault();
-        try { button.setPointerCapture(event.pointerId); } catch (_) {}
-        this.pointerDirections.set(event.pointerId, button.dataset.moveDirection);
-        button.setAttribute("aria-pressed", "true");
-        this.applyMovementInput();
-      }, { signal });
-      ["pointerup", "pointercancel", "lostpointercapture"].forEach((type) => {
-        button.addEventListener(type, (event) => {
-          release(event);
-          if (![...this.pointerDirections.values()].includes(button.dataset.moveDirection)) {
-            button.setAttribute("aria-pressed", "false");
-          }
-        }, { signal });
-      });
-    });
   }
 
   applyMovementInput() {
     let x = 0;
     let y = 0;
-    const directions = new Set(this.pointerDirections.values());
-    if (this.pressedMovementKeys.has("KeyA") || this.pressedMovementKeys.has("ArrowLeft") || directions.has("left")) x -= 1;
-    if (this.pressedMovementKeys.has("KeyD") || this.pressedMovementKeys.has("ArrowRight") || directions.has("right")) x += 1;
-    if (this.pressedMovementKeys.has("KeyW") || this.pressedMovementKeys.has("ArrowUp") || directions.has("up")) y -= 1;
-    if (this.pressedMovementKeys.has("KeyS") || this.pressedMovementKeys.has("ArrowDown") || directions.has("down")) y += 1;
+    if (this.pressedMovementKeys.has("KeyA") || this.pressedMovementKeys.has("ArrowLeft")) x -= 1;
+    if (this.pressedMovementKeys.has("KeyD") || this.pressedMovementKeys.has("ArrowRight")) x += 1;
+    if (this.pressedMovementKeys.has("KeyW") || this.pressedMovementKeys.has("ArrowUp")) y -= 1;
+    if (this.pressedMovementKeys.has("KeyS") || this.pressedMovementKeys.has("ArrowDown")) y += 1;
     this.combatSystem.setMovementInput(x, y);
   }
 
@@ -340,10 +359,6 @@ export class BattleSceneController {
 
   clearMovementInput() {
     this.pressedMovementKeys.clear();
-    this.pointerDirections.clear();
-    document.querySelectorAll("[data-move-direction]").forEach((button) => {
-      button.setAttribute("aria-pressed", "false");
-    });
     this.combatSystem?.clearMovementInput?.();
   }
 
@@ -386,9 +401,9 @@ export class BattleSceneController {
   canOpenBackpack(state = {}) {
     return Boolean(
       state.actions?.canAbandon
-      && ["route", "camp", "extraction-ready"].includes(state.phase)
       && !(state.activeSearch || state.searchState)
-      && !state.isWaveActive
+      && !state.pendingLootChoice
+      && state.phase !== "extracting"
     );
   }
 
@@ -423,7 +438,7 @@ export class BattleSceneController {
       toggle.setAttribute("aria-expanded", nextOpen ? "true" : "false");
       toggle.title = allowed
         ? (nextOpen ? "关闭远征背包（B）" : "打开远征背包（B）")
-        : "战斗、搜索和撤离守点期间不能整理背包";
+        : "搜索和撤离过程中不能整理背包";
     }
     const close = document.getElementById("battle-pack-close");
     if (close) {
@@ -547,7 +562,7 @@ export class BattleSceneController {
     const prepCopy = {
       briefing: ["远征准备", "选一把武器即可出发；高级配装与委托按需展开。"],
       extracted: ["撤离成功", "战利品已经入库，本局收益已完成结算。"],
-      defeat: ["行动结束", "安全袋和保底收益已经结算，可以调整整备后再次出发。"],
+      defeat: ["行动结束", "安全袋与战败结果已经结算，可以调整整备后再次出发。"],
     }[phase] || ["远征进行中", "保持移动，靠近地点后按 E 交互。"];
     if (prepTitle) prepTitle.textContent = prepCopy[0];
     if (prepSubtitle) prepSubtitle.textContent = prepCopy[1];
@@ -601,11 +616,18 @@ export class BattleSceneController {
     const detail = document.getElementById("battle-settlement-detail");
 
     if (!settlement) {
-      setText("battle-summary-label-a", "已清理");
+      setText("battle-summary-label-a", "已探索");
       setText("battle-summary-label-b", "本局击杀");
       setText("battle-summary-label-c", "携带价值");
       setText("battle-summary-label-d", "历史撤离");
-      setText("battle-rooms-display", `${state.depth || 0} / ${state.maxDepth || 0}`);
+      const routeLocations = (state.world?.locations || []).filter((location) => location.kind === "route");
+      const exploredLocations = routeLocations.filter((location) => (
+        location.completed || ["visited", "cleared", "completed", "searched"].includes(location.state)
+      )).length;
+      setText(
+        "battle-rooms-display",
+        `${state.exploredCount ?? exploredLocations} / ${state.hotspotCount ?? routeLocations.length ?? state.maxDepth ?? 0}`
+      );
       setText("battle-kills-display", state.rewards?.kills || 0);
       setText("battle-reward-coins", formatNumber(state.pendingValue || 0));
       setText("battle-extractions-display", state.meta?.extractions || 0);
@@ -681,7 +703,14 @@ export class BattleSceneController {
     );
 
     setText("battle-phase-badge", state.phaseLabel);
-    setText("battle-depth-display", `${state.depth} / ${state.maxDepth}`);
+    const routeLocations = (state.world?.locations || []).filter((location) => location.kind === "route");
+    const exploredLocations = routeLocations.filter((location) => (
+      location.completed || ["visited", "cleared", "completed", "searched"].includes(location.state)
+    )).length;
+    setText(
+      "battle-depth-display",
+      `${state.exploredCount ?? exploredLocations} / ${state.hotspotCount ?? routeLocations.length ?? state.maxDepth ?? 0}`
+    );
     const guardHp = Math.ceil(state.petGuard?.hp || 0);
     const guardMaxHp = Math.ceil(state.petGuard?.maxHp || 0);
     setText(
@@ -690,7 +719,10 @@ export class BattleSceneController {
         ? `${state.hp}/${state.maxHp} · 护${guardHp}`
         : `${state.hp}/${state.maxHp}`
     );
-    setText("battle-threat-display", `${this.getThreatTierLabel(state)} · ${state.threat}`);
+    setText(
+      "battle-threat-display",
+      `${this.getThreatTierLabel(state)} · ${state.threat}${state.raidThreatActive ? " · 暴露" : ""}`
+    );
     setText("battle-bag-display", `${state.backpackCount}/${state.backpackCapacity}`);
     setText(
       "battle-guard-display",
@@ -702,22 +734,23 @@ export class BattleSceneController {
     setText(
       "battle-location-display",
       state.world.navigationTarget
-        ? `${this.getNavigationLabel(state.world.navigationTarget)} · ${state.world.navigationTarget.distance}m`
+        ? `${this.getNavigationLabel(state.world.navigationTarget)} · ${this.getNavigationHint(state.world.navigationTarget)}`
         : "自由探索"
     );
     setText("battle-interact-label", state.interaction.label);
     setText("battle-interact-detail", state.interaction.detail);
-    setText(
-      "battle-nearby-prompt",
-      state.interaction.location ? `${state.interaction.label} · E 交互` : ""
-    );
 
     const battleScene = document.getElementById("battle-scene");
     if (battleScene) {
+      const combatEngaged = Boolean(
+        state.phase === "combat"
+        || state.phase === "extracting"
+        || state.raidThreatActive
+      );
       battleScene.dataset.phase = state.phase;
       battleScene.dataset.moving = state.world.player.moving ? "true" : "false";
       battleScene.dataset.raidActive = state.actions.canAbandon ? "true" : "false";
-      battleScene.dataset.combatActive = state.isWaveActive || state.phase === "extracting" ? "true" : "false";
+      battleScene.dataset.combatActive = combatEngaged ? "true" : "false";
     }
     const flowLayer = document.getElementById("battle-flow-layer");
     if (flowLayer) {
@@ -757,7 +790,6 @@ export class BattleSceneController {
     setHidden("battle-start-expedition-btn", state.phase !== "briefing");
     setHidden("battle-world-controls", !state.actions.canAbandon);
     setHidden("battle-weapon-hud", !state.actions.canAbandon);
-    setHidden("battle-nearby-prompt", !state.interaction.location);
 
     const startButton = document.getElementById("battle-start-expedition-btn");
     if (startButton) {
@@ -771,11 +803,16 @@ export class BattleSceneController {
     const interactButton = document.getElementById("battle-interact-btn");
     if (interactButton) interactButton.disabled = !state.actions.canInteract;
     const fireButton = document.getElementById("battle-fire-btn");
-    const combatControlsActive = Boolean(state.isWaveActive || state.phase === "extracting");
+    const combatControlsActive = Boolean(state.actions.canFire ?? state.actions.canAbandon);
     if (fireButton) fireButton.disabled = !combatControlsActive;
-    document.querySelectorAll("[data-move-direction]").forEach((button) => {
-      button.disabled = !state.actions.canMove;
-    });
+    const reloadButton = document.getElementById("battle-reload-btn");
+    if (reloadButton) {
+      const activeWeapon = state.weapon?.active;
+      reloadButton.disabled = !combatControlsActive
+        || Boolean(activeWeapon?.reloading)
+        || Number(activeWeapon?.reserve || 0) <= 0
+        || Number(activeWeapon?.magazine || 0) >= Number(activeWeapon?.magazineSize || activeWeapon?.capacity || Infinity);
+    }
     setText("battle-command-tip", this.getTip(state));
     this.syncActionContext(state);
     this.handleSettlement(state);
@@ -785,6 +822,27 @@ export class BattleSceneController {
     if (!location) return "自由探索";
     if (location.kind === "route" && !(location.known || location.discovered)) return "未知信号";
     return location.name || "地图目标";
+  }
+
+  getNavigationHint(location = null) {
+    if (!location) return "自由探索";
+    if (location.guidance || location.navigationHint) {
+      return String(location.guidance || location.navigationHint);
+    }
+    if (location.directionLabel || location.distanceBandLabel) {
+      return [location.directionLabel, location.distanceBandLabel].filter(Boolean).join(" · ");
+    }
+    const distance = Math.max(0, Number(location.distance) || 0);
+    const distanceBand = distance <= 120
+      ? "就在附近"
+      : distance <= 360
+        ? "中距离"
+        : distance <= 720
+          ? "远处"
+          : "深区";
+    return location.directionLabel
+      ? `${location.directionLabel} · ${distanceBand}`
+      : distanceBand;
   }
 
   getThreatTierLabel(state = {}) {
@@ -836,7 +894,7 @@ export class BattleSceneController {
           title="${this.escapeHTML(`${roles[weapon.id] || "战斗武器"} · 射程 ${weapon.range || 0}`)}"
           ${!raidActive && weapon.available !== false && state.actions?.canStart ? "" : "disabled"}>
           <span>${this.escapeHTML(weapon.name)}</span>
-          <small>${raidActive ? "本局锁定 · 自动换弹" : roles[weapon.id] || "战斗武器"}</small>
+          <small>${raidActive ? "本局锁定 · R 换弹" : roles[weapon.id] || "战斗武器"}</small>
         </button>
       `).join("");
     }
@@ -861,6 +919,28 @@ export class BattleSceneController {
     if (bar) bar.value = progress;
   }
 
+  purchaseLoadoutInsurance(instanceId) {
+    const quote = this.expeditionMetaSystem?.quoteLoadoutInsurance?.(instanceId);
+    if (!quote?.success) return quote || { success: false, message: "装备保险暂不可用" };
+    if (quote.alreadyInsured) {
+      return { success: true, duplicate: true, message: `${quote.item?.name || "该装备"}已投保` };
+    }
+    if (Number(quote.voucherCount || 0) > 0) {
+      return this.expeditionMetaSystem.insureLoadoutItem?.(instanceId, { useVoucher: true });
+    }
+    const premium = Math.max(0, Number(quote.premium) || 0);
+    if (!this.resourceSystem?.hasEnoughCoins?.(premium)) {
+      return { success: false, message: `装备保险需要 ${premium} 金币或 1 张保险券` };
+    }
+    const result = this.expeditionMetaSystem.insureLoadoutItem?.(instanceId, {
+      useVoucher: false,
+      useBalance: false,
+      paidCoins: premium,
+    });
+    if (result?.success && premium > 0) this.resourceSystem.spendCoins?.(premium);
+    return result;
+  }
+
   renderMetaState(metaState = null, state = {}) {
     if (!metaState) return;
     const setText = (id, value) => {
@@ -883,10 +963,40 @@ export class BattleSceneController {
     const consumables = (loadout.consumables || []).filter(Boolean).length;
     const canManage = Boolean(state.actions?.canStart && !metaState.activeRaid);
     const currentWeaponName = state.weapon?.active?.name || loadout.mainWeapon?.name || "制式武器";
+    const selectedInsuranceIds = new Set([
+      ...(metaState.insurance?.selected || []).map((entry) => String(entry.instanceId)),
+      ...(metaState.insurance?.activeRaidInsuredIds || []).map(String),
+    ]);
+    const metaRenderSignature = JSON.stringify({
+      raidActive,
+      canManage,
+      currentWeaponName,
+      warehouseUsed: metaState.warehouseUsed,
+      warehouseCapacity: metaState.warehouseCapacity,
+      warehouse: metaState.warehouse,
+      deliveryInbox: metaState.deliveryInbox,
+      loadout,
+      activeRaid: metaState.activeRaid,
+      insurance: metaState.insurance,
+      crafting: metaState.crafting,
+      facilityUpgrades: metaState.facilityUpgrades,
+      contracts: metaState.contracts,
+    });
+    if (metaRenderSignature === this.lastMetaRenderSignature) return;
+    this.lastMetaRenderSignature = metaRenderSignature;
+    const renderInsuranceControl = (item) => {
+      if (!item || item.permanent || item.bound || item.keepOnFailure) return "";
+      const insured = selectedInsuranceIds.has(String(item.instanceId));
+      if (insured) {
+        return `<button type="button" data-loadout-uninsure="${this.escapeHTML(item.instanceId)}" ${canManage ? "" : "disabled"}>已投保</button>`;
+      }
+      const premium = Math.max(1, Math.ceil(Math.max(0, Number(item.sellPrice) || 0) * 0.2));
+      return `<button type="button" data-loadout-insure="${this.escapeHTML(item.instanceId)}" ${canManage ? "" : "disabled"}>保险 ${premium}</button>`;
+    };
     setText(
       "battle-loadout-summary",
       raidActive
-        ? `本局武器已锁定为 ${currentWeaponName}，空弹会自动换弹${atRiskSummary}。`
+        ? `本局武器已锁定为 ${currentWeaponName}；R 手动换弹，空弹时仍会自动换弹${atRiskSummary}。`
         : `${loadout.mainWeapon?.name || "制式训练武器组"} · ${loadout.armor?.name || "无护甲"} · ${loadout.petLinker?.name || "无宠物链接器"} · 消耗品 ${consumables}/4。确认后锁定配装；基础武器不会遗失。`
     );
 
@@ -895,9 +1005,9 @@ export class BattleSceneController {
       const activeWeapon = state.weapon?.active
         || state.weapon?.weapons?.find(weapon => weapon.id === loadout.mainWeapon?.combatWeaponId);
       const cards = [
-        `<div class="expedition-equipped-item permanent"><span>${raidActive ? "本局锁定武器" : "出发武器"}</span><b>${this.escapeHTML(activeWeapon?.name || loadout.mainWeapon?.name || "制式武器")}</b></div>`,
-        `<div class="expedition-equipped-item"><span>护甲</span><b>${this.escapeHTML(loadout.armor?.name || "空")}</b>${loadout.armor ? `<button type="button" data-loadout-unequip="armor" ${canManage ? "" : "disabled"}>卸下</button>` : ""}</div>`,
-        `<div class="expedition-equipped-item"><span>宠物链接</span><b>${this.escapeHTML(loadout.petLinker?.name || "空")}</b>${loadout.petLinker ? `<button type="button" data-loadout-unequip="petLinker" ${canManage ? "" : "disabled"}>卸下</button>` : ""}</div>`,
+        `<div class="expedition-equipped-item permanent"><span>${raidActive ? "本局锁定武器" : "出发武器"}</span><b>${this.escapeHTML(activeWeapon?.name || loadout.mainWeapon?.name || "制式武器")}</b>${renderInsuranceControl(loadout.mainWeapon)}</div>`,
+        `<div class="expedition-equipped-item"><span>护甲</span><b>${this.escapeHTML(loadout.armor?.name || "空")}</b>${renderInsuranceControl(loadout.armor)}${loadout.armor ? `<button type="button" data-loadout-unequip="armor" ${canManage ? "" : "disabled"}>卸下</button>` : ""}</div>`,
+        `<div class="expedition-equipped-item"><span>宠物链接</span><b>${this.escapeHTML(loadout.petLinker?.name || "空")}</b>${renderInsuranceControl(loadout.petLinker)}${loadout.petLinker ? `<button type="button" data-loadout-unequip="petLinker" ${canManage ? "" : "disabled"}>卸下</button>` : ""}</div>`,
         ...(loadout.consumables || []).map((item, index) => `
           <div class="expedition-equipped-item compact"><span>补给 ${index + 1}</span><b>${this.escapeHTML(item?.name || "空")}${item ? ` ×${Math.max(1, Number(item.quantity) || 1)}` : ""}</b>
             ${item ? `<button type="button" data-loadout-unequip="consumable" data-consumable-index="${index}" ${canManage ? "" : "disabled"}>卸下</button>` : ""}
@@ -907,6 +1017,33 @@ export class BattleSceneController {
       equippedItems.innerHTML = cards.join("");
     }
 
+    const formatRequirements = (requirements = []) => requirements
+      .map((requirement) => `${requirement.label} ${requirement.current}/${requirement.required}`)
+      .join(" · ");
+    const craftingList = document.getElementById("battle-crafting-list");
+    if (craftingList) {
+      const recipes = metaState.crafting?.recipes || this.expeditionMetaSystem?.getCraftingRecipes?.() || [];
+      craftingList.innerHTML = recipes.map((recipe) => `
+        <article class="expedition-meta-action-card">
+          <div><strong>${this.escapeHTML(recipe.name)}</strong><small>${this.escapeHTML(recipe.description || "")}</small></div>
+          <span>${this.escapeHTML(formatRequirements(recipe.requirements))}</span>
+          <button type="button" data-craft-recipe="${this.escapeHTML(recipe.id)}" ${canManage && recipe.available ? "" : "disabled"}>制作</button>
+        </article>
+      `).join("") || '<span class="expedition-empty-loot">暂无可用配方</span>';
+    }
+
+    const facilityList = document.getElementById("battle-facility-list");
+    if (facilityList) {
+      const upgrades = Object.values(metaState.facilityUpgrades || {});
+      facilityList.innerHTML = upgrades.map((upgrade) => `
+        <article class="expedition-meta-action-card">
+          <div><strong>${this.escapeHTML(upgrade.label)}</strong><small>Lv.${upgrade.level}/${upgrade.maxLevel} · 当前容量 ${upgrade.capacity}</small></div>
+          <span>${upgrade.next ? this.escapeHTML(formatRequirements(upgrade.requirements)) : "已满级"}</span>
+          <button type="button" data-facility-upgrade="${this.escapeHTML(upgrade.id)}" ${canManage && upgrade.available ? "" : "disabled"}>升级</button>
+        </article>
+      `).join("") || '<span class="expedition-empty-loot">暂无设施升级</span>';
+    }
+
     const stashList = document.getElementById("battle-stash-list");
     if (stashList) {
       const items = Array.isArray(metaState.warehouse) ? metaState.warehouse : [];
@@ -914,7 +1051,7 @@ export class BattleSceneController {
         const equipSlot = this.expeditionMetaSystem?.expectedEquipSlot?.(item);
         return `
           <div class="expedition-stash-item rarity-${this.escapeHTML(item.rarity || "common")}">
-            <span title="${this.escapeHTML(item.use || item.description || "")}">${this.escapeHTML(item.name)} ×${Math.max(1, Number(item.quantity) || 1)}</span>
+            <span title="${this.escapeHTML(item.purposeUse || item.use || item.description || "")}">${this.escapeHTML(item.name)} ×${Math.max(1, Number(item.quantity) || 1)}${item.purposeLabel ? ` · ${this.escapeHTML(item.purposeLabel)}` : ""}</span>
             <div class="expedition-stash-actions">
               ${equipSlot ? `<button type="button" data-stash-equip="${this.escapeHTML(item.instanceId)}" ${canManage ? "" : "disabled"}>装备</button>` : ""}
               <button type="button" data-stash-sell="${this.escapeHTML(item.instanceId)}"
@@ -1013,18 +1150,18 @@ export class BattleSceneController {
     }
 
     const summaries = {
-      briefing: ["行动简报", "未知禁区", "撤离后才会结算全部收益", "选择路线，搜索物资，击败阻拦者，并判断何时收手。"],
+      briefing: ["行动简报", "未知禁区", "撤离后才会结算全部收益", "侦察热点、绕开或解决威胁；觉得够了就返回入口撤离。"],
       route: [
         "大地图探索",
         state.interaction.location?.name || this.getNavigationLabel(state.world.navigationTarget) || "荒野行进",
-        state.interaction.location ? "已进入交互范围" : state.extraction.unlocked ? "入口撤离点已解锁" : "继续探索以定位撤离点",
+        state.interaction.location ? "已进入交互范围" : "入口始终可以止损撤离",
         state.interaction.location
           ? state.interaction.location.description
-          : "使用 WASD、方向键或屏幕方向键移动；点击顶部目标条可轮换追踪地点。"
+          : "使用 WASD 或方向键移动；点击顶部目标条可轮换追踪地点。"
       ],
       "extraction-ready": ["最终目标", "选择撤离路线", "入口返程或深区应急撤离", "比较距离、守点时间、敌人规模与补给成本后再决定撤离路线。"],
       extracted: ["远征结算", "撤离成功", "背包战利品已入库", "战斗现金和经验已发放；物品需在仓库中出售、装备或用于委托。"],
-      defeat: ["远征结算", "撤离失败", "未保护战利品与未保险配装会遗失", "安全阶段止损保留更多战斗收益；战斗退出与阵亡风险最高。"],
+      defeat: ["远征结算", "撤离失败", "未保护战利品与未保险配装会遗失", "只有到达撤离点才能带回完整收益；退出只保留安全袋。"],
     };
     const summary = summaries[state.phase] || ["行动状态", state.phaseLabel, "远征进行中", state.lastAction];
     setText("battle-room-kicker", summary[0]);
@@ -1045,7 +1182,9 @@ export class BattleSceneController {
     }
     const canPackSafetyBag = Boolean(
       state.actions?.canAbandon
-      && ["route", "camp", "extraction-ready"].includes(state.phase)
+      && !(state.activeSearch || state.searchState)
+      && state.phase !== "extracting"
+      && !state.raidThreatActive
       && !state.pendingLootChoice
     );
     if (backpack.length === 0) {
@@ -1062,7 +1201,8 @@ export class BattleSceneController {
       const copy = document.createElement("span");
       copy.className = "expedition-loot-item-copy";
       const name = document.createElement("span");
-      name.textContent = `${loot.icon || "◇"} ${loot.name}`;
+      const marker = loot.marker || (loot.locked ? "锁定" : loot.questItem ? "任务" : "");
+      name.textContent = `${marker ? `[${marker}] ` : ""}${loot.icon || "◇"} ${loot.name}`;
       const use = document.createElement("small");
       use.textContent = loot.use || `${loot.rarityLabel || "普通"}战利品`;
       copy.append(name, use);
@@ -1081,8 +1221,19 @@ export class BattleSceneController {
       insureButton.textContent = loot.insured ? "已装袋" : "装入安全袋";
       insureButton.title = canPackSafetyBag
         ? (loot.insured ? "点击移出安全袋" : "失败时仍可带回此物品")
-        : "战斗、搜索和撤离守点期间无法整理安全袋";
-      item.append(copy, value, insureButton);
+        : "被敌人发现、搜索和撤离期间无法整理安全袋";
+      const markButton = document.createElement("button");
+      markButton.type = "button";
+      markButton.className = "expedition-loot-mark";
+      markButton.dataset.lootMark = loot.id;
+      markButton.setAttribute("aria-pressed", loot.locked ? "true" : "false");
+      markButton.disabled = Boolean(loot.insured || !state.actions?.canAbandon || state.pendingLootChoice);
+      markButton.textContent = loot.locked ? "已锁定" : "锁定";
+      markButton.title = loot.locked ? "允许该物品被替换" : "阻止背包取舍时替换此物品";
+      const actions = document.createElement("span");
+      actions.className = "expedition-loot-actions";
+      actions.append(markButton, insureButton);
+      item.append(copy, value, actions);
       return item;
     });
     list.replaceChildren(...items);
@@ -1101,10 +1252,14 @@ export class BattleSceneController {
     const name = document.getElementById("battle-loot-choice-name");
     if (name) {
       const value = (incoming.score || 0) > 0 ? ` · 价值 ${incoming.score}` : "";
-      name.textContent = `${incoming.icon || "◇"} ${incoming.name || "新战利品"}${value}`;
+      const marker = choice.marker || incoming.marker || (incoming.questItem ? "任务" : incoming.locked ? "锁定" : "");
+      name.textContent = `${marker ? `[${marker}] ` : ""}${incoming.icon || "◇"} ${incoming.name || "新战利品"}${value}`;
     }
     const detail = document.getElementById("battle-loot-choice-detail");
-    if (detail) detail.textContent = incoming.use || "选择一件未装入安全袋的物品替换，或放弃新战利品。";
+    if (detail) {
+      const purpose = incoming.purposeUse || incoming.use || "选择一件未装入安全袋的物品替换，或放弃新战利品。";
+      detail.textContent = choice.marked ? `重要物资：${purpose}` : purpose;
+    }
 
     const options = Array.isArray(choice.replaceOptions) ? choice.replaceOptions : [];
     const buttons = options.map((loot) => {
@@ -1112,9 +1267,11 @@ export class BattleSceneController {
       button.type = "button";
       button.dataset.lootAction = "replace";
       button.dataset.lootItemId = loot.id;
-      button.disabled = Boolean(loot.insured);
+      button.disabled = Boolean(loot.insured || loot.locked);
       button.textContent = loot.insured
         ? `🔒 ${loot.name} · 已装入安全袋，无法替换`
+        : loot.locked
+          ? `📌 ${loot.name} · 已锁定，无法替换`
         : `替换 ${loot.name}（价值 ${loot.score || 0}）`;
       return button;
     });
@@ -1149,16 +1306,21 @@ export class BattleSceneController {
     const backpackValue = Math.max(0, Number(backpackRewards.score || 0));
     const explicitlyInsured = (state.backpack || []).filter((loot) => loot.insured);
     const insuredValue = explicitlyInsured.reduce((total, loot) => total + (loot.score || 0), 0);
-    const failureCoins = Math.floor(Number(rewards.coins || 0) * 0.3);
     const defeatedCoins = Math.floor(Number(rewards.coins || 0) * 0.1);
     const successValue = Math.max(0, Number(state.pendingValue) || successCoins + backpackValue);
-    const dangerousExit = state.phase === "combat" || state.phase === "extracting";
-    const failureValue = (dangerousExit ? defeatedCoins : failureCoins) + insuredValue;
+    const dangerousExit = Boolean(
+      state.phase === "combat"
+      || state.phase === "extracting"
+      || state.raidThreatActive
+    );
+    const failureValue = (dangerousExit ? defeatedCoins : 0) + insuredValue;
     setText("battle-success-preview", `总价值 ${formatNumber(successValue)}`);
-    setText("battle-failure-preview-label", dangerousExit ? "战斗退出" : "安全止损");
+    setText("battle-failure-preview-label", dangerousExit ? "战斗退出" : "主动退出");
     setText(
       "battle-failure-preview",
-      `${dangerousExit ? "战败" : "保底"}价值 ${formatNumber(failureValue)} · 安全袋 ${explicitlyInsured.length} 件`
+      dangerousExit
+        ? `战败价值 ${formatNumber(failureValue)} · 安全袋 ${explicitlyInsured.length} 件`
+        : `不保留战斗收益 · 安全袋 ${explicitlyInsured.length} 件`
     );
   }
 
@@ -1263,22 +1425,20 @@ export class BattleSceneController {
         : "";
       return state.settlement.extracted
         ? `撤离成功：获得 ${state.settlement.coins} 金币、${state.settlement.crystals} 水晶、${state.settlement.exp} 经验${rubySuffix}${bondSuffix}。`
-        : `本局结束：保留 ${state.settlement.coins} 金币和 ${state.settlement.exp} 经验，安全袋带回 ${state.settlement.insuredLootRecovered || 0} 件、遗失 ${state.settlement.lootLost} 件${loadoutSuffix}${bondSuffix}。`;
+        : `本局结束：安全袋带回 ${state.settlement.insuredLootRecovered || 0} 件，未保护战利品遗失 ${state.settlement.lootLost} 件${loadoutSuffix}${bondSuffix}。`;
     }
     const tips = {
-      briefing: "开始后用 WASD、方向键或屏幕方向键探索 3000×1900 的远征地图。",
+      briefing: "开始后用 WASD 或方向键探索 3000×1900 的远征地图。",
       route: state.interaction.location
         ? `${state.interaction.label}：按 E 或点击右下角交互键。`
-        : state.extraction.unlocked
-          ? (state.extraction.availability?.emergency?.canExtract
-            ? "两条撤离路线均已解锁：入口不耗补给，应急点路近但守点压力更高。"
-            : "入口撤离信标已解锁；可现在返程，也可继续深入以激活应急撤离点。")
-          : `探索地图并清理地点；再完成 ${Math.max(0, 3 - state.depth)} 个区域即可解锁撤离信标。`,
+        : (state.extraction.availability?.emergency?.canExtract
+          ? "入口可随时止损；应急出口更近，但会消耗补给并暴露位置。"
+          : "入口始终可以撤离；继续搜索前先判断弹药、生命和背包价值。"),
       search: state.activeSearch || state.searchState
         ? "搜索会持续一段时间；移动、受伤或点击取消都会中断，完成前不会获得战利品。"
         : "快速拿取风险最低；彻底搜刮收益更高，队长宠物的侦察效果会自动生效。",
       camp: "休整消耗 1 份补给并恢复 42% 生命、降低威胁；直接离开可保留补给并获得下一战隐蔽先手。",
-      combat: "WASD 移动，鼠标瞄准并按住射击；E 交互，Q 队伍技，Esc 退出，空弹会自动换弹。",
+      combat: "WASD 移动，鼠标瞄准并按住射击；R 换弹，4 使用补给，Q 队伍技。可以脱战，不必清空地图。",
       extracting: state.extraction.inZone
         ? `留在信标范围内守住 ${state.extraction.remainingSeconds} 秒。`
         : `已离开信标范围；撤离进度已暂停，返回信标后继续，增援仍会持续抵达。`,
@@ -1304,7 +1464,7 @@ export class BattleSceneController {
     this.uiSystem?.showToast(
       settlement.extracted
         ? `撤离成功，背包奖励已入库${bondMessage}`
-        : `远征结束，已结算保底收益${bondMessage}`,
+        : `远征结束，已结算安全袋与战败结果${bondMessage}`,
       settlement.extracted ? "success" : "info"
     );
   }

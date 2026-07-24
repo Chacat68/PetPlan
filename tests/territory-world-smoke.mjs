@@ -184,12 +184,21 @@ test("基地生产有离线容量上限，领取后不会重复结算", () => {
   const now = 2_000_000_000_000;
   territory.getBuildingByType("workshop").lastProduction = now - 10 * 60 * 1000;
   const snapshot = territory.getProductionSnapshot(now);
-  assert.equal(snapshot.coins, 225);
+  assert.equal(snapshot.coins, 54);
   assert.equal(snapshot.storageHours, 8);
+  assert.deepEqual(territory.getWorkshopCapabilities(), {
+    unlocked: true,
+    level: 1,
+    role: "expedition-crafting",
+    queueSlots: 1,
+    recipeTier: 1,
+    passiveCoinRatePerMinute: 5.4,
+    productionEfficiency: 0.12,
+  });
 
   const before = resource.coins;
-  assert.deepEqual(territory.collectResources(now), { coins: 225, crystals: 0 });
-  assert.equal(resource.coins, before + 225);
+  assert.deepEqual(territory.collectResources(now), { coins: 54, crystals: 0 });
+  assert.equal(resource.coins, before + 54);
   assert.deepEqual(territory.collectResources(now), { coins: 0, crystals: 0 });
 });
 

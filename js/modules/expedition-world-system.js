@@ -48,9 +48,9 @@ export const WORLD_EXTRACTION_RULES = Object.freeze({
     id: "entry",
     locationId: "extraction-beacon",
     name: "入口撤离信标",
-    minDepth: 3,
+    minDepth: 0,
     supplyCost: 0,
-    tradeoff: "需要原路折返，但守点压力较低且不消耗补给。",
+    tradeoff: "开局即可原路折返，约 4 秒完成，守点压力较低且不消耗补给。",
   }),
   emergency: Object.freeze({
     id: "emergency",
@@ -173,6 +173,7 @@ export class ExpeditionWorldSystem {
     this.initialized = true;
     this.createWorldEvents();
     this.syncRouteChoices(routeChoices);
+    this.setExtractionUnlocked(true, "entry");
     this.updateDiscovery(this.spawnPoint.x, this.spawnPoint.y);
     return this.getState(this.spawnPoint);
   }
@@ -367,13 +368,13 @@ export class ExpeditionWorldSystem {
         type: "extraction",
         extractionType: "entry",
         name: "入口撤离信标",
-        description: "探索 3 个区域后返回这里，可以启动低压力的最终撤离。",
+        description: "开局即可返回这里启动约 4 秒的低压力撤离。",
         icon: "⇥",
         danger: "尚未定位",
         x: this.extractionPoint.x,
         y: this.extractionPoint.y,
         radius: 54,
-        state: "locked",
+        state: this.initialized ? "unlocked" : "locked",
         discovered: true,
         known: true,
         color: LOCATION_COLORS.extraction,
@@ -410,20 +411,23 @@ export class ExpeditionWorldSystem {
   }
 
   syncRouteChoices(routeChoices = []) {
-    const incomingIds = new Set(routeChoices.map((node) => node.id));
-    for (const location of this.locations.values()) {
-      if (
-        location.kind === "route" &&
-        location.state === "available" &&
-        !incomingIds.has(location.nodeId)
-      ) {
-        location.state = "missed";
-      }
-    }
-
     routeChoices.forEach((node, index) => {
-      if (this.getLocationByNodeId(node.id)) return;
-      const [x, y] = this.getSlot(node.depth, node.branch ?? index);
+      const existing = this.getLocationByNodeId(node.id);
+      if (existing) {
+        existing.completed = Boolean(node.completed);
+        existing.revisitable = node.revisitable !== false;
+        existing.region = node.region || existing.region;
+        existing.depth = node.depth ?? existing.depth;
+        if (
+          node.completed
+          && existing.state !== "engaged"
+          && existing.state !== "visited"
+        ) {
+          existing.state = "visited";
+        }
+        return;
+      }
+      const [x, y] = this.getSlot(node.depth, node.branch ?? index, node.mapIndex ?? index);
       this.locations.set(`location-${node.id}`, {
         id: `location-${node.id}`,
         nodeId: node.id,
@@ -435,10 +439,13 @@ export class ExpeditionWorldSystem {
         danger: node.danger,
         depth: node.depth,
         branch: node.branch ?? index,
+        region: node.region || null,
+        completed: Boolean(node.completed),
+        revisitable: node.revisitable !== false,
         x,
         y,
         radius: node.type === "boss" ? 68 : 50,
-        state: "available",
+        state: node.completed ? "visited" : "available",
         discovered: false,
         known: false,
         color: LOCATION_COLORS[node.type] || "#ffd167",
@@ -452,12 +459,16 @@ export class ExpeditionWorldSystem {
     return this.getAvailableLocations();
   }
 
-  getSlot(depth, branch = 0) {
+  getSlot(depth, branch = 0, variant = 0) {
     const slots = ROUTE_SLOTS[depth] || ROUTE_SLOTS[8];
     const slot = slots[Math.max(0, Math.min(slots.length - 1, branch))] || slots[0];
-    const salt = Math.max(1, Number(depth) || 1) * 17 + Math.max(0, Number(branch) || 0) * 7;
-    const jitterX = depth >= 8 ? 0 : (this.seededValue(400 + salt) - 0.5) * 90;
-    const jitterY = depth >= 8 ? 0 : (this.seededValue(500 + salt) - 0.5) * 220;
+    const salt = Math.max(1, Number(depth) || 1) * 17
+      + Math.max(0, Number(branch) || 0) * 7
+      + Math.max(0, Number(variant) || 0) * 29;
+    const variantOffsetX = (Math.max(0, Number(variant) || 0) % 3 - 1) * 82;
+    const variantOffsetY = (Math.floor(Math.max(0, Number(variant) || 0) / 3) % 3 - 1) * 86;
+    const jitterX = depth >= 8 ? variantOffsetX : (this.seededValue(400 + salt) - 0.5) * 90 + variantOffsetX;
+    const jitterY = depth >= 8 ? variantOffsetY : (this.seededValue(500 + salt) - 0.5) * 220 + variantOffsetY;
     return [
       Math.max(80, Math.min(this.width - 80, Math.round(slot[0] + jitterX))),
       Math.max(80, Math.min(this.height - 80, Math.round(slot[1] + jitterY))),
@@ -521,7 +532,7 @@ export class ExpeditionWorldSystem {
 
   getAvailableLocations() {
     return Array.from(this.locations.values()).filter((location) => (
-      location.state === "available" || location.state === "unlocked"
+      ["available", "unlocked", "visited"].includes(location.state)
     ));
   }
 
@@ -601,18 +612,94 @@ export class ExpeditionWorldSystem {
     );
   }
 
+  getDirectionGuidance(location, playerPosition = this.lastPlayerPosition || this.spawnPoint) {
+    if (!location) return null;
+    const originX = Number(playerPosition?.x) || 0;
+    const originY = Number(playerPosition?.y) || 0;
+    const deltaX = Number(location.x) - originX;
+    const deltaY = Number(location.y) - originY;
+    const directionIndex = (Math.round(Math.atan2(deltaY, deltaX) / (Math.PI / 4)) + 8) % 8;
+    const directions = [
+      ["east", "东"],
+      ["southeast", "东南"],
+      ["south", "南"],
+      ["southwest", "西南"],
+      ["west", "西"],
+      ["northwest", "西北"],
+      ["north", "北"],
+      ["northeast", "东北"],
+    ];
+    const [direction, directionLabel] = directions[directionIndex];
+    const column = location.x < this.width / 3 ? "west" : location.x > this.width * 2 / 3 ? "east" : "central";
+    const row = location.y < this.height / 3 ? "north" : location.y > this.height * 2 / 3 ? "south" : "central";
+    const regionNames = {
+      "north-west": "西北外围",
+      "north-central": "北部城区",
+      "north-east": "东北深区",
+      "central-west": "西侧入口带",
+      "central-central": "中央城区",
+      "central-east": "东侧高危区",
+      "south-west": "西南湿地",
+      "south-central": "南部废墟",
+      "south-east": "东南深区",
+    };
+    const region = `${row}-${column}`;
+    const regionLabel = location.region || regionNames[region] || "未知区域";
+    const priority = location.kind === "extraction"
+      ? 3
+      : ["boss", "elite", "cache"].includes(location.type)
+        ? 3
+        : ["combat", "search"].includes(location.type)
+          ? 2
+          : 1;
+    const priorityLabel = ["低优先", "顺路调查", "建议调查", "关键目标"][priority];
+    const exactDistance = Math.hypot(deltaX, deltaY);
+    const distanceBand = exactDistance < 260
+      ? "nearby"
+      : exactDistance < 700
+        ? "near"
+        : exactDistance < 1400
+          ? "medium"
+          : "far";
+    const distanceBandLabel = {
+      nearby: "附近",
+      near: "较近",
+      medium: "中距离",
+      far: "远距离",
+    }[distanceBand];
+    return {
+      direction,
+      directionLabel,
+      region,
+      regionLabel,
+      priority,
+      priorityLabel,
+      distanceBand,
+      distanceBandLabel,
+      guidance: `${directionLabel} · ${regionLabel} · ${priorityLabel}`,
+      exactDistance,
+    };
+  }
+
   getNavigationTargetSnapshot(location, playerPosition = this.lastPlayerPosition || this.spawnPoint) {
     if (!location) return null;
     const known = this.isLocationKnown(location);
+    const guidance = this.getDirectionGuidance(location, playerPosition);
     const snapshot = {
       ...location,
       known: location.kind === "extraction" ? true : Boolean(location.known),
       discovered: Boolean(location.discovered),
-      distance: Math.round(this.getDistanceToLocation(
-        location.id,
-        Number(playerPosition?.x) || 0,
-        Number(playerPosition?.y) || 0,
-      )),
+      // distance 保留给旧控制器；新目标追踪应优先读取 direction / region / priority。
+      distance: Math.round(guidance?.exactDistance || 0),
+      direction: guidance?.direction || null,
+      directionLabel: guidance?.directionLabel || null,
+      region: guidance?.region || null,
+      regionLabel: guidance?.regionLabel || null,
+      priority: guidance?.priority || 0,
+      priorityLabel: guidance?.priorityLabel || null,
+      distanceBand: guidance?.distanceBand || null,
+      distanceBandLabel: guidance?.distanceBandLabel || null,
+      guidance: guidance?.guidance || null,
     };
     if (!known) {
       snapshot.name = "未知信号";
@@ -694,14 +781,14 @@ export class ExpeditionWorldSystem {
   trackLocation(nodeOrLocationId) {
     const location = this.locations.get(nodeOrLocationId)
       || this.getLocationByNodeId(nodeOrLocationId);
-    if (!location || !["available", "unlocked", "engaged"].includes(location.state)) {
+    if (!location || !["available", "unlocked", "engaged", "visited"].includes(location.state)) {
       return { success: false, message: "该地点当前不可追踪" };
     }
     this.navigationTargetId = location.id;
     const navigationTarget = this.getNavigationTargetSnapshot(location);
     return {
       success: true,
-      message: `已追踪：${navigationTarget.name}`,
+      message: `已追踪：${navigationTarget.name} · ${navigationTarget.guidance}`,
       location: { ...navigationTarget },
       navigationTarget: { ...navigationTarget },
       navigationTargetId: location.id,
@@ -751,18 +838,19 @@ export class ExpeditionWorldSystem {
 
   engageLocation(nodeId) {
     const location = this.getLocationByNodeId(nodeId);
-    if (!location || location.state !== "available") {
+    if (!location || !["available", "visited"].includes(location.state)) {
       return { success: false, message: "该地点已经无法进入" };
     }
-    for (const other of this.locations.values()) {
-      if (
-        other.kind === "route" &&
-        other.depth === location.depth &&
-        other.id !== location.id &&
-        other.state === "available"
-      ) {
-        other.state = "missed";
-      }
+    if (location.state === "visited" || location.completed) {
+      location.discovered = true;
+      location.known = true;
+      this.navigationTargetId = location.id;
+      return {
+        success: true,
+        revisited: true,
+        location: { ...location, state: "visited" },
+        containers: this.getContainersForLocation(location.id).map((container) => ({ ...container })),
+      };
     }
     location.state = "engaged";
     location.discovered = true;
@@ -777,16 +865,42 @@ export class ExpeditionWorldSystem {
     };
   }
 
-  completeActiveLocation() {
-    const location = this.locations.get(this.activeLocationId);
-    if (!location) return null;
+  disengageActiveLocation(nodeId = null) {
+    const location = nodeId
+      ? this.getLocationByNodeId(nodeId)
+      : this.locations.get(this.activeLocationId);
+    if (!location) return { success: false, message: "未找到需要脱离的地点" };
+    if (location.completed || location.state === "visited") {
+      return { success: false, message: "已完成地点无需脱离" };
+    }
     for (const container of this.getContainersForLocation(location.id)) {
-      if (["available", "searching"].includes(container.state)) container.state = "abandoned";
+      if (container.state === "searching") container.state = "available";
     }
     if (this.activeContainerSearchId && this.containers.get(this.activeContainerSearchId)?.locationId === location.id) {
       this.activeContainerSearchId = null;
     }
-    location.state = "cleared";
+    if (this.nearbyContainerId && this.containers.get(this.nearbyContainerId)?.locationId === location.id) {
+      this.nearbyContainerId = null;
+    }
+    location.state = "available";
+    location.revisitable = true;
+    if (this.activeLocationId === location.id) this.activeLocationId = null;
+    if (this.nearbyLocationId === location.id) this.nearbyLocationId = null;
+    return { success: true, location: { ...location } };
+  }
+
+  completeActiveLocation() {
+    const location = this.locations.get(this.activeLocationId);
+    if (!location) return null;
+    for (const container of this.getContainersForLocation(location.id)) {
+      if (container.state === "searching") container.state = "available";
+    }
+    if (this.activeContainerSearchId && this.containers.get(this.activeContainerSearchId)?.locationId === location.id) {
+      this.activeContainerSearchId = null;
+    }
+    location.state = "visited";
+    location.completed = true;
+    location.revisitable = true;
     location.discovered = true;
     location.known = true;
     this.activeLocationId = null;
@@ -886,7 +1000,7 @@ export class ExpeditionWorldSystem {
 
   findNearbyLocation(x, y) {
     return Array.from(this.locations.values())
-      .filter((location) => ["available", "unlocked"].includes(location.state))
+      .filter((location) => ["available", "unlocked", "visited"].includes(location.state))
       .map((location) => ({
         location,
         distance: Math.hypot(location.x - x, location.y - y),

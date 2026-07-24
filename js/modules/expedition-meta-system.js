@@ -5,13 +5,97 @@
  * 本局战利品快照交给 applySettlement，即可安全地完成一次且仅一次的入库。
  */
 
-export const EXPEDITION_META_SAVE_VERSION = 1;
+export const EXPEDITION_META_SAVE_VERSION = 2;
 
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
 const asInteger = (value, fallback = 0) => Number.isFinite(Number(value))
   ? Math.floor(Number(value))
   : fallback;
 const clampNonNegative = value => Math.max(0, asInteger(value));
+
+export const EXPEDITION_ITEM_PURPOSES = Object.freeze({
+  mechanical: Object.freeze({ id: "mechanical", label: "机械件", use: "武器维护、弹药与基础护甲制作" }),
+  medical: Object.freeze({ id: "medical", label: "医疗物资", use: "行动补给与护甲内衬制作" }),
+  intel: Object.freeze({ id: "intel", label: "情报", use: "主线调查、保险与路线准备" }),
+  pet: Object.freeze({ id: "pet", label: "宠物素材", use: "伙伴补给与宠物装置制作" }),
+  core: Object.freeze({ id: "core", label: "稀有核心", use: "高阶装备、保险券与基地扩容" }),
+  equipment: Object.freeze({ id: "equipment", label: "装备", use: "带入远征并承担失败遗失风险" }),
+  consumable: Object.freeze({ id: "consumable", label: "行动物资", use: "出发时转化为本局补给或弹药" }),
+  insurance: Object.freeze({ id: "insurance", label: "保险凭证", use: "为一件非永久配装承保一局" }),
+  valuables: Object.freeze({ id: "valuables", label: "贵重品", use: "出售换取金币" }),
+});
+
+const MATERIAL_PURPOSES = Object.freeze(["mechanical", "medical", "intel", "pet", "core"]);
+
+export const EXPEDITION_WORKSHOP_RECIPES = Object.freeze({
+  "field-ammo-pack": Object.freeze({
+    id: "field-ammo-pack",
+    name: "通用弹药包",
+    description: "为后续远征整备预留的通用弹药物资。",
+    costs: Object.freeze({ mechanical: 2 }),
+    output: Object.freeze({ templateId: "field-ammo-pack", quantity: 1 }),
+  }),
+  "field-ration": Object.freeze({
+    id: "field-ration",
+    name: "伙伴行动补给",
+    description: "装入补给栏，出发时转化为 1 份补给。",
+    costs: Object.freeze({ medical: 1, pet: 1 }),
+    output: Object.freeze({ templateId: "field-ration", quantity: 1 }),
+  }),
+  "insurance-voucher": Object.freeze({
+    id: "insurance-voucher",
+    name: "装备保险券",
+    description: "为一件非永久配装支付一次出发保险。",
+    costs: Object.freeze({ intel: 2, core: 1 }),
+    output: Object.freeze({ templateId: "insurance-voucher", quantity: 1 }),
+  }),
+  "field-armor": Object.freeze({
+    id: "field-armor",
+    name: "拼装野战护甲",
+    description: "基础可遗失护甲，本局提供 6 点防御。",
+    costs: Object.freeze({ mechanical: 3, medical: 1 }),
+    output: Object.freeze({ templateId: "field-armor", quantity: 1 }),
+  }),
+});
+
+export const EXPEDITION_CAPACITY_UPGRADES = Object.freeze({
+  warehouse: Object.freeze([
+    Object.freeze({ level: 1, increase: 8, costs: Object.freeze({ mechanical: 4, intel: 1 }) }),
+    Object.freeze({ level: 2, increase: 8, costs: Object.freeze({ mechanical: 7, core: 1 }) }),
+    Object.freeze({ level: 3, increase: 12, costs: Object.freeze({ mechanical: 10, core: 2 }) }),
+  ]),
+  backpack: Object.freeze([
+    Object.freeze({ level: 1, increase: 1, costs: Object.freeze({ mechanical: 3, medical: 2 }) }),
+    Object.freeze({ level: 2, increase: 1, costs: Object.freeze({ mechanical: 6, pet: 2, core: 1 }) }),
+  ]),
+  safetyBag: Object.freeze([
+    Object.freeze({ level: 1, increase: 1, costs: Object.freeze({ intel: 3, core: 1 }) }),
+    Object.freeze({ level: 2, increase: 1, costs: Object.freeze({ intel: 6, core: 2 }) }),
+  ]),
+});
+
+const MAIN_CONTRACT_CHAIN = Object.freeze([
+  "main-supply-recovery",
+  "main-investigate-vault",
+]);
+
+const inferPurposeCategory = item => {
+  const explicit = String(item?.purposeCategory || item?.materialCategory || "");
+  if (EXPEDITION_ITEM_PURPOSES[explicit]) return explicit;
+  const type = String(item?.type || "");
+  const equipSlot = String(item?.equipSlot || "");
+  if (["mainWeapon", "weapon", "armor", "petLinker", "pet-linker"].includes(equipSlot)) return "equipment";
+  if (type === "component") return "mechanical";
+  if (["medical", "medicine", "medkit", "supply"].includes(type)) return "medical";
+  if (["intel", "contract-material", "quest-material", "trophy"].includes(type)) return "intel";
+  if (["pet-supply", "pet-material"].includes(type)) return "pet";
+  if (["crystal", "relic", "deep-material", "boss-material"].includes(type)) return "core";
+  if (["weapon", "armor", "equipment", "pet-linker", "petLinker", "pet-device"].includes(type)) return "equipment";
+  if (["consumable", "ammo", "grenade"].includes(type)) return "consumable";
+  if (type === "insurance-voucher") return "insurance";
+  if (["currency", "valuable"].includes(type)) return "valuables";
+  return "valuables";
+};
 
 export const EXPEDITION_ITEM_TEMPLATES = Object.freeze({
   "starter-carbine": Object.freeze({
@@ -33,6 +117,7 @@ export const EXPEDITION_ITEM_TEMPLATES = Object.freeze({
     templateId: "contract-fragment",
     name: "合约残片",
     type: "contract-material",
+    purposeCategory: "intel",
     rarity: "uncommon",
     sellPrice: 12,
     score: 20,
@@ -44,12 +129,66 @@ export const EXPEDITION_ITEM_TEMPLATES = Object.freeze({
     templateId: "deep-material",
     name: "深层材料",
     type: "deep-material",
+    purposeCategory: "core",
     rarity: "rare",
     sellPrice: 55,
     score: 90,
     stackable: true,
     maxStack: 999,
     description: "来自远征深层区域的稀有研究材料。",
+  }),
+  "field-ammo-pack": Object.freeze({
+    templateId: "field-ammo-pack",
+    name: "通用弹药包",
+    type: "ammo",
+    purposeCategory: "consumable",
+    rarity: "common",
+    equipSlot: "consumable",
+    sellPrice: 18,
+    score: 28,
+    stackable: true,
+    maxStack: 12,
+    ammoPackValue: 1,
+    description: "装入行动物资栏，出发时补充一份备弹。",
+  }),
+  "field-ration": Object.freeze({
+    templateId: "field-ration",
+    name: "伙伴行动补给",
+    type: "consumable",
+    purposeCategory: "consumable",
+    rarity: "uncommon",
+    equipSlot: "consumable",
+    supplyValue: 1,
+    sellPrice: 24,
+    score: 42,
+    stackable: true,
+    maxStack: 8,
+    description: "装入行动补给栏，出发时转化为 1 份补给。",
+  }),
+  "insurance-voucher": Object.freeze({
+    templateId: "insurance-voucher",
+    name: "装备保险券",
+    type: "insurance-voucher",
+    purposeCategory: "insurance",
+    rarity: "rare",
+    sellPrice: 40,
+    score: 80,
+    stackable: true,
+    maxStack: 20,
+    description: "出发前为一件非永久配装承保一局。",
+  }),
+  "field-armor": Object.freeze({
+    templateId: "field-armor",
+    name: "拼装野战护甲",
+    type: "armor",
+    purposeCategory: "equipment",
+    rarity: "uncommon",
+    equipSlot: "armor",
+    defenseBonus: 6,
+    sellPrice: 60,
+    score: 105,
+    stackable: false,
+    description: "基础可遗失护甲，本局提供 6 点防御。",
   }),
 });
 
@@ -65,7 +204,7 @@ export const EXPEDITION_CONTRACT_TEMPLATES = Object.freeze({
     title: "重建补给线",
     description: "带回并交付 3 件机械或通用组件。",
     target: 3,
-    matcher: Object.freeze({ types: Object.freeze(["component"]) }),
+    matcher: Object.freeze({ purposeCategory: "mechanical" }),
     reward: Object.freeze({
       coins: 320,
       crystals: 1,
@@ -127,25 +266,34 @@ export class ExpeditionMetaSystem {
     contractBoardSize = 4,
   } = {}) {
     this.defaultWarehouseCapacity = Math.max(4, asInteger(warehouseCapacity, 40));
+    this.defaultBackpackCapacity = 8;
+    this.defaultSafetyBagCapacity = 1;
     this.creditSettlementCurrency = creditSettlementCurrency !== false;
     this.contractBoardSize = Math.max(3, Math.min(5, asInteger(contractBoardSize, 4)));
     this.reset();
   }
 
   reset() {
-    this.warehouseCapacity = this.defaultWarehouseCapacity;
+    this.baseWarehouseCapacity = this.defaultWarehouseCapacity;
+    this.capacityLevels = { warehouse: 0, backpack: 0, safetyBag: 0 };
+    this.warehouseCapacity = this.baseWarehouseCapacity;
+    this.backpackCapacity = this.defaultBackpackCapacity;
+    this.safetyBagCapacity = this.defaultSafetyBagCapacity;
     this.itemSerial = 0;
     this.contractSerial = 0;
     this.boardSerial = 0;
+    this.contractCycle = 0;
     this.raidSerial = 0;
     this.warehouse = [];
     this.deliveryInbox = [];
     this.loadout = this.createDefaultLoadout();
+    this.selectedLoadoutInsurance = {};
     this.activeRaid = null;
     this.balances = { coins: 0, crystals: 0, rubies: 0, exp: 0 };
     this.activeContracts = [];
     this.contractHistory = [];
     this.contractBoard = [];
+    this.contractOfferCooldowns = {};
     this.settlementLedger = {};
     this.stats = {
       settlements: 0,
@@ -158,7 +306,7 @@ export class ExpeditionMetaSystem {
       contractsCompleted: 0,
     };
     this.migrations = { legacyCountersV1: true };
-    this.refreshContractBoard();
+    this.refreshContractBoard({ reason: "initial" });
     return this.getState();
   }
 
@@ -209,6 +357,8 @@ export class ExpeditionMetaSystem {
       instanceId = `meta-item-${this.itemSerial}`;
     }
     const quantity = Math.max(1, asInteger(merged.quantity, 1));
+    const purposeCategory = inferPurposeCategory(merged);
+    const purpose = EXPEDITION_ITEM_PURPOSES[purposeCategory] || EXPEDITION_ITEM_PURPOSES.valuables;
     const item = {
       ...merged,
       instanceId,
@@ -216,6 +366,10 @@ export class ExpeditionMetaSystem {
       originId: merged.originId ?? merged.id ?? null,
       name: String(merged.name || templateId),
       type: String(merged.type || "loot"),
+      purposeCategory,
+      materialCategory: MATERIAL_PURPOSES.includes(purposeCategory) ? purposeCategory : null,
+      purposeLabel: purpose.label,
+      purposeUse: String(merged.purposeUse || purpose.use),
       rarity: String(merged.rarity || "common"),
       quantity,
       stackable: Boolean(merged.stackable),
@@ -415,12 +569,196 @@ export class ExpeditionMetaSystem {
     };
   }
 
+  getPurposeCount(purposeCategory) {
+    const normalized = String(purposeCategory || "");
+    return this.warehouse.reduce((total, item) => (
+      item.purposeCategory === normalized ? total + Math.max(1, asInteger(item.quantity, 1)) : total
+    ), 0);
+  }
+
+  getMaterialRequirementState(costs = {}, multiplier = 1) {
+    const safeMultiplier = Math.max(1, asInteger(multiplier, 1));
+    const requirements = Object.entries(costs)
+      .filter(([purposeCategory]) => MATERIAL_PURPOSES.includes(purposeCategory))
+      .map(([purposeCategory, amount]) => {
+        const required = Math.max(0, asInteger(amount)) * safeMultiplier;
+        const current = this.getPurposeCount(purposeCategory);
+        return {
+          purposeCategory,
+          label: EXPEDITION_ITEM_PURPOSES[purposeCategory]?.label || purposeCategory,
+          current,
+          required,
+          missing: Math.max(0, required - current),
+          met: current >= required,
+        };
+      });
+    return {
+      requirements,
+      ready: requirements.every(requirement => requirement.met),
+    };
+  }
+
+  consumeMaterialCosts(costs = {}, multiplier = 1) {
+    const state = this.getMaterialRequirementState(costs, multiplier);
+    if (!state.ready) return { success: false, consumed: [], ...state };
+    const consumed = [];
+    for (const requirement of state.requirements) {
+      const result = this.consumeMatchingItems(
+        { purposeCategory: requirement.purposeCategory },
+        requirement.required,
+      );
+      consumed.push(...result.consumed);
+    }
+    this.refreshInventoryContractProgress();
+    return { success: true, consumed, ...state };
+  }
+
+  getCraftingRecipes() {
+    return Object.values(EXPEDITION_WORKSHOP_RECIPES).map(recipe => {
+      const requirementState = this.getMaterialRequirementState(recipe.costs);
+      return {
+        ...clone(recipe),
+        ...requirementState,
+        available: !this.activeRaid && requirementState.ready,
+      };
+    });
+  }
+
+  craftRecipe(recipeId, { quantity = 1 } = {}) {
+    if (this.activeRaid) return { success: false, message: "远征进行中无法使用工坊" };
+    const recipe = EXPEDITION_WORKSHOP_RECIPES[String(recipeId || "")];
+    if (!recipe) return { success: false, message: "未知工坊配方" };
+    const safeQuantity = Math.max(1, Math.min(20, asInteger(quantity, 1)));
+    const requirementState = this.getMaterialRequirementState(recipe.costs, safeQuantity);
+    if (!requirementState.ready) {
+      const missing = requirementState.requirements
+        .filter(requirement => !requirement.met)
+        .map(requirement => `${requirement.label} ${requirement.missing}`)
+        .join("、");
+      return { success: false, message: `制作材料不足：${missing}`, ...requirementState };
+    }
+    const consumption = this.consumeMaterialCosts(recipe.costs, safeQuantity);
+    if (!consumption.success) return { success: false, message: "制作材料扣除失败", ...consumption };
+    const output = {
+      ...clone(recipe.output),
+      quantity: Math.max(1, asInteger(recipe.output.quantity, 1)) * safeQuantity,
+    };
+    const deposit = this.depositItem(output, {
+      source: `workshop-${recipe.id}`,
+      allowPending: true,
+    });
+    return {
+      success: deposit.success,
+      message: (deposit.pending || []).length > 0
+        ? `${recipe.name}制作完成，仓库已满并转入待领取箱`
+        : `${recipe.name}制作完成`,
+      recipe: clone(recipe),
+      quantity: safeQuantity,
+      consumed: consumption.consumed,
+      output: deposit.item || this.createItem(output, { source: `workshop-${recipe.id}` }),
+      deposit,
+    };
+  }
+
+  recalculateFacilityCapacities() {
+    const sumIncrease = id => EXPEDITION_CAPACITY_UPGRADES[id]
+      .slice(0, Math.max(0, asInteger(this.capacityLevels[id])))
+      .reduce((total, upgrade) => total + upgrade.increase, 0);
+    this.warehouseCapacity = this.baseWarehouseCapacity + sumIncrease("warehouse");
+    this.backpackCapacity = this.defaultBackpackCapacity + sumIncrease("backpack");
+    this.safetyBagCapacity = this.defaultSafetyBagCapacity + sumIncrease("safetyBag");
+    return {
+      warehouseCapacity: this.warehouseCapacity,
+      backpackCapacity: this.backpackCapacity,
+      safetyBagCapacity: this.safetyBagCapacity,
+    };
+  }
+
+  getFacilityUpgrades() {
+    const labels = {
+      warehouse: "仓库扩建",
+      backpack: "行动背包",
+      safetyBag: "安全袋",
+    };
+    return Object.fromEntries(Object.keys(EXPEDITION_CAPACITY_UPGRADES).map(id => {
+      const level = Math.max(0, asInteger(this.capacityLevels[id]));
+      const next = EXPEDITION_CAPACITY_UPGRADES[id][level] || null;
+      const requirementState = next
+        ? this.getMaterialRequirementState(next.costs)
+        : { requirements: [], ready: false };
+      const capacityKey = id === "warehouse"
+        ? "warehouseCapacity"
+        : id === "backpack"
+          ? "backpackCapacity"
+          : "safetyBagCapacity";
+      return [id, {
+        id,
+        label: labels[id],
+        level,
+        maxLevel: EXPEDITION_CAPACITY_UPGRADES[id].length,
+        capacity: this[capacityKey],
+        next: next ? clone(next) : null,
+        requirements: requirementState.requirements,
+        available: !this.activeRaid && Boolean(next) && requirementState.ready,
+      }];
+    }));
+  }
+
+  upgradeFacility(facilityId) {
+    if (this.activeRaid) return { success: false, message: "远征进行中无法升级远征设施" };
+    const aliases = {
+      stash: "warehouse",
+      safePocket: "safetyBag",
+      insuredSlot: "safetyBag",
+    };
+    const id = aliases[String(facilityId || "")] || String(facilityId || "");
+    const upgrades = EXPEDITION_CAPACITY_UPGRADES[id];
+    if (!upgrades) return { success: false, message: "未知远征设施" };
+    const level = Math.max(0, asInteger(this.capacityLevels[id]));
+    const next = upgrades[level];
+    if (!next) return { success: false, message: "该设施已达到最高等级" };
+    const requirementState = this.getMaterialRequirementState(next.costs);
+    if (!requirementState.ready) {
+      const missing = requirementState.requirements
+        .filter(requirement => !requirement.met)
+        .map(requirement => `${requirement.label} ${requirement.missing}`)
+        .join("、");
+      return { success: false, message: `升级材料不足：${missing}`, ...requirementState };
+    }
+    const consumption = this.consumeMaterialCosts(next.costs);
+    if (!consumption.success) return { success: false, message: "升级材料扣除失败", ...consumption };
+    this.capacityLevels[id] = level + 1;
+    const capacities = this.recalculateFacilityCapacities();
+    return {
+      success: true,
+      message: `${this.getFacilityUpgrades()[id].label}升级至 Lv.${this.capacityLevels[id]}`,
+      facilityId: id,
+      level: this.capacityLevels[id],
+      consumed: consumption.consumed,
+      capacities,
+      state: this.getFacilityUpgrades()[id],
+    };
+  }
+
+  upgradeCapacity(facilityId) {
+    return this.upgradeFacility(facilityId);
+  }
+
+  getCapacityState() {
+    return {
+      warehouseCapacity: this.warehouseCapacity,
+      backpackCapacity: this.backpackCapacity,
+      safetyBagCapacity: this.safetyBagCapacity,
+      levels: { ...this.capacityLevels },
+    };
+  }
+
   expectedEquipSlot(item) {
     if (item.equipSlot) return item.equipSlot;
     if (item.type === "weapon") return "mainWeapon";
     if (item.type === "armor") return "armor";
     if (["pet-linker", "petLinker", "pet-device"].includes(item.type)) return "petLinker";
-    if (["consumable", "medical", "grenade", "supply"].includes(item.type)) return "consumable";
+    if (["consumable", "medical", "ammo", "grenade", "supply"].includes(item.type)) return "consumable";
     return null;
   }
 
@@ -465,6 +803,7 @@ export class ExpeditionMetaSystem {
       if (previous && !previous.permanent) this.warehouse.push(previous);
       this.loadout[expected] = item;
     }
+    if (previous?.instanceId) delete this.selectedLoadoutInsurance[previous.instanceId];
     this.refreshInventoryContractProgress();
     return { success: true, equipped: clone(item), previous: clone(previous), loadout: this.getLoadout() };
   }
@@ -485,6 +824,7 @@ export class ExpeditionMetaSystem {
     }
     const result = this.storeNormalizedItem(current, { allowPending: false });
     if (!result.success) return result;
+    delete this.selectedLoadoutInsurance[current.instanceId];
     if (slot === "consumable" || slot === "consumables") this.loadout.consumables[targetIndex] = null;
     else if (slot === "mainWeapon") this.loadout.mainWeapon = this.createStarterWeapon();
     else this.loadout[slot] = null;
@@ -504,18 +844,108 @@ export class ExpeditionMetaSystem {
     ].filter(Boolean);
   }
 
+  quoteLoadoutInsurance(instanceId) {
+    if (this.activeRaid) return { success: false, message: "远征进行中无法调整装备保险" };
+    const item = this.getEquippedItems().find(entry => String(entry.instanceId) === String(instanceId));
+    if (!item) return { success: false, message: "该物品不在当前配装中" };
+    if (item.permanent || item.bound || item.keepOnFailure) {
+      return { success: false, message: "该物品无需装备保险", item: clone(item) };
+    }
+    const premium = Math.max(1, Math.ceil(Math.max(0, Number(item.sellPrice) || 0) * 0.2));
+    const voucherCount = this.getItemCount({ templateId: "insurance-voucher" });
+    return {
+      success: true,
+      instanceId: item.instanceId,
+      item: clone(item),
+      premium,
+      rate: 0.2,
+      voucherCount,
+      alreadyInsured: Boolean(this.selectedLoadoutInsurance[item.instanceId]),
+    };
+  }
+
+  insureLoadoutItem(instanceId, {
+    useVoucher = true,
+    paidCoins = 0,
+    useBalance = true,
+  } = {}) {
+    const quote = this.quoteLoadoutInsurance(instanceId);
+    if (!quote.success) return quote;
+    if (quote.alreadyInsured) {
+      return {
+        success: true,
+        duplicate: true,
+        message: `${quote.item.name}已投保`,
+        insurance: clone(this.selectedLoadoutInsurance[quote.instanceId]),
+      };
+    }
+
+    let payment = null;
+    if (useVoucher && quote.voucherCount > 0) {
+      const voucher = this.warehouse.find(item => item.templateId === "insurance-voucher");
+      const consumed = this.withdrawItem(voucher.instanceId, { quantity: 1 });
+      if (!consumed.success) return { success: false, message: "保险券扣除失败" };
+      payment = { type: "voucher", amount: 1 };
+    } else if (Math.max(0, asInteger(paidCoins)) >= quote.premium) {
+      payment = { type: "external-coins", amount: quote.premium };
+    } else if (useBalance && this.balances.coins >= quote.premium) {
+      this.balances.coins -= quote.premium;
+      payment = { type: "meta-balance", amount: quote.premium };
+    } else {
+      return {
+        success: false,
+        message: `需要 1 张装备保险券或 ${quote.premium} 金币保费`,
+        quote,
+      };
+    }
+
+    const insurance = {
+      instanceId: quote.instanceId,
+      itemName: quote.item.name,
+      premium: quote.premium,
+      rate: quote.rate,
+      payment,
+      selectedAtRaidSerial: this.raidSerial + 1,
+    };
+    this.selectedLoadoutInsurance[quote.instanceId] = insurance;
+    return {
+      success: true,
+      message: `${quote.item.name}已投保，本次出发失败时不会遗失`,
+      insurance: clone(insurance),
+    };
+  }
+
+  cancelLoadoutInsurance(instanceId) {
+    if (this.activeRaid) return { success: false, message: "远征进行中无法取消装备保险" };
+    const insurance = this.selectedLoadoutInsurance[String(instanceId)];
+    if (!insurance) return { success: false, message: "该物品尚未投保" };
+    delete this.selectedLoadoutInsurance[String(instanceId)];
+    return {
+      success: true,
+      message: "装备保险已取消；已支付保费不返还",
+      insurance: clone(insurance),
+    };
+  }
+
   startRaid({ raidId = null, insuredLoadoutIds = [] } = {}) {
     if (this.activeRaid) return { success: false, message: "已有进行中的远征配装" };
     this.raidSerial += 1;
     const resolvedRaidId = String(raidId ?? `meta-raid-${this.raidSerial}`);
     const equippedIds = new Set(this.getEquippedItems().map(item => item.instanceId));
-    const insuredIds = [...new Set((insuredLoadoutIds || []).map(String))]
+    const selectedIds = Object.keys(this.selectedLoadoutInsurance);
+    const insuredIds = [...new Set([...(insuredLoadoutIds || []).map(String), ...selectedIds])]
       .filter(id => equippedIds.has(id) && id !== BASIC_WEAPON_INSTANCE_ID);
     this.activeRaid = {
       raidId: resolvedRaidId,
       insuredLoadoutIds: insuredIds,
+      insurance: insuredIds
+        .map(id => this.selectedLoadoutInsurance[id])
+        .filter(Boolean)
+        .map(clone),
       loadoutSnapshot: this.getLoadout(),
+      capacities: this.getCapacityState(),
     };
+    this.selectedLoadoutInsurance = {};
     return {
       success: true,
       raidId: resolvedRaidId,
@@ -684,6 +1114,10 @@ export class ExpeditionMetaSystem {
     else this.stats.failedRuns += 1;
     this.stats.itemsRecovered += recoveredQuantity;
     this.stats.itemsLost += lostQuantity + loadoutResolution.lost.reduce((sum, item) => sum + item.quantity, 0);
+    const refreshedContractBoard = this.refreshContractBoard({
+      advanceCycle: true,
+      reason: "settlement",
+    });
 
     const result = {
       success: true,
@@ -698,6 +1132,8 @@ export class ExpeditionMetaSystem {
       loadoutLost: loadoutResolution.lost,
       loadoutRetained: loadoutResolution.retained,
       contractUpdates: [...new Set(contractUpdates)],
+      contractCycle: this.contractCycle,
+      refreshedContractBoard,
       message: extracted
         ? `撤离物资已接收：${recoveredQuantity} 件`
         : `失败回收已处理：${recoveredQuantity} 件，遗失 ${lostQuantity} 件`,
@@ -724,27 +1160,62 @@ export class ExpeditionMetaSystem {
     if (matcher.templateId && item.templateId !== matcher.templateId) return false;
     if (matcher.name && item.name !== matcher.name) return false;
     if (matcher.type && item.type !== matcher.type) return false;
+    if (matcher.purposeCategory && item.purposeCategory !== matcher.purposeCategory) return false;
+    if (matcher.materialCategory && item.materialCategory !== matcher.materialCategory) return false;
     if (Array.isArray(matcher.types) && !matcher.types.includes(item.type)) return false;
+    if (Array.isArray(matcher.purposeCategories) && !matcher.purposeCategories.includes(item.purposeCategory)) return false;
     if (Array.isArray(matcher.tags) && !matcher.tags.every(tag => (item.tags || []).includes(tag))) return false;
     return true;
   }
 
-  refreshContractBoard() {
+  getNextMainContractTemplate() {
+    const completed = new Set(this.contractHistory
+      .filter(contract => contract.category === "main" && contract.status === "completed")
+      .map(contract => contract.templateId));
+    const furthestCompletedIndex = MAIN_CONTRACT_CHAIN.reduce((furthest, templateId, index) => (
+      completed.has(templateId) ? Math.max(furthest, index) : furthest
+    ), -1);
+    const active = new Set(this.activeContracts
+      .filter(contract => contract.category === "main")
+      .map(contract => contract.templateId));
+    if (active.size > 0) return null;
+    const nextId = MAIN_CONTRACT_CHAIN[furthestCompletedIndex + 1] || null;
+    if (!nextId) return null;
+    return EXPEDITION_CONTRACT_TEMPLATES[nextId] || null;
+  }
+
+  refreshContractBoard({ advanceCycle = false, reason = "manual" } = {}) {
+    if (advanceCycle) this.contractCycle += 1;
     const activeTemplateIds = new Set(this.activeContracts.map(contract => contract.templateId));
-    const templates = Object.values(EXPEDITION_CONTRACT_TEMPLATES)
-      .filter(template => !activeTemplateIds.has(template.id));
-    this.boardSerial += 1;
-    const start = templates.length ? (this.boardSerial - 1) % templates.length : 0;
-    const rotated = templates.length
-      ? [...templates.slice(start), ...templates.slice(0, start)]
+    const completedThisCycle = new Set(this.contractHistory
+      .filter(contract => contract.category === "side" && contract.completedCycle === this.contractCycle)
+      .map(contract => contract.templateId));
+    const sideTemplates = Object.values(EXPEDITION_CONTRACT_TEMPLATES)
+      .filter(template => template.category === "side")
+      .filter(template => !activeTemplateIds.has(template.id))
+      .filter(template => !completedThisCycle.has(template.id))
+      .filter(template => asInteger(this.contractOfferCooldowns[template.id]) <= this.contractCycle);
+    const start = sideTemplates.length
+      ? this.contractCycle % sideTemplates.length
+      : 0;
+    const rotatedSides = sideTemplates.length
+      ? [...sideTemplates.slice(start), ...sideTemplates.slice(0, start)]
       : [];
-    this.contractBoard = rotated.slice(0, this.contractBoardSize).map((template, index) => ({
+    const nextMain = this.getNextMainContractTemplate();
+    const templates = [
+      ...(nextMain ? [nextMain] : []),
+      ...rotatedSides,
+    ];
+    this.boardSerial += 1;
+    this.contractBoard = templates.slice(0, this.contractBoardSize).map((template, index) => ({
       offerId: `contract-offer-${this.boardSerial}-${index + 1}`,
       templateId: template.id,
       category: template.category,
       title: template.title,
       description: template.description,
       reward: clone(template.reward),
+      cycle: this.contractCycle,
+      refreshReason: reason,
     }));
     return clone(this.contractBoard);
   }
@@ -785,10 +1256,11 @@ export class ExpeditionMetaSystem {
       reward: clone(template.reward || {}),
       targetPetId: options.petId ? String(options.petId) : null,
       targetPetName: options.petName ? String(options.petName) : null,
+      acceptedCycle: this.contractCycle,
     };
     this.activeContracts.push(contract);
+    this.contractBoard = this.contractBoard.filter(entry => entry.templateId !== template.id);
     this.refreshInventoryContractProgress();
-    this.refreshContractBoard();
     return { success: true, contract: clone(contract) };
   }
 
@@ -809,11 +1281,9 @@ export class ExpeditionMetaSystem {
       if (contract.kind === "investigate-location" && event.type === "location-investigated") {
         const required = contract.requirements?.locationId;
         const requiredType = contract.requirements?.locationType;
-        if (
-          (!required && !requiredType)
-          || (required && String(event.locationId) === String(required))
-          || (requiredType && String(event.locationType) === String(requiredType))
-        ) increment = 1;
+        const locationMatches = !required || String(event.locationId) === String(required);
+        const typeMatches = !requiredType || String(event.locationType) === String(requiredType);
+        if (locationMatches && typeMatches) increment = 1;
       } else if (contract.kind === "kill-elite" && event.type === "elite-killed") {
         increment = Math.max(1, asInteger(event.count, 1));
       } else if (contract.kind === "pet-extraction" && event.type === "extraction" && event.extracted) {
@@ -879,11 +1349,12 @@ export class ExpeditionMetaSystem {
 
     contract.status = "completed";
     contract.completedSerial = this.stats.contractsCompleted + 1;
+    contract.completedCycle = this.contractCycle;
     this.activeContracts.splice(index, 1);
     this.contractHistory.push(clone(contract));
     this.stats.contractsCompleted += 1;
     this.refreshInventoryContractProgress();
-    this.refreshContractBoard();
+    if (contract.category === "main") this.refreshContractBoard({ reason: "main-chain" });
     return {
       success: true,
       contract: clone(contract),
@@ -899,8 +1370,16 @@ export class ExpeditionMetaSystem {
     const index = this.activeContracts.findIndex(contract => contract.contractId === contractId);
     if (index < 0) return { success: false, message: "未找到进行中的合约" };
     const [contract] = this.activeContracts.splice(index, 1);
-    this.refreshContractBoard();
-    return { success: true, contract: clone(contract) };
+    contract.status = "abandoned";
+    contract.abandonedCycle = this.contractCycle;
+    this.contractOfferCooldowns[contract.templateId] = this.contractCycle + 1;
+    this.contractHistory.push(clone(contract));
+    this.contractBoard = this.contractBoard.filter(entry => entry.templateId !== contract.templateId);
+    return {
+      success: true,
+      contract: clone(contract),
+      message: `已放弃“${contract.title}”；完成下一次远征后才会补充新委托`,
+    };
   }
 
   getContractState() {
@@ -914,6 +1393,8 @@ export class ExpeditionMetaSystem {
         side: this.activeContracts.filter(contract => contract.category === "side").length,
         sideMax: 2,
       },
+      cycle: this.contractCycle,
+      nextRefresh: "settlement",
     };
   }
 
@@ -975,24 +1456,31 @@ export class ExpeditionMetaSystem {
     return clone({
       version: EXPEDITION_META_SAVE_VERSION,
       config: {
+        baseWarehouseCapacity: this.baseWarehouseCapacity,
         warehouseCapacity: this.warehouseCapacity,
+        defaultBackpackCapacity: this.defaultBackpackCapacity,
+        defaultSafetyBagCapacity: this.defaultSafetyBagCapacity,
         creditSettlementCurrency: this.creditSettlementCurrency,
         contractBoardSize: this.contractBoardSize,
       },
+      capacityLevels: this.capacityLevels,
       serials: {
         item: this.itemSerial,
         contract: this.contractSerial,
         board: this.boardSerial,
+        contractCycle: this.contractCycle,
         raid: this.raidSerial,
       },
       warehouse: this.warehouse,
       deliveryInbox: this.deliveryInbox,
       loadout: this.loadout,
+      selectedLoadoutInsurance: this.selectedLoadoutInsurance,
       activeRaid: this.activeRaid,
       balances: this.balances,
       activeContracts: this.activeContracts,
       contractHistory: this.contractHistory,
       contractBoard: this.contractBoard,
+      contractOfferCooldowns: this.contractOfferCooldowns,
       settlementLedger: this.settlementLedger,
       stats: this.stats,
       migrations: this.migrations,
@@ -1007,14 +1495,49 @@ export class ExpeditionMetaSystem {
     const legacyFragments = this.findLegacyCounter(saveData, "contractFragments");
     const legacyDeepMaterials = this.findLegacyCounter(saveData, "deepMaterials");
     const migrationAlreadyApplied = Boolean(saved.migrations?.legacyCountersV1);
+    const incomingVersion = Math.max(0, asInteger(saved.version));
 
     this.reset();
-    this.warehouseCapacity = Math.max(4, asInteger(saved.config?.warehouseCapacity ?? saved.warehouseCapacity, this.defaultWarehouseCapacity));
+    const savedCapacityLevels = saved.capacityLevels && typeof saved.capacityLevels === "object"
+      ? saved.capacityLevels
+      : {};
+    this.capacityLevels = {
+      warehouse: Math.max(0, Math.min(
+        EXPEDITION_CAPACITY_UPGRADES.warehouse.length,
+        asInteger(savedCapacityLevels.warehouse),
+      )),
+      backpack: Math.max(0, Math.min(
+        EXPEDITION_CAPACITY_UPGRADES.backpack.length,
+        asInteger(savedCapacityLevels.backpack),
+      )),
+      safetyBag: Math.max(0, Math.min(
+        EXPEDITION_CAPACITY_UPGRADES.safetyBag.length,
+        asInteger(savedCapacityLevels.safetyBag),
+      )),
+    };
+    const legacyWarehouseCapacity = Math.max(
+      4,
+      asInteger(saved.config?.warehouseCapacity ?? saved.warehouseCapacity, this.defaultWarehouseCapacity),
+    );
+    this.baseWarehouseCapacity = Math.max(
+      4,
+      asInteger(saved.config?.baseWarehouseCapacity, legacyWarehouseCapacity),
+    );
+    this.defaultBackpackCapacity = Math.max(
+      3,
+      asInteger(saved.config?.defaultBackpackCapacity, this.defaultBackpackCapacity),
+    );
+    this.defaultSafetyBagCapacity = Math.max(
+      1,
+      asInteger(saved.config?.defaultSafetyBagCapacity, this.defaultSafetyBagCapacity),
+    );
+    this.recalculateFacilityCapacities();
     this.creditSettlementCurrency = saved.config?.creditSettlementCurrency ?? this.creditSettlementCurrency;
     this.contractBoardSize = Math.max(3, Math.min(5, asInteger(saved.config?.contractBoardSize, this.contractBoardSize)));
     this.itemSerial = clampNonNegative(saved.serials?.item ?? saved.itemSerial);
     this.contractSerial = clampNonNegative(saved.serials?.contract ?? saved.contractSerial);
     this.boardSerial = clampNonNegative(saved.serials?.board ?? saved.boardSerial);
+    this.contractCycle = clampNonNegative(saved.serials?.contractCycle ?? saved.contractCycle);
     this.raidSerial = clampNonNegative(saved.serials?.raid ?? saved.raidSerial);
 
     const seenIds = new Set([BASIC_WEAPON_INSTANCE_ID]);
@@ -1026,6 +1549,12 @@ export class ExpeditionMetaSystem {
       ...this.hydrateCollection(saved.deliveryInbox, seenIds, "save-inbox"),
     ];
     this.loadout = this.hydrateLoadout(saved.loadout || {}, seenIds);
+    const equippedIds = new Set(this.getEquippedItems().map(item => String(item.instanceId)));
+    this.selectedLoadoutInsurance = Object.fromEntries(Object.entries(
+      saved.selectedLoadoutInsurance && typeof saved.selectedLoadoutInsurance === "object"
+        ? saved.selectedLoadoutInsurance
+        : {},
+    ).filter(([instanceId]) => equippedIds.has(String(instanceId))));
     this.activeRaid = saved.activeRaid && typeof saved.activeRaid === "object" ? clone(saved.activeRaid) : null;
     this.balances = {
       coins: clampNonNegative(saved.balances?.coins),
@@ -1036,6 +1565,10 @@ export class ExpeditionMetaSystem {
     this.activeContracts = Array.isArray(saved.activeContracts) ? clone(saved.activeContracts) : [];
     this.contractHistory = Array.isArray(saved.contractHistory) ? clone(saved.contractHistory) : [];
     this.contractBoard = Array.isArray(saved.contractBoard) ? clone(saved.contractBoard) : [];
+    this.contractOfferCooldowns = saved.contractOfferCooldowns && typeof saved.contractOfferCooldowns === "object"
+      ? Object.fromEntries(Object.entries(saved.contractOfferCooldowns)
+        .map(([templateId, cycle]) => [templateId, clampNonNegative(cycle)]))
+      : {};
     this.settlementLedger = saved.settlementLedger && typeof saved.settlementLedger === "object"
       ? clone(saved.settlementLedger)
       : {};
@@ -1060,7 +1593,9 @@ export class ExpeditionMetaSystem {
       }
     }
     this.migrations.legacyCountersV1 = true;
-    if (!this.contractBoard.length) this.refreshContractBoard();
+    if (incomingVersion < 2 || !this.contractBoard.length) {
+      this.refreshContractBoard({ reason: incomingVersion < 2 ? "v2-migration" : "restore-empty" });
+    }
     this.refreshInventoryContractProgress();
     return {
       success: true,
@@ -1078,7 +1613,19 @@ export class ExpeditionMetaSystem {
       warehouseFree: this.getWarehouseFreeSlots(),
       warehouse: this.warehouse,
       deliveryInbox: this.deliveryInbox,
+      capacities: this.getCapacityState(),
+      crafting: {
+        recipes: this.getCraftingRecipes(),
+        materialCounts: Object.fromEntries(MATERIAL_PURPOSES.map(id => [id, this.getPurposeCount(id)])),
+      },
+      facilityUpgrades: this.getFacilityUpgrades(),
       loadout: this.loadout,
+      insurance: {
+        rate: 0.2,
+        selected: Object.values(this.selectedLoadoutInsurance),
+        activeRaidInsuredIds: this.activeRaid?.insuredLoadoutIds || [],
+        voucherCount: this.getItemCount({ templateId: "insurance-voucher" }),
+      },
       activeRaid: this.activeRaid,
       balances: this.balances,
       contracts: this.getContractState(),
