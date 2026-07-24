@@ -15,14 +15,14 @@ test("窄竖屏使用可恢复的横屏引导而不是压缩玩法舞台", () =>
   assert.match(indexHtml, /旋转设备后会保留当前场景、远征进度与操作位置/);
   assert.match(styleCss, /\.orientation-guide\[hidden\]/);
   assert.match(mainJs, /OrientationController/);
-  assert.match(indexHtml, /style\.css\?v=expedition-simplification-20260723b/);
+  assert.match(indexHtml, /style\.css\?v=battle-context-ui-20260723b/);
 });
 
 test("命运桌不再显示累计次数和银色点击快捷提示", () => {
   assert.doesNotMatch(indexHtml, /fate-total-flips-display/);
   assert.doesNotMatch(indexHtml, /fate-skill-tree-btn/);
   assert.doesNotMatch(indexHtml, /查看银色点击/);
-  assert.match(indexHtml, /main\.js\?v=expedition-simplification-20260723b/);
+  assert.match(indexHtml, /main\.js\?v=battle-context-ui-20260723b/);
 });
 
 test("远征使用沉浸模式并通过 Esc 确认退出", () => {
@@ -31,6 +31,7 @@ test("远征使用沉浸模式并通过 Esc 确认退出", () => {
   assert.match(indexHtml, /id="expedition-exit-cancel"[^>]*>继续远征<\/button>/);
   assert.match(indexHtml, /id="expedition-exit-confirm"[^>]*>确认退出<\/button>/);
   assert.match(mainJs, /if \(this\.currentScene === "dungeon"\)[\s\S]*openExpeditionExitConfirm\(\)/);
+  assert.match(mainJs, /battleSceneController\?\.backpackForced[\s\S]*请先处理背包中待取舍的战利品[\s\S]*return/);
   assert.match(mainJs, /runActive \? this\.combatSystem\.abandonRun\(\) : null/);
   assert.match(mainJs, /战斗或撤离守点[^]*?10% 金币与 20% 经验/);
   assert.match(mainJs, /安全止损[^]*?30% 金币与 40% 经验/);
@@ -60,7 +61,7 @@ test("发布入口使用新缓存键且成功撤离深度继续透传", () => {
   }
   assert.match(
     mainJs,
-    /battle-scene-controller\.js\?v=expedition-simplification-20260723b/,
+    /battle-scene-controller\.js\?v=battle-context-ui-20260723b/,
   );
   assert.match(mainJs, /save-system\.js\?v=review-fixes-20260722a/);
   assert.match(mainJs, /expedition-meta-system\.js\?v=expedition-simplification-20260723b/);
@@ -113,22 +114,25 @@ test("首轮成长引导入口和浮层已从当前版本移除", () => {
   assert.doesNotMatch(styleCss, /\.onboarding-/);
 });
 
-test("远征终端和战斗 HUD 使用阶段化减负结构", () => {
-  assert.match(indexHtml, /id="battle-terminal-toggle"/);
-  assert.match(indexHtml, /class="battle-terminal-scroll"/);
-  assert.match(indexHtml, /class="battle-terminal-footer"/);
+test("远征使用全屏战场和按情境出现的轻量交互", () => {
+  assert.match(indexHtml, /class="battle-flow-layer" id="battle-flow-layer"/);
+  assert.match(indexHtml, /id="battle-prep-panel"/);
+  assert.match(indexHtml, /id="battle-context-dock"[^>]*hidden/);
+  assert.match(indexHtml, /id="battle-pack-toggle"[^>]*aria-controls="battle-pack-drawer"/s);
+  assert.match(indexHtml, /id="battle-pack-drawer"[^>]*hidden/);
+  assert.match(indexHtml, /id="battle-target-cycle-btn"/);
   assert.match(indexHtml, /class="run-stat stat-survival"/);
-  assert.match(indexHtml, /id="battle-terminal-status"[^>]*aria-live="polite"/);
+  assert.match(indexHtml, /id="battle-action-status"[^>]*aria-live="polite"/);
+  assert.doesNotMatch(indexHtml, /battle-terminal-toggle|battle-terminal-scroll|battle-terminal-footer/);
+  assert.doesNotMatch(indexHtml, /远征战术终端|FIELD COMMAND|Tab \/ M/);
+  assert.doesNotMatch(indexHtml, /id="battle-route-list"|id="battle-abandon-btn"|id="battle-extract-btn"/);
   assert.match(styleCss, /#battle-scene\[data-raid-active="true"\] \.battle-resource-strip/);
-  assert.match(styleCss, /#upgrade-panel\[data-raid-active="true"\]\[data-compact-open="false"\]/);
-  assert.match(styleCss, /@media \(max-aspect-ratio: 4 \/ 3\) and \(min-width: 541px\)/);
+  assert.match(styleCss, /#battle-scene \.battle-board-panel \{[\s\S]*?width:\s*100%;[\s\S]*?flex:\s*1 1 100%;/);
+  assert.match(styleCss, /\.battle-flow-layer \{[\s\S]*?position:\s*absolute;[\s\S]*?pointer-events:\s*none;/);
+  assert.match(styleCss, /\.battle-context-dock\[hidden\][\s\S]*?display:\s*none !important;/);
+  assert.match(styleCss, /\.battle-prep-card \{[\s\S]*?left:\s*50%;[\s\S]*?pointer-events:\s*auto;/);
   assert.match(indexHtml, /class="run-stat stat-depth">已清理 <b id="battle-depth-display">0 \/ 8<\/b>/);
   assert.match(indexHtml, /id="battle-threat-display">警戒 · 0<\/b>/);
-  assert.match(indexHtml, /终端 <small>Tab \/ M<\/small>/);
-  assert.match(
-    styleCss,
-    /#battle-scene\[data-raid-active="true"\] #upgrade-panel\[data-compact-open="false"\][\s\S]*?flex:\s*0 0 52px/,
-  );
 });
 
 test("远征风险面板只保留单一警戒指标", () => {

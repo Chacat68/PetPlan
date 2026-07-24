@@ -22,7 +22,7 @@ import { ExpeditionMetaSystem } from "./modules/expedition-meta-system.js?v=expe
 import { SceneRouter } from "./modules/scene-router.js?v=controllers-phase-two-20260711b";
 
 import { AchievementController } from "./controllers/achievement-controller.js?v=achievement-ui-v3-20260714a";
-import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=expedition-simplification-20260723b";
+import { BattleSceneController } from "./controllers/battle-scene-controller.js?v=battle-context-ui-20260723b";
 import { FateSceneController } from "./controllers/fate-scene-controller.js?v=fate-toast-top-right-20260715a";
 import { PetModalController } from "./controllers/pet-modal-controller.js?v=pet-command-ui-v1-20260714a";
 import { OrientationController } from "./controllers/orientation-controller.js?v=experience-ux-20260722a";
@@ -201,6 +201,7 @@ export class Game {
       playerSystem: this.playerSystem,
       saveSystem: this.saveSystem,
       uiSystem: this.uiSystem,
+      modalFocusManager: this.modalFocusManager,
       getCurrentScene: () => this.currentScene,
     });
 
@@ -303,6 +304,11 @@ export class Game {
           event.preventDefault();
           event.stopPropagation();
           if (event.repeat) return;
+          if (this.battleSceneController?.backpackForced) {
+            const status = document.getElementById("battle-action-status");
+            if (status) status.textContent = "请先处理背包中待取舍的战利品";
+            return;
+          }
           if (this.expeditionExitOpen) this.closeExpeditionExitConfirm();
           else this.openExpeditionExitConfirm();
           return;
@@ -419,16 +425,16 @@ export class Game {
     this.fateSceneController.setSceneActive(this.currentScene === "fate");
     this.battleSceneController?.setSceneActive(this.currentScene === "dungeon");
     this.territorySceneController?.setSceneActive(this.currentScene === "territory");
-    const upgradePanel = document.getElementById("upgrade-panel");
+    const battleFlowLayer = document.getElementById("battle-flow-layer");
 
     if (this.currentScene === "fate") {
       this.closeExpeditionExitConfirm();
-      if (upgradePanel) upgradePanel.style.display = "none";
+      if (battleFlowLayer) battleFlowLayer.style.display = "none";
       if (this.combatSystem) this.combatSystem.isPaused = true;
       this.fateSceneController.updateDisplay({ commitRecommendation: true });
     } else if (this.currentScene === "territory") {
       this.closeExpeditionExitConfirm();
-      if (upgradePanel) upgradePanel.style.display = "none";
+      if (battleFlowLayer) battleFlowLayer.style.display = "none";
       if (this.combatSystem) this.combatSystem.isPaused = true;
       this.territorySceneController.updateDisplay();
     } else if (this.currentScene === "dungeon") {
@@ -436,7 +442,7 @@ export class Game {
       this.achievementController?.close();
       this.settingsController?.close();
       this.playerModalController?.close();
-      if (upgradePanel) upgradePanel.style.display = "flex";
+      if (battleFlowLayer) battleFlowLayer.style.display = "block";
       if (this.combatSystem) {
         this.combatSystem.prepareBattle();
         this.combatSystem.isPaused = false;

@@ -23,7 +23,7 @@
 | --- | --- |
 | `FateSceneController` | `bind()`、`updateDisplay()`、`handleUpgrade()`、`handleAutoFlip()`、`destroy()` |
 | `ShopRecommendationController` | `bind()`、`update()`、`setFateShopFilter()`、`destroy()` |
-| `BattleSceneController` | `bind()`、`bindMovementControls()`、`applyMovementInput()`、`clearMovementInput()`、`setSceneActive()`、`handleAbandon()`、`handleBattleActionResult()`、`updateBattleDisplay()`、`renderRouteChoices()`、`renderLoot()`、`renderPetSkills()`、`destroy()` |
+| `BattleSceneController` | `bind()`、`bindMovementControls()`、`applyMovementInput()`、`clearMovementInput()`、`setSceneActive()`、`handleBattleActionResult()`、`updateBattleDisplay()`、`cycleNavigationTarget()`、`setBackpackOpen()`、`renderLoot()`、`renderPetSkills()`、`destroy()` |
 | `TerritorySceneController` | `bind()`、`syncProgress()`、`updateDisplay()`、`destroy()` |
 | `PlayerModalController` | `bindEvents()`、`open()`、`close()`、`updateUpgradeControls()`、`destroy()` |
 | `SettingsController` | `bindEvents()`、`open()`、`close()`、`quickSave()`、`quickLoad()`、`destroy()` |
@@ -122,7 +122,7 @@ world.updatePlayerPosition(280, 950);
 | `isPointRevealed(x, y)` / `isAreaRevealed(area)` | 判断世界点或矩形区域是否已进入探索迷雾的揭示网格 |
 | `getState(playerPosition)` | 返回世界尺寸、探索比例、已揭示网格、障碍、地点、附近地点和导航目标快照 |
 
-地点主要状态为 `locked`、`available`、`engaged`、`cleared` 和 `missed`。规则层仍以 `route` 表示自由探索期；控制器不能因为路线卡被点击就直接进入地点。
+地点主要状态为 `locked`、`available`、`engaged`、`cleared` 和 `missed`。规则层仍以 `route` 表示自由探索期；控制器不能因为顶部目标条被点击或按下 `M` 就直接进入地点。
 
 ### CameraSystem
 

@@ -959,7 +959,7 @@ export class CombatSystem {
         this.battleInitialized = true;
         this.placeHeroAtCamp({ force: true });
         this.notifyStateChange();
-        return { success: true, message: '远征终端已就绪' };
+        return { success: true, message: '远征已就绪' };
     }
 
     startRun() {
@@ -2749,7 +2749,7 @@ export class CombatSystem {
             extracted: '撤离成功',
             defeat: '远征失败'
         };
-        return labels[phase] || '远征终端';
+        return labels[phase] || '远征';
     }
 
     getEncounterTitle(type) {

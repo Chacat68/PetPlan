@@ -1068,6 +1068,22 @@
                 frame.contentDocument.getElementById("battle-world-controls"),
                 "未渲染屏幕移动控件",
               );
+              const battleScene = frame.contentDocument.getElementById("battle-scene");
+              const battleBoard = battleScene.querySelector(".battle-board-panel");
+              const flowLayer = frame.contentDocument.getElementById("battle-flow-layer");
+              assert(!frame.contentDocument.getElementById("battle-terminal-toggle"), "右侧远征终端仍然存在");
+              assert(
+                battleBoard.getBoundingClientRect().width >= battleScene.getBoundingClientRect().width - 40,
+                "战斗画布没有占满远征场景",
+              );
+              assert(
+                frame.contentWindow.getComputedStyle(flowLayer).position === "absolute",
+                "情境交互层仍在参与左右分栏",
+              );
+              assert(
+                frame.contentWindow.getComputedStyle(flowLayer).pointerEvents === "none",
+                "隐藏的情境交互层拦截了画布指针",
+              );
 
               const playerXBefore = routeState.world.player.x;
               frame.contentDocument.dispatchEvent(new frame.contentWindow.KeyboardEvent("keydown", {
@@ -1149,20 +1165,36 @@
               const restoredCenter = game.combatSystem.getHeroCenter();
               game.combatSystem.cameraSystem.snapTo(restoredCenter.x, restoredCenter.y);
 
-              const firstRoute = frame.contentDocument.querySelector(
-                "#battle-route-list [data-route-id]",
-              );
-              assert(firstRoute, "未渲染首个路线按钮");
-              firstRoute.click();
+              const targetButton = frame.contentDocument.getElementById("battle-target-cycle-btn");
+              assert(targetButton && !targetButton.hidden, "未渲染顶部目标切换按钮");
+              const targetBefore = game.combatSystem.getBattleState().world.navigationTarget?.nodeId || null;
+              targetButton.click();
+              await waitFor(() => {
+                const target = game.combatSystem.getBattleState().world.navigationTarget;
+                return target?.nodeId && target.nodeId !== targetBefore ? target : null;
+              }, "地图目标轮换");
+              const preferredNodeId = routeState.routeChoices[0].id;
+              const candidateCount = game.battleSceneController.getNavigationCandidates(
+                game.combatSystem.getBattleState(),
+              ).length;
+              for (let index = 0; index <= candidateCount; index += 1) {
+                if (game.combatSystem.getBattleState().world.navigationTarget?.nodeId === preferredNodeId) break;
+                targetButton.click();
+              }
               await waitFor(
-                () => game.combatSystem.getBattleState().world.navigationTarget?.nodeId === routeState.routeChoices[0].id,
-                "地图目标追踪",
+                () => game.combatSystem.getBattleState().world.navigationTarget?.nodeId === preferredNodeId,
+                "轮换回首个搜索目标",
               );
 
               const trackedState = game.combatSystem.getBattleState();
               assert(trackedState.phase === "route", "追踪地点不应直接触发事件");
+              const trackedNodeId = trackedState.world.navigationTarget?.nodeId;
+              assert(
+                trackedState.routeChoices.some((choice) => choice.id === trackedNodeId),
+                "顶部目标按钮没有轮换到可探索路线",
+              );
               const targetLocation = trackedState.world.locations.find(
-                (location) => location.nodeId === routeState.routeChoices[0].id,
+                (location) => location.nodeId === trackedNodeId,
               );
               assert(targetLocation, "未找到首个路线对应的大地图地点");
               const actor = game.playerSystem.player;
@@ -1197,9 +1229,15 @@
                   '[data-search-mode="quick"]',
                 );
                 assert(quickSearch, "未找到快速搜索按钮");
+                const contextDock = frame.contentDocument.getElementById("battle-context-dock");
+                assert(contextDock && !contextDock.hidden, "靠近搜索容器后没有出现情境操作条");
                 assert(quickSearch.textContent.includes("品质 +1"), "搜索按钮未展示宠物实际加成");
                 assert(quickSearch.dataset.talentActive === "true", "搜索按钮未标记天赋生效");
                 quickSearch.click();
+                assert(
+                  !frame.contentDocument.getElementById("battle-search-progress").hidden,
+                  "开始搜索后情境操作条没有切换为进度",
+                );
                 // 后台 iframe 可能暂停 requestAnimationFrame；显式推进搜索倒计时，
                 // 避免浏览器节流把正常的 3 秒搜索误报为超时。
                 for (let elapsed = 0; elapsed < 3200; elapsed += 100) {
@@ -1228,6 +1266,13 @@
                 frame.contentDocument.getElementById("battle-bag-display")?.textContent === `${after.backpackCount}/${after.backpackCapacity}`,
                 "背包 HUD 未更新",
               );
+              const packToggle = frame.contentDocument.getElementById("battle-pack-toggle");
+              const packDrawer = frame.contentDocument.getElementById("battle-pack-drawer");
+              assert(packToggle && !packToggle.disabled, "安全阶段背包按钮不可用");
+              packToggle.click();
+              assert(packDrawer && !packDrawer.hidden, "点击背包按钮后没有打开轻量抽屉");
+              frame.contentDocument.getElementById("battle-pack-close").click();
+              assert(packDrawer.hidden, "背包抽屉无法关闭");
               return `world=${routeState.world.width}x${routeState.world.height} · moved=${Math.round(movedState.world.player.x - playerXBefore)} · depth=${after.depth} · bag=${after.backpackCount}`;
             });
 

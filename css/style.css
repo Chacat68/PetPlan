@@ -12264,3 +12264,613 @@ body[data-scene="dungeon"] .game-hud-controls {
     min-width: 52px;
   }
 }
+
+/* ==================== 远征情境交互 v3 ==================== */
+#battle-scene {
+  position: relative;
+  isolation: isolate;
+}
+
+#battle-scene .battle-board-panel {
+  width: 100%;
+  flex: 1 1 100%;
+}
+
+.battle-flow-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 36;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.battle-flow-layer[style*="display: none"] {
+  display: none !important;
+}
+
+.battle-flow-layer[data-phase="briefing"]::before,
+.battle-flow-layer[data-phase="extracted"]::before,
+.battle-flow-layer[data-phase="defeat"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(71, 166, 201, 0.14), transparent 34%),
+    rgba(4, 9, 14, 0.78);
+  backdrop-filter: blur(3px);
+  pointer-events: auto;
+}
+
+.battle-prep-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: min(720px, calc(100% - 40px));
+  max-height: calc(100% - 34px);
+  display: grid;
+  gap: 10px;
+  padding: clamp(16px, 1.5vw, 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(121, 221, 255, 0.46);
+  border-radius: 16px;
+  color: #dbe8f0;
+  background:
+    radial-gradient(circle at 88% 0, rgba(76, 161, 194, 0.16), transparent 28%),
+    linear-gradient(160deg, rgba(18, 29, 42, 0.98), rgba(8, 14, 22, 0.98));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58);
+  pointer-events: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(121, 221, 255, 0.36) transparent;
+}
+
+.battle-flow-layer:not([data-phase="briefing"]):not([data-phase="extracted"]):not([data-phase="defeat"])
+  .battle-prep-card {
+  display: none;
+}
+
+.battle-prep-header {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.battle-prep-header > span {
+  color: #79ddff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.battle-prep-header h2 {
+  margin: 0;
+  color: #f4fbff;
+  font-size: clamp(23px, 2.2vw, 34px);
+  line-height: 1.1;
+}
+
+.battle-prep-header p {
+  margin: 0;
+  color: #9eb0bc;
+  font-size: clamp(11px, 0.76vw, 13px);
+  line-height: 1.45;
+}
+
+.battle-prep-card .expedition-room-card,
+.battle-prep-card .expedition-loadout-panel,
+.battle-prep-card .expedition-risk-preview {
+  margin: 0;
+}
+
+.battle-prep-card .expedition-room-card {
+  padding: 11px 13px;
+}
+
+.battle-prep-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.battle-prep-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid rgba(130, 162, 185, 0.24);
+  border-radius: 8px;
+  background: rgba(6, 12, 19, 0.56);
+}
+
+.battle-prep-summary span {
+  color: #8198a8;
+  font-size: 9px;
+}
+
+.battle-prep-summary b {
+  overflow: hidden;
+  color: #edf9ff;
+  font-size: clamp(12px, 0.95vw, 16px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-settlement-detail {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(121, 221, 255, 0.24);
+  border-radius: 8px;
+  color: #b9cad5;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(7, 14, 23, 0.68);
+}
+
+.battle-settlement-detail[hidden] {
+  display: none;
+}
+
+.battle-prep-details {
+  margin-top: 8px;
+  border-top: 1px solid rgba(130, 162, 185, 0.2);
+}
+
+.battle-prep-details > summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 4px 0;
+  color: #bcecff;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  list-style: none;
+}
+
+.battle-prep-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.battle-prep-details > summary::after {
+  content: "展开";
+  color: #7892a3;
+  font-size: 10px;
+}
+
+.battle-prep-details[open] > summary::after {
+  content: "收起";
+}
+
+.battle-prep-details .expedition-equipped-items,
+.battle-prep-details .expedition-stash-list,
+.battle-prep-details .expedition-contract-list {
+  margin-top: 8px;
+}
+
+.battle-prep-actions {
+  display: grid;
+}
+
+.battle-prep-actions .expedition-action-btn {
+  min-height: 48px;
+  font-size: 14px;
+}
+
+.battle-flow-layer[data-phase="extracted"] .expedition-loadout-panel,
+.battle-flow-layer[data-phase="defeat"] .expedition-loadout-panel,
+.battle-flow-layer[data-phase="extracted"] .expedition-risk-preview,
+.battle-flow-layer[data-phase="defeat"] .expedition-risk-preview {
+  display: none;
+}
+
+.battle-flow-layer[data-phase="extracted"] .battle-prep-card {
+  border-color: rgba(105, 229, 159, 0.64);
+}
+
+.battle-flow-layer[data-phase="defeat"] .battle-prep-card {
+  border-color: rgba(255, 111, 131, 0.58);
+}
+
+.battle-context-dock {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(16px, 1.4vw, 24px);
+  z-index: 4;
+  width: min(650px, calc(100% - 500px));
+  min-width: 420px;
+  display: grid;
+  grid-template-columns: minmax(150px, 0.72fr) minmax(260px, 1.28fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(121, 221, 255, 0.52);
+  border-radius: 12px;
+  color: #e8f7ff;
+  background: rgba(8, 16, 25, 0.94);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.44);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.battle-context-dock[hidden],
+.battle-pack-drawer[hidden],
+.battle-map-location[hidden],
+.battle-supply-btn[hidden] {
+  display: none !important;
+}
+
+.battle-context-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.battle-context-copy > span {
+  color: #79ddff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.battle-context-copy > strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.battle-context-dock .battle-command-tip {
+  margin: 2px 0 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  color: #8fa5b4;
+  font-size: 10px;
+  line-height: 1.35;
+  background: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.battle-context-actions,
+.battle-context-actions .expedition-action-group {
+  min-width: 0;
+}
+
+.battle-context-actions .expedition-action-group {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.battle-context-actions .expedition-action-btn {
+  min-height: 52px;
+}
+
+.battle-context-actions .expedition-search-pet-bonus {
+  grid-column: 1 / -1;
+  padding: 4px 7px;
+}
+
+.battle-context-actions .expedition-search-progress {
+  margin: 0;
+  padding: 9px;
+}
+
+#battle-scene[data-context-active="true"] .battle-event-feed {
+  display: none;
+}
+
+.battle-pack-drawer {
+  position: absolute;
+  top: clamp(112px, 9vw, 138px);
+  right: clamp(16px, 1.4vw, 24px);
+  z-index: 5;
+  width: min(410px, calc(100% - 32px));
+  max-height: calc(100% - 154px);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid rgba(121, 221, 255, 0.52);
+  border-radius: 13px;
+  color: #dbe8f0;
+  background: rgba(8, 16, 25, 0.97);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+.battle-pack-drawer[data-forced="true"] {
+  top: 50%;
+  right: auto;
+  left: 50%;
+  width: min(520px, calc(100% - 32px));
+  transform: translate(-50%, -50%);
+  border-color: rgba(255, 199, 102, 0.74);
+}
+
+.battle-pack-drawer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid rgba(130, 162, 185, 0.22);
+}
+
+.battle-pack-drawer > header span {
+  color: #79ddff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.battle-pack-drawer > header h2 {
+  margin: 2px 0 0;
+  color: #f4fbff;
+  font-size: 20px;
+}
+
+.battle-pack-close {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(121, 221, 255, 0.38);
+  border-radius: 9px;
+  color: #dff7ff;
+  font: inherit;
+  font-size: 22px;
+  background: rgba(20, 42, 54, 0.8);
+  cursor: pointer;
+}
+
+.battle-pack-summary {
+  padding: 8px 10px;
+  border: 1px solid rgba(130, 162, 185, 0.22);
+  border-radius: 8px;
+  background: rgba(18, 27, 40, 0.72);
+}
+
+.battle-pack-drawer .expedition-loot-list {
+  max-height: none;
+}
+
+.extraction-run-status > .run-stat {
+  min-width: 0;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid var(--exp-line);
+  border-radius: 6px;
+  color: #8fa4b3;
+  font: inherit;
+  font-size: clamp(9px, 0.66vw, 11px);
+  text-align: left;
+  background: rgba(7, 14, 23, 0.84);
+  box-shadow: none;
+  backdrop-filter: blur(7px);
+}
+
+.extraction-run-status > button.run-stat {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.extraction-run-status > button.run-stat:disabled {
+  pointer-events: none;
+  cursor: default;
+}
+
+.extraction-run-status > button.run-stat:not(:disabled):hover,
+.extraction-run-status > button.run-stat[aria-expanded="true"] {
+  border-color: rgba(121, 221, 255, 0.74);
+  color: #dff7ff;
+  background: rgba(19, 48, 61, 0.92);
+}
+
+.extraction-run-status > .run-stat b {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #edf9ff;
+  font-size: clamp(10px, 0.78vw, 13px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-map-location {
+  right: clamp(154px, 14vw, 220px);
+  max-width: min(28%, 260px);
+  min-width: 0;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  font: inherit;
+  text-align: right;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.battle-map-location span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-map-location small {
+  color: #7892a3;
+  font-size: 8px;
+}
+
+.battle-map-location:disabled {
+  cursor: default;
+  opacity: 0.78;
+}
+
+#battle-scene[data-combat-active="true"] .battle-map-location {
+  display: none !important;
+}
+
+.battle-supply-btn {
+  position: absolute;
+  right: clamp(108px, 9vw, 142px);
+  bottom: clamp(18px, 1.45vw, 26px);
+  z-index: 2;
+  min-width: 72px;
+  min-height: 54px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid rgba(105, 229, 159, 0.72);
+  border-radius: 9px;
+  color: #c9f9dc;
+  font: inherit;
+  background: rgba(18, 62, 43, 0.9);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.battle-supply-btn strong {
+  font-size: 12px;
+}
+
+.battle-supply-btn span {
+  color: #91cfa9;
+  font-size: 8px;
+}
+
+.battle-supply-btn:disabled {
+  display: none;
+}
+
+@media (max-width: 900px) and (max-height: 600px),
+       (max-height: 520px) {
+  .battle-prep-card {
+    width: min(680px, calc(100% - 24px));
+    max-height: calc(100% - 20px);
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    align-items: start;
+    gap: 8px 10px;
+    padding: 12px;
+  }
+
+  .battle-prep-header,
+  .battle-prep-actions {
+    grid-column: 1 / -1;
+  }
+
+  .battle-prep-card .expedition-room-card,
+  .battle-prep-card .battle-prep-summary {
+    grid-column: 1;
+  }
+
+  .battle-prep-card .expedition-loadout-panel,
+  .battle-prep-card .expedition-risk-preview {
+    grid-column: 2;
+  }
+
+  .battle-flow-layer[data-phase="extracted"] .battle-prep-card,
+  .battle-flow-layer[data-phase="defeat"] .battle-prep-card {
+    grid-template-columns: 1fr;
+  }
+
+  .battle-flow-layer[data-phase="extracted"] .battle-prep-card > *,
+  .battle-flow-layer[data-phase="defeat"] .battle-prep-card > * {
+    grid-column: 1;
+  }
+
+  .battle-prep-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .battle-context-dock {
+    bottom: 10px;
+    width: min(540px, calc(100% - 310px));
+    min-width: 390px;
+    grid-template-columns: minmax(120px, 0.55fr) minmax(250px, 1.45fr);
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .battle-context-dock .battle-command-tip {
+    display: none;
+  }
+
+  .battle-context-actions .expedition-action-btn {
+    min-height: 46px;
+  }
+
+  .battle-map-location {
+    display: grid;
+    right: 150px;
+    max-width: 30%;
+  }
+
+  .battle-pack-drawer {
+    top: 96px;
+    right: 10px;
+    max-height: calc(100% - 106px);
+  }
+}
+
+@media (max-width: 700px) {
+  .battle-context-dock {
+    bottom: 172px;
+    width: calc(100% - 20px);
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .battle-context-copy {
+    display: none;
+  }
+
+  .battle-pack-drawer {
+    top: 96px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+    max-height: calc(100% - 106px);
+  }
+
+  .battle-prep-card {
+    width: calc(100% - 20px);
+    grid-template-columns: 1fr;
+  }
+
+  .battle-prep-card > * {
+    grid-column: 1 !important;
+  }
+
+  .battle-prep-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-prep-card,
+  .battle-context-dock,
+  .battle-pack-drawer {
+    scroll-behavior: auto;
+  }
+}

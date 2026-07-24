@@ -42,7 +42,7 @@ index.html
 | 控制器 | 责任 |
 | --- | --- |
 | `achievement-controller.js` | 里程碑模态、分类筛选、HUD 徽标和领取交互 |
-| `battle-scene-controller.js` | WASD/方向键/屏幕 D-pad、鼠标/触摸瞄准射击、`E` 情境交互、`Q` 队伍技能、路线追踪、两种搜索、安全屋、补给、撤离/放弃、终端显隐、面板刷新和结算反馈 |
+| `battle-scene-controller.js` | WASD/方向键/屏幕 D-pad、鼠标/触摸瞄准射击、`E` 情境交互、`Q` 队伍技能、`R` 补给、`M` 目标轮换、`B` 背包，以及整备/情境/结算三态刷新 |
 | `settings-controller.js` | 设置模态、显示设置、快捷存档/读档和存档状态 |
 | `player-modal-controller.js` | 玩家属性模态、属性升级和升级按钮状态 |
 | `pet-modal-controller.js` | 宠物编队、背包、图鉴以及解锁/上阵操作 |
@@ -82,20 +82,20 @@ Game 初始化
   -> ExpeditionWorldSystem.moveEntity() 处理世界边界与障碍
   -> CameraSystem 跟随玩家
 
-路线卡 / E / 交互按钮
+顶部目标条 / M / E / 交互按钮
   -> BattleSceneController
   -> CombatSystem.trackLocation() / interactWithNearbyLocation()
   -> ExpeditionWorldSystem（追踪、距离与 POI 状态）
   -> 靠近 POI 后才调用 ExpeditionRunSystem.chooseNode()
 
-搜索 / 安全屋 / 撤离 DOM 操作
+搜索情境条 / 安全屋情境条 / 撤离点 E 交互
   -> BattleSceneController
   -> CombatSystem（对外远征门面）
   -> ExpeditionRunSystem（纯局内规则状态）
   -> CombatSystem 在当前 POI 世界坐标生成或清理遭遇实体
   -> ExpeditionWorldSystem 完成地点并同步下一深度 POI
   -> getBattleState() 形成统一只读快照
-  -> BattleSceneController 刷新追踪、近距交互、路线、背包、威胁、技能与操作按钮
+  -> BattleSceneController 刷新顶部追踪、近距交互、背包抽屉、技能与当前情境按钮
 
 GameCore 帧循环
   -> PlayerSystem.update(deltaTime) 处理玩家世界移动
@@ -116,7 +116,9 @@ GameCore.render()
 
 `ExpeditionRunSystem` 不访问 DOM、Canvas 或永久资源；它只计算 `briefing`、`route`、`search`、`camp`、`combat`、`extraction-ready`、`extracting`、`extracted`、`defeat` 的状态流。`route` 仍是规则阶段名，但在表现层代表可自由行进的大地图探索。`ExpeditionWorldSystem` 不复制规则，只把当前 `routeChoices` 映射为世界 POI，并维护地点、碰撞和发现状态；`CameraSystem` 只处理视口。
 
-`CombatSystem` 是三者的协调门面：路线卡只调用 `trackLocation()`，玩家进入 POI 近距范围后，`interactWithNearbyLocation()` 才调用规则层的 `chooseNode()`。战斗实体始终使用世界坐标，Canvas 点击经镜头转换后锁敌。撤离信标固定在入口，倒计时只有玩家位于信标圈内时才推进。最终奖励仍只在整局结束时发放一次。
+`CombatSystem` 是三者的协调门面：顶部目标条或 `M` 只调用 `trackLocation()`，玩家进入 POI 近距范围后，`interactWithNearbyLocation()` 才调用规则层的 `chooseNode()`。战斗实体始终使用世界坐标，Canvas 点击经镜头转换后锁敌。撤离信标固定在入口，倒计时只有玩家位于信标圈内时才推进。最终奖励仍只在整局结束时发放一次。
+
+战斗表现层不再使用右侧管理栏。`briefing`、`extracted` 与 `defeat` 使用居中覆盖层；搜索和营地使用底部情境条；常规行动只有全宽 Canvas 与战斗 HUD。背包抽屉只在安全阶段允许打开，旧待选物品是唯一会强制打开它的兼容路径。
 
 远征世界坐标、探索网格、地点状态、路线、生命、补给、警戒、背包、怪物、弹药和撤离倒计时都会进入活动远征快照。切换场景只暂停 `CombatSystem` 并清空移动输入；页面隐藏时自动保存，刷新后按 Meta → Combat 的顺序恢复当前远征。活动远征期间禁止快速读档，避免复制战利品。
 

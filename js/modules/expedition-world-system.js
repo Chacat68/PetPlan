@@ -77,7 +77,7 @@ const WORLD_EVENT_LIBRARY = Object.freeze([
     name: "遗落补给箱",
     icon: "▣",
     danger: "轻微动静",
-    description: "一只没有登记在路线终端里的旧补给箱，开启时可能暴露位置。",
+    description: "一只没有登记在路线记录里的旧补给箱，开启时可能暴露位置。",
     effect: Object.freeze({ supply: 1, threatDelta: 2 }),
   }),
   Object.freeze({

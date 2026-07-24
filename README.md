@@ -34,7 +34,9 @@ python3 -m http.server 4174 --directory .
 | 鼠标 / 触摸战场 | 瞄准并射击 |
 | E / 屏幕“交互”按钮 | 靠近地点后进入、搜索或启动撤离 |
 | Q / 队伍技能按钮 | 释放队长宠物的主动技能 |
-| Tab / M | 展开或收起远征终端 |
+| R / 屏幕“补给”按钮 | 条件允许时使用一份补给恢复生命 |
+| M / 顶部目标条 | 在可探索地点、事件和撤离点之间轮换追踪 |
+| B / 顶部“背包” | 在安全行进阶段打开或关闭远征背包 |
 | A / D、左右方向键 / 屏幕左右键 | 在领地基地中横向移动 |
 | E / 领地“交互”按钮 | 靠近基地设施后建造、升级、活动或收取 |
 | 宠物 / 成就 | 打开辅助管理页面 |
@@ -78,6 +80,7 @@ PetPlan/
 - [玩家指南](./doc/player-guide.md)
 - [产品体验设计](./doc/design/product-experience.md)
 - [远征玩法精简改版（当前规则）](./doc/design/expedition-gameplay-simplification-20260723.md)
+- [远征情境交互改版（当前界面）](./doc/design/expedition-context-interaction-20260723.md)
 - [宠物远征初版设计（历史）](./doc/design/extraction-rpg-rework.md)
 - [实际基地领地设计](./doc/design/territory-world-rework.md)
 - [系统架构](./doc/design/architecture.md)

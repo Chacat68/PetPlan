@@ -237,3 +237,26 @@ test("主动止损的保底高于战败且保险物仍可带回", () => {
   assert.equal(abandoned.abandonmentPenalty, true);
   assert.equal(abandoned.insuredLootRecovered, 1);
 });
+
+test("远征结算会清除尚未处理的战利品选择", () => {
+  const run = new ExpeditionRunSystem();
+  run.startRun();
+  run.pendingLootChoice = {
+    id: "pending-before-settlement",
+    incoming: loot("incoming", 50),
+    source: "test",
+    replaceOptions: [],
+  };
+  run.lootOverflowQueue = [{
+    id: "queued-before-settlement",
+    incoming: loot("queued", 40),
+    source: "test",
+    replaceOptions: [],
+  }];
+
+  const settlement = run.finishRun({ extracted: false, reason: "abandoned" });
+  const state = run.getState();
+  assert.equal(settlement.extracted, false);
+  assert.equal(state.pendingLootChoice, null);
+  assert.deepEqual(state.lootOverflowQueue, []);
+});

@@ -869,6 +869,10 @@ export class ExpeditionRunSystem {
       + settlement.deepMaterials * 120
       + settlement.rubyReward * 100;
 
+    // 结算后不应再保留任何局内战利品决策，否则结果界面会被旧的
+    // “背包已满”强制抽屉覆盖，重新开始时也可能继承过期选择。
+    this.pendingLootChoice = null;
+    this.lootOverflowQueue = [];
     this.active = false;
     this.phase = successful ? "extracted" : "defeat";
     this.routeChoices = [];

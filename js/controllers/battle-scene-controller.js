@@ -10,6 +10,7 @@ export class BattleSceneController {
     playerSystem,
     saveSystem,
     uiSystem,
+    modalFocusManager = null,
     getCurrentScene,
   }) {
     this.canvas = canvas;
@@ -19,20 +20,17 @@ export class BattleSceneController {
     this.playerSystem = playerSystem;
     this.saveSystem = saveSystem;
     this.uiSystem = uiSystem;
+    this.modalFocusManager = modalFocusManager;
     this.getCurrentScene = getCurrentScene;
     this.lastSettlementKey = null;
-    this.abandonArmedUntil = 0;
-    this.abandonResetTimer = null;
     this.pressedMovementKeys = new Set();
     this.pointerDirections = new Map();
     this.firingPointerIds = new Set();
     this.lastWorldRevision = -1;
-    this.lastTerminalPhase = null;
-    this.lastTerminalAttentionKey = null;
-    this.shouldFocusTerminal = true;
+    this.lastActionPhase = null;
+    this.backpackOpen = false;
+    this.backpackForced = false;
     this.isSceneActive = false;
-    this.compactTerminalOpen = true;
-    this.lastCompactViewport = false;
     this.abortController = null;
   }
 
@@ -46,11 +44,9 @@ export class BattleSceneController {
       ["battle-rest-btn", () => this.combatSystem.restAtCamp()],
       ["battle-leave-camp-btn", () => this.combatSystem.leaveCamp()],
       ["battle-use-supply-btn", () => this.combatSystem.useSupply()],
-      ["battle-extract-btn", () => this.combatSystem.requestExtraction()],
       ["battle-interact-btn", () => this.combatSystem.interactWithNearbyLocation()],
       ["battle-cancel-search-btn", () => this.combatSystem.cancelSearch?.("manual")],
       ["battle-restart-btn", () => this.combatSystem.resetBattle()],
-      ["battle-abandon-btn", () => this.handleAbandon()],
     ];
 
     actions.forEach(([id, handler]) => {
@@ -66,12 +62,6 @@ export class BattleSceneController {
       const button = event.target.closest("[data-search-mode]");
       if (!button) return;
       this.handleBattleActionResult(this.combatSystem.searchArea(button.dataset.searchMode));
-    }, { signal });
-
-    document.getElementById("battle-route-list")?.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-route-id]");
-      if (!button) return;
-      this.handleBattleActionResult(this.combatSystem.trackLocation(button.dataset.routeId));
     }, { signal });
 
     document.getElementById("battle-skill-dock")?.addEventListener("click", (event) => {
@@ -167,15 +157,19 @@ export class BattleSceneController {
       this.handleMetaActionResult(result);
     }, { signal });
 
-    document.getElementById("battle-terminal-toggle")?.addEventListener(
+    document.getElementById("battle-pack-toggle")?.addEventListener(
       "click",
-      () => this.setCompactTerminalOpen(!this.compactTerminalOpen),
+      () => this.setBackpackOpen(!this.backpackOpen),
       { signal }
     );
-    this.lastCompactViewport = this.isCompactTerminalViewport();
-    window.addEventListener(
-      "resize",
-      () => this.handleTerminalViewportChange(),
+    document.getElementById("battle-pack-close")?.addEventListener(
+      "click",
+      () => this.setBackpackOpen(false),
+      { signal }
+    );
+    document.getElementById("battle-target-cycle-btn")?.addEventListener(
+      "click",
+      () => this.handleBattleActionResult(this.cycleNavigationTarget()),
       { signal }
     );
 
@@ -256,14 +250,6 @@ export class BattleSceneController {
         target?.isContentEditable
       ) return;
 
-      if ((event.code === "Tab" || event.code === "KeyM") && !event.repeat) {
-        const state = this.combatSystem?.getBattleState?.() || {};
-        if (!state.actions?.canAbandon) return;
-        event.preventDefault();
-        this.setCompactTerminalOpen(!this.compactTerminalOpen);
-        return;
-      }
-
       if (movementCodes.has(event.code)) {
         event.preventDefault();
         this.pressedMovementKeys.add(event.code);
@@ -278,6 +264,21 @@ export class BattleSceneController {
       if (event.code === "KeyQ" && !event.repeat) {
         event.preventDefault();
         this.handleBattleActionResult(this.useTeamSkill());
+        return;
+      }
+      if (event.code === "KeyR" && !event.repeat) {
+        event.preventDefault();
+        this.handleBattleActionResult(this.combatSystem.useSupply?.());
+        return;
+      }
+      if (event.code === "KeyB" && !event.repeat) {
+        event.preventDefault();
+        this.setBackpackOpen(!this.backpackOpen);
+        return;
+      }
+      if (event.code === "KeyM" && !event.repeat) {
+        event.preventDefault();
+        this.handleBattleActionResult(this.cycleNavigationTarget());
       }
     }, { signal });
 
@@ -369,17 +370,272 @@ export class BattleSceneController {
 
   setSceneActive(active) {
     const nextActive = Boolean(active);
-    if (nextActive && !this.isSceneActive) this.shouldFocusTerminal = true;
     this.isSceneActive = nextActive;
-    if (!nextActive) this.clearControlInput();
+    if (!nextActive) {
+      this.setBackpackOpen(false, {}, { forceClose: true });
+      this.clearControlInput();
+    }
   }
 
   destroy() {
     this.clearControlInput();
-    if (this.abandonResetTimer) window.clearTimeout(this.abandonResetTimer);
-    this.abandonResetTimer = null;
     this.abortController?.abort();
     this.abortController = null;
+  }
+
+  canOpenBackpack(state = {}) {
+    return Boolean(
+      state.actions?.canAbandon
+      && ["route", "camp", "extraction-ready"].includes(state.phase)
+      && !(state.activeSearch || state.searchState)
+      && !state.isWaveActive
+    );
+  }
+
+  setBackpackOpen(open, providedState = null, options = {}) {
+    const state = providedState || this.combatSystem?.getBattleState?.() || {};
+    const forcedChoice = Boolean(state.actions?.canAbandon && state.pendingLootChoice);
+    const allowed = forcedChoice || this.canOpenBackpack(state);
+    const nextOpen = options.forceClose
+      ? false
+      : forcedChoice || (Boolean(open) && allowed);
+    this.backpackOpen = nextOpen;
+
+    const drawer = document.getElementById("battle-pack-drawer");
+    const wasOpen = Boolean(drawer && !drawer.hidden);
+    const wasForcedOpen = Boolean(drawer && drawer.dataset.forced === "true" && !drawer.hidden);
+    if (drawer) {
+      drawer.hidden = !nextOpen;
+      drawer.dataset.forced = forcedChoice ? "true" : "false";
+      if (forcedChoice && nextOpen) {
+        drawer.setAttribute("role", "dialog");
+        drawer.setAttribute("aria-modal", "true");
+        drawer.setAttribute("aria-describedby", "battle-loot-choice-detail");
+      } else {
+        drawer.removeAttribute("role");
+        drawer.removeAttribute("aria-modal");
+        drawer.removeAttribute("aria-describedby");
+      }
+    }
+    const toggle = document.getElementById("battle-pack-toggle");
+    if (toggle) {
+      toggle.disabled = !allowed;
+      toggle.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+      toggle.title = allowed
+        ? (nextOpen ? "关闭远征背包（B）" : "打开远征背包（B）")
+        : "战斗、搜索和撤离守点期间不能整理背包";
+    }
+    const close = document.getElementById("battle-pack-close");
+    if (close) {
+      close.hidden = forcedChoice;
+      close.disabled = forcedChoice;
+    }
+    const board = document.querySelector(".battle-board-panel");
+    if (board) {
+      board.inert = Boolean(forcedChoice && nextOpen);
+      board.setAttribute("aria-hidden", forcedChoice && nextOpen ? "true" : "false");
+    }
+    if (forcedChoice && nextOpen && !wasForcedOpen) {
+      this.clearControlInput();
+      const status = document.getElementById("battle-action-status");
+      if (status) status.textContent = "背包已满，请先选择替换物品或放弃新战利品";
+      if (this.modalFocusManager) {
+        this.modalFocusManager.activate?.(
+          drawer,
+          '[data-loot-action]:not([disabled]), button:not([disabled])'
+        );
+      } else {
+        queueMicrotask(() => {
+          if (drawer?.hidden === false) {
+            const focusTarget = drawer.querySelector(
+              '[data-loot-action]:not([disabled]), button:not([disabled])'
+            ) || drawer;
+            focusTarget.focus?.();
+          }
+        });
+      }
+    } else if (wasOpen && !nextOpen && drawer?.contains(document.activeElement)) {
+      if (wasForcedOpen && this.modalFocusManager) {
+        this.modalFocusManager.release?.(drawer);
+      } else {
+        const restoreTarget = !toggle?.disabled
+          ? toggle
+          : document.getElementById("battle-restart-btn");
+        restoreTarget?.focus?.();
+      }
+    } else if (wasForcedOpen && !nextOpen && this.modalFocusManager) {
+      this.modalFocusManager.release?.(drawer);
+    }
+    return nextOpen;
+  }
+
+  getNavigationCandidates(state = {}) {
+    const world = state.world || {};
+    const candidates = [];
+    const seen = new Set();
+    const append = (id, kind, name = "地图目标") => {
+      if (!id || seen.has(String(id))) return;
+      seen.add(String(id));
+      candidates.push({ id: String(id), kind, name });
+    };
+
+    (state.routeChoices || []).forEach((node) => {
+      const location = (world.locations || []).find((item) => item.nodeId === node.id);
+      if (!location || ["available", "engaged"].includes(location.state)) {
+        append(node.id, "route", node.name);
+      }
+    });
+    (world.locations || []).forEach((location) => {
+      if (
+        location.kind === "world-event"
+        && location.state === "available"
+        && (location.known || location.discovered)
+      ) {
+        append(location.id, "world-event", location.name);
+      }
+    });
+    (world.extractionLocations || world.locations || []).forEach((location) => {
+      if (location.kind === "extraction" && ["unlocked", "engaged"].includes(location.state)) {
+        append(location.id, "extraction", location.name);
+      }
+    });
+    return candidates;
+  }
+
+  cycleNavigationTarget(providedState = null) {
+    const state = providedState || this.combatSystem?.getBattleState?.() || {};
+    if (!state.actions?.canTrackMap) {
+      return { success: false, message: "当前不需要切换地图目标" };
+    }
+    const candidates = this.getNavigationCandidates(state);
+    if (candidates.length === 0) {
+      return { success: false, message: "当前没有可追踪的地图目标" };
+    }
+    const current = state.world?.navigationTarget || {};
+    const currentIndex = candidates.findIndex((candidate) => (
+      candidate.id === String(current.id || "")
+      || candidate.id === String(current.nodeId || "")
+    ));
+    const next = candidates[(currentIndex + 1 + candidates.length) % candidates.length];
+    return this.combatSystem.trackLocation(next.id);
+  }
+
+  syncActionContext(state = {}) {
+    const phase = state.phase || "briefing";
+    const activeSearch = state.activeSearch || state.searchState || null;
+    const contextVisible = Boolean(
+      state.actions?.canSearch
+      || state.actions?.canRest
+      || activeSearch
+    );
+    const contextDock = document.getElementById("battle-context-dock");
+    if (contextDock) contextDock.hidden = !contextVisible;
+    const battleScene = document.getElementById("battle-scene");
+    if (battleScene) battleScene.dataset.contextActive = contextVisible ? "true" : "false";
+
+    const contextTitle = document.getElementById("battle-context-title");
+    if (contextTitle) {
+      contextTitle.textContent = activeSearch
+        ? "正在搜索"
+        : state.actions?.canRest
+          ? "营地选择"
+          : "选择搜索方式";
+    }
+
+    const prepTitle = document.getElementById("battle-prep-title");
+    const prepSubtitle = document.getElementById("battle-prep-subtitle");
+    const prepCopy = {
+      briefing: ["远征准备", "选一把武器即可出发；高级配装与委托按需展开。"],
+      extracted: ["撤离成功", "战利品已经入库，本局收益已完成结算。"],
+      defeat: ["行动结束", "安全袋和保底收益已经结算，可以调整整备后再次出发。"],
+    }[phase] || ["远征进行中", "保持移动，靠近地点后按 E 交互。"];
+    if (prepTitle) prepTitle.textContent = prepCopy[0];
+    if (prepSubtitle) prepSubtitle.textContent = prepCopy[1];
+
+    const candidates = this.getNavigationCandidates(state);
+    const targetButton = document.getElementById("battle-target-cycle-btn");
+    if (targetButton) {
+      targetButton.hidden = !state.actions?.canTrackMap;
+      targetButton.disabled = candidates.length === 0;
+      targetButton.setAttribute(
+        "aria-label",
+        candidates.length > 1
+          ? "切换地图追踪目标（M）"
+          : candidates.length === 1 ? "追踪当前地图目标（M）" : "当前没有地图目标"
+      );
+    }
+    const targetHint = document.getElementById("battle-target-cycle-hint");
+    if (targetHint) {
+      targetHint.textContent = candidates.length > 1
+        ? `点击或 M 切换 · ${candidates.length} 个目标`
+        : candidates.length === 1 ? "点击或 M 追踪" : "暂无目标";
+    }
+
+    const wasForced = this.backpackForced;
+    this.backpackForced = Boolean(state.actions?.canAbandon && state.pendingLootChoice);
+    if (this.backpackForced) {
+      this.setBackpackOpen(true, state);
+    } else if (wasForced) {
+      this.setBackpackOpen(false, state, { forceClose: true });
+    } else if (this.backpackOpen && !this.canOpenBackpack(state)) {
+      this.setBackpackOpen(false, state, { forceClose: true });
+    } else {
+      this.setBackpackOpen(this.backpackOpen, state);
+    }
+
+    if (this.lastActionPhase !== phase) {
+      const status = document.getElementById("battle-action-status");
+      if (status && this.lastActionPhase !== null) {
+        status.textContent = `远征已进入${state.phaseLabel || "新阶段"}`;
+      }
+      this.lastActionPhase = phase;
+    }
+  }
+
+  renderRunSummary(state = {}, formatNumber = String) {
+    const setText = (id, value) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = String(value);
+    };
+    const settlement = state.settlement || null;
+    const detail = document.getElementById("battle-settlement-detail");
+
+    if (!settlement) {
+      setText("battle-summary-label-a", "已清理");
+      setText("battle-summary-label-b", "本局击杀");
+      setText("battle-summary-label-c", "携带价值");
+      setText("battle-summary-label-d", "历史撤离");
+      setText("battle-rooms-display", `${state.depth || 0} / ${state.maxDepth || 0}`);
+      setText("battle-kills-display", state.rewards?.kills || 0);
+      setText("battle-reward-coins", formatNumber(state.pendingValue || 0));
+      setText("battle-extractions-display", state.meta?.extractions || 0);
+      if (detail) detail.hidden = true;
+      return;
+    }
+
+    setText("battle-summary-label-a", "结算金币");
+    setText("battle-summary-label-b", "水晶 / 红宝石");
+    setText("battle-summary-label-c", "结算经验");
+    setText(
+      "battle-summary-label-d",
+      settlement.extracted ? "带回战利品" : "安全袋 / 遗失"
+    );
+    setText("battle-rooms-display", formatNumber(settlement.coins || 0));
+    setText(
+      "battle-kills-display",
+      `${formatNumber(settlement.crystals || 0)} / ${formatNumber(settlement.rubyReward || 0)}`
+    );
+    setText("battle-reward-coins", formatNumber(settlement.exp || 0));
+    setText(
+      "battle-extractions-display",
+      settlement.extracted
+        ? `${settlement.lootExtracted || 0} 件`
+        : `${settlement.insuredLootRecovered || 0} / ${settlement.lootLost || 0} 件`
+    );
+    if (detail) {
+      detail.hidden = false;
+      detail.textContent = this.getTip(state);
+    }
   }
 
   getAtRiskLoadoutItems(metaState = null) {
@@ -397,42 +653,6 @@ export class BattleSceneController {
       && !item.permanent
       && !item.keepOnFailure
       && !protectedIds.has(String(item.instanceId)));
-  }
-
-  handleAbandon() {
-    const now = Date.now();
-    if (now > this.abandonArmedUntil) {
-      this.abandonArmedUntil = now + 3200;
-      this.updateAbandonButton(true);
-      if (this.abandonResetTimer) window.clearTimeout(this.abandonResetTimer);
-      this.abandonResetTimer = window.setTimeout(() => {
-        this.abandonArmedUntil = 0;
-        this.abandonResetTimer = null;
-        this.updateAbandonButton(false);
-      }, 3200);
-      const phase = this.combatSystem?.getBattleState?.()?.phase;
-      const dangerousExit = phase === "combat" || phase === "extracting";
-      const atRisk = this.getAtRiskLoadoutItems();
-      const loadoutRisk = atRisk.length
-        ? `；未保险配装将遗失：${atRisk.map((item) => item.name || "未命名装备").join("、")}`
-        : "";
-      return {
-        success: false,
-        message: `再次点击“放弃本局”确认；${dangerousExit ? "当前退出按战败结算，" : "当前可安全止损，"}未保护战利品将遗失，安全袋保留${loadoutRisk}`,
-      };
-    }
-    this.abandonArmedUntil = 0;
-    if (this.abandonResetTimer) window.clearTimeout(this.abandonResetTimer);
-    this.abandonResetTimer = null;
-    this.updateAbandonButton(false);
-    return this.combatSystem.abandonRun();
-  }
-
-  updateAbandonButton(armed = false) {
-    const button = document.getElementById("battle-abandon-btn");
-    if (!button) return;
-    button.dataset.armed = armed ? "true" : "false";
-    button.textContent = armed ? "再次点击确认放弃" : "放弃本局";
   }
 
   handleBattleActionResult(result, options = {}) {
@@ -477,10 +697,6 @@ export class BattleSceneController {
       `${guardHp}/${guardMaxHp}${state.petGuard?.rescueReady ? " +救援" : ""}`
     );
     setText("battle-enemy-display", state.activeEnemies + state.queuedEnemies);
-    setText("battle-rooms-display", `${state.depth} / ${state.maxDepth}`);
-    setText("battle-extractions-display", state.meta.extractions);
-    setText("battle-kills-display", state.rewards.kills);
-    setText("battle-reward-coins", formatNumber(state.pendingValue));
     setText("battle-supplies-display", `补给 ${state.supplies}`);
     setText("battle-event-feed", state.lastAction);
     setText(
@@ -503,10 +719,10 @@ export class BattleSceneController {
       battleScene.dataset.raidActive = state.actions.canAbandon ? "true" : "false";
       battleScene.dataset.combatActive = state.isWaveActive || state.phase === "extracting" ? "true" : "false";
     }
-    const terminalPanel = document.getElementById("upgrade-panel");
-    if (terminalPanel) {
-      terminalPanel.dataset.phase = state.phase;
-      terminalPanel.dataset.raidActive = state.actions.canAbandon ? "true" : "false";
+    const flowLayer = document.getElementById("battle-flow-layer");
+    if (flowLayer) {
+      flowLayer.dataset.phase = state.phase;
+      flowLayer.dataset.raidActive = state.actions.canAbandon ? "true" : "false";
     }
     const loadoutPanel = document.getElementById("battle-loadout-panel");
     if (loadoutPanel) loadoutPanel.dataset.raidActive = state.actions.canAbandon ? "true" : "false";
@@ -516,7 +732,7 @@ export class BattleSceneController {
     if (status) status.dataset.threat = state.threat >= 70 ? "high" : state.threat >= 40 ? "medium" : "low";
 
     this.renderCurrentRoom(state);
-    this.renderRouteChoices(state.routeChoices, state.world, state);
+    this.renderRunSummary(state, formatNumber);
     this.renderLoot(state.backpack, state);
     this.renderLootChoice(state.pendingLootChoice);
     this.renderRiskPreview(state, formatNumber);
@@ -534,12 +750,9 @@ export class BattleSceneController {
     this.renderSearchProgress(state.activeSearch || state.searchState || null);
     this.renderMetaState(state.raidMeta || this.expeditionMetaSystem?.getState?.(), state);
 
-    setHidden("battle-route-panel", !state.actions.canTrackMap);
     setHidden("battle-search-actions", !state.actions.canSearch);
     setHidden("battle-camp-actions", !state.actions.canRest);
     setHidden("battle-use-supply-btn", !state.actions.canHeal);
-    setHidden("battle-extract-btn", !state.actions.canExtract);
-    setHidden("battle-abandon-btn", !state.actions.canAbandon);
     setHidden("battle-restart-btn", !(state.phase === "extracted" || state.phase === "defeat"));
     setHidden("battle-start-expedition-btn", state.phase !== "briefing");
     setHidden("battle-world-controls", !state.actions.canAbandon);
@@ -549,14 +762,12 @@ export class BattleSceneController {
     const startButton = document.getElementById("battle-start-expedition-btn");
     if (startButton) {
       startButton.disabled = !state.actions.canStart;
-      startButton.textContent = "确认配装并开始远征";
+      startButton.textContent = "选好武器，开始远征";
     }
     const restartButton = document.getElementById("battle-restart-btn");
     if (restartButton) restartButton.textContent = "返回整备";
     const healButton = document.getElementById("battle-use-supply-btn");
     if (healButton) healButton.disabled = !state.actions.canHeal;
-    const extractButton = document.getElementById("battle-extract-btn");
-    if (extractButton) extractButton.disabled = !state.actions.canExtract;
     const interactButton = document.getElementById("battle-interact-btn");
     if (interactButton) interactButton.disabled = !state.actions.canInteract;
     const fireButton = document.getElementById("battle-fire-btn");
@@ -565,96 +776,9 @@ export class BattleSceneController {
     document.querySelectorAll("[data-move-direction]").forEach((button) => {
       button.disabled = !state.actions.canMove;
     });
-    setText(
-      "battle-extract-label",
-      state.extraction?.nearType === "emergency"
-        ? "消耗 1 补给 · 高压守点"
-        : state.threat >= 70 ? "高危守点" : state.depth >= state.maxDepth ? "最终撤离" : "低压返程撤离"
-    );
-
     setText("battle-command-tip", this.getTip(state));
-    if (!state.actions.canAbandon) this.updateAbandonButton(false);
-    this.syncTerminalContext(state);
+    this.syncActionContext(state);
     this.handleSettlement(state);
-  }
-
-  syncTerminalContext(state = {}) {
-    const panel = document.getElementById("upgrade-panel");
-    if (!panel) return;
-
-    const phase = state.phase || "briefing";
-    const phaseChanged = this.lastTerminalPhase !== phase;
-    const attentionKey = this.getTerminalAttentionKey(state);
-    const attentionChanged = this.lastTerminalAttentionKey !== attentionKey;
-    const raidActive = Boolean(state.actions?.canAbandon);
-    const shouldReset = this.isSceneActive && (
-      this.shouldFocusTerminal || phaseChanged
-    );
-
-    if (shouldReset) {
-      panel.scrollTop = 0;
-      const status = document.getElementById("battle-terminal-status");
-      if (status && this.lastTerminalPhase !== null) {
-        status.textContent = `远征终端已切换到${state.phaseLabel || "当前阶段"}`;
-      }
-      this.shouldFocusTerminal = false;
-    }
-
-    if (!raidActive) {
-      this.setCompactTerminalOpen(true);
-    } else if (attentionChanged || shouldReset) {
-      this.setCompactTerminalOpen(Boolean(attentionKey));
-    }
-
-    this.lastTerminalPhase = phase;
-    this.lastTerminalAttentionKey = attentionKey;
-  }
-
-  getTerminalAttentionKey(state = {}) {
-    if (state.pendingLootChoice) {
-      const incoming = state.pendingLootChoice.incoming || {};
-      return `loot:${incoming.id || incoming.name || "pending"}`;
-    }
-    if (state.settlement || ["extracted", "defeat"].includes(state.phase)) {
-      const settlement = state.settlement || {};
-      return `settlement:${settlement.runId || state.phase || "complete"}`;
-    }
-    if (state.phase === "search" && !(state.activeSearch || state.searchState)) {
-      return `search:${state.currentNode?.id || state.depth || "current"}`;
-    }
-    if (["camp", "extraction-ready"].includes(state.phase)) {
-      return `${state.phase}:${state.currentNode?.id || state.depth || "current"}`;
-    }
-    return null;
-  }
-
-  isCompactTerminalViewport() {
-    return typeof window !== "undefined" && window.matchMedia?.(
-      "(max-width: 900px) and (max-height: 600px), (max-height: 520px)"
-    ).matches;
-  }
-
-  handleTerminalViewportChange() {
-    const compactViewport = this.isCompactTerminalViewport();
-    if (compactViewport === this.lastCompactViewport) return;
-    this.lastCompactViewport = compactViewport;
-  }
-
-  setCompactTerminalOpen(open) {
-    this.compactTerminalOpen = Boolean(open);
-    const panel = document.getElementById("upgrade-panel");
-    const toggle = document.getElementById("battle-terminal-toggle");
-    if (panel) panel.dataset.compactOpen = this.compactTerminalOpen ? "true" : "false";
-    if (toggle) {
-      toggle.setAttribute("aria-expanded", this.compactTerminalOpen ? "true" : "false");
-      toggle.setAttribute(
-        "aria-label",
-        this.compactTerminalOpen ? "收起远征终端" : "展开远征终端"
-      );
-      const icon = toggle.querySelector("b");
-      if (icon) icon.textContent = this.compactTerminalOpen ? "›" : "‹";
-    }
-    if (!this.compactTerminalOpen && panel) panel.scrollTop = 0;
   }
 
   getNavigationLabel(location = null) {
@@ -896,7 +1020,7 @@ export class BattleSceneController {
         state.interaction.location ? "已进入交互范围" : state.extraction.unlocked ? "入口撤离点已解锁" : "继续探索以定位撤离点",
         state.interaction.location
           ? state.interaction.location.description
-          : "使用 WASD、方向键或屏幕方向键移动；右侧地点卡用于切换追踪目标。"
+          : "使用 WASD、方向键或屏幕方向键移动；点击顶部目标条可轮换追踪地点。"
       ],
       "extraction-ready": ["最终目标", "选择撤离路线", "入口返程或深区应急撤离", "比较距离、守点时间、敌人规模与补给成本后再决定撤离路线。"],
       extracted: ["远征结算", "撤离成功", "背包战利品已入库", "战斗现金和经验已发放；物品需在仓库中出售、装备或用于委托。"],
@@ -907,118 +1031,6 @@ export class BattleSceneController {
     setText("battle-room-name", summary[1]);
     setText("battle-room-risk", summary[2]);
     setText("battle-room-desc", summary[3]);
-  }
-
-  renderRouteChoices(choices = [], world = {}, state = {}) {
-    const list = document.getElementById("battle-route-list");
-    if (!list) return;
-    const buttons = choices.map((node) => {
-      const location = world.locations?.find((item) => item.nodeId === node.id);
-      const isTracking = world.navigationTarget?.nodeId === node.id;
-      const isKnown = !location || Boolean(location.known || location.discovered);
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `expedition-route-choice route-${isKnown ? node.type : "unknown"}${isTracking ? " tracking" : ""}`;
-      button.dataset.routeId = node.id;
-      button.setAttribute("aria-pressed", isTracking ? "true" : "false");
-
-      const icon = document.createElement("span");
-      icon.className = "route-choice-icon";
-      icon.textContent = isKnown ? (node.icon || "◇") : "?";
-      const copy = document.createElement("span");
-      copy.className = "route-choice-copy";
-      const name = document.createElement("strong");
-      name.textContent = isKnown ? node.name : "未知信号";
-      const danger = document.createElement("small");
-      const distance = location
-        ? Math.round(Math.hypot(location.x - world.player.x, location.y - world.player.y))
-        : null;
-      danger.textContent = `${isKnown ? node.danger : "风险待侦察"}${distance === null ? "" : ` · ${distance}m`} · ${isTracking ? "追踪中" : "点击追踪"}`;
-      copy.append(name, danger);
-      button.append(icon, copy);
-      return button;
-    });
-    const discoveredEvents = (world.locations || []).filter((location) => (
-      location.kind === "world-event" &&
-      location.state === "available" &&
-      (location.known || location.discovered)
-    ));
-    discoveredEvents.forEach((eventLocation) => {
-      const isTracking = world.navigationTarget?.id === eventLocation.id;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `expedition-route-choice route-event${isTracking ? " tracking" : ""}`;
-      button.dataset.routeId = eventLocation.id;
-      button.setAttribute("aria-pressed", isTracking ? "true" : "false");
-      const icon = document.createElement("span");
-      icon.className = "route-choice-icon";
-      icon.textContent = eventLocation.icon || "!";
-      const copy = document.createElement("span");
-      copy.className = "route-choice-copy";
-      const name = document.createElement("strong");
-      name.textContent = eventLocation.name;
-      const detail = document.createElement("small");
-      const distance = Math.round(Math.hypot(
-        eventLocation.x - world.player.x,
-        eventLocation.y - world.player.y
-      ));
-      detail.textContent = `可选支线 · ${distance}m · ${isTracking ? "追踪中" : "点击追踪"}`;
-      copy.append(name, detail);
-      button.append(icon, copy);
-      buttons.push(button);
-    });
-    const extractionLocations = (world.extractionLocations || world.locations || [])
-      .filter((location) => location.kind === "extraction" && ["unlocked", "engaged"].includes(location.state));
-    extractionLocations.forEach((extraction) => {
-      const isTracking = world.navigationTarget?.id === extraction.id;
-      const extractionType = extraction.extractionType || "entry";
-      const rule = state.extraction?.rules?.[extractionType] || world.extractionRules?.[extractionType] || {};
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `expedition-route-choice route-extraction${isTracking ? " tracking" : ""}`;
-      button.dataset.routeId = extraction.id;
-      button.setAttribute("aria-pressed", isTracking ? "true" : "false");
-
-      const icon = document.createElement("span");
-      icon.className = "route-choice-icon";
-      icon.textContent = extraction.icon || "⇥";
-      const copy = document.createElement("span");
-      copy.className = "route-choice-copy";
-      const name = document.createElement("strong");
-      name.textContent = extraction.name;
-      const detail = document.createElement("small");
-      const distance = Math.round(Math.hypot(
-        extraction.x - world.player.x,
-        extraction.y - world.player.y
-      ));
-      const cost = Number(rule.supplyCost) > 0 ? ` · 补给 -${rule.supplyCost}` : "";
-      const estimate = this.getExtractionEstimate(rule, state);
-      detail.textContent = `${extractionType === "emergency" ? "应急撤离" : "入口撤离"}${cost} · ${distance}m · 约 ${estimate.durationSeconds}s / ${estimate.enemyCount} 敌人 · ${isTracking ? "追踪中" : "点击追踪"}`;
-      copy.append(name, detail);
-      button.append(icon, copy);
-      buttons.push(button);
-    });
-    list.replaceChildren(...buttons);
-  }
-
-  getExtractionEstimate(rule = {}, state = {}) {
-    const durationMs = Math.max(
-      Number(rule.minDurationMs) || 0,
-      (Number(rule.baseDurationMs) || 0)
-        + Math.floor((Number(state.threat) || 0) / 25) * (Number(rule.threatDurationStepMs) || 0)
-        + (Number(state.overpressure) || 0) * (Number(rule.overpressureDurationStepMs) || 0)
-    );
-    const enemyCount = Math.max(
-      3,
-      (Number(rule.baseEnemyCount) || 0)
-        + Math.max(1, Number(state.depth) || 1)
-        + Math.floor((Number(state.threat) || 0) / Math.max(1, Number(rule.threatPerEnemy) || 14))
-        + Math.floor((Number(state.overpressure) || 0) / Math.max(1, Number(rule.overpressurePerEnemy) || 12))
-    );
-    return {
-      durationSeconds: Math.max(0, Math.round(durationMs / 1000)),
-      enemyCount,
-    };
   }
 
   renderLoot(backpack = [], state = {}) {
