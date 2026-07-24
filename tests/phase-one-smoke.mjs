@@ -66,46 +66,13 @@ function createResourceStub() {
   };
 }
 
-function testProgressionGuide() {
+function testProgressionPaths() {
   const progression = new ProgressionSystem();
-
-  assert.deepEqual(
-    {
-      id: progression.getFirstSessionGuide({}).id,
-      current: progression.getFirstSessionGuide({}).current,
-    },
-    { id: "flip", current: 1 }
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({ totalFlips: 8 }).current,
-    2
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({
-      totalFlips: 8,
-      fateCoins: 2,
-      assistants: 1,
-      expeditionDepth: 1,
-      extractions: 1,
-      buildings: 1,
-    }).complete,
-    true
-  );
-
-  const outOfOrder = progression.getFirstSessionGuide({
-    fateCoins: 2,
-    assistants: 1,
-    expeditionDepth: 1,
-    extractions: 1,
-    buildings: 1,
-  });
-  assert.equal(outOfOrder.id, "flip");
-  assert.equal(outOfOrder.current, 1);
-  assert.equal(outOfOrder.completedCount, 5);
 
   const path = progression.getPathSummary({ assistants: 2 });
   assert.equal(path.leadingPath?.id, "companion");
   assert.equal(progression.getRecommendationBoost("assistant", path), 14);
+  assert.deepEqual(progression.getSaveData(), { claimedAchievementIds: [] });
 }
 
 function testTerritoryPacingAndPersistence() {
@@ -259,7 +226,7 @@ function testSceneNormalization() {
   assert.equal(currentUrl.searchParams.get("scene"), "territory");
 }
 
-testProgressionGuide();
+testProgressionPaths();
 testTerritoryPacingAndPersistence();
 await testSaveMigration();
 testSceneNormalization();

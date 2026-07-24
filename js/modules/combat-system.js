@@ -4,11 +4,12 @@
  * ExpeditionRunSystem 负责路线和结算，本类负责战斗实体、主动技能与 Canvas 渲染。
  */
 
-import { ExpeditionRunSystem } from './expedition-run-system.js?v=duckov-continuous-20260724a';
-import { ExpeditionWorldSystem } from './expedition-world-system.js?v=duckov-continuous-20260724a';
+import { ExpeditionRunSystem } from './expedition-run-system.js?v=petplan-sync-20260724c';
+import { ExpeditionWorldSystem } from './expedition-world-system.js?v=petplan-sync-20260724c';
 import { CameraSystem } from './camera-system.js?v=expedition-simplification-20260723b';
 import { getPlayerVisualBounds } from './player-system.js?v=expedition-simplification-20260723b';
 import { TargetingSystem } from './targeting-system.js?v=tower-defense-20260710b';
+import { FIRST_EXTRACTION_BONUS } from './progression-config.js?v=r1-r2-bridge-20260724a';
 import {
     CHARACTER_ART_VERSION,
     CHARACTER_FRAME_COUNT,
@@ -3117,6 +3118,15 @@ export class CombatSystem {
             crystals: Math.floor(baseSettlement.crystals * (1 + (territoryBonuses.crystalBonus || 0) / 100)),
             exp: Math.floor(baseSettlement.exp * (1 + territoryExpBonus / 100))
         };
+        const isFirstSuccessfulExtraction = settlement.extracted && this.meta.extractions === 0;
+        if (isFirstSuccessfulExtraction) {
+            settlement.coins += FIRST_EXTRACTION_BONUS.coins;
+            settlement.crystals += FIRST_EXTRACTION_BONUS.crystals;
+            settlement.value = (Number(settlement.value) || 0)
+                + FIRST_EXTRACTION_BONUS.coins
+                + FIRST_EXTRACTION_BONUS.crystals * 35;
+            settlement.firstExtractionBonus = { ...FIRST_EXTRACTION_BONUS };
+        }
         settlement.bossKills = this.runBossKills;
         settlement.eliteKills = this.runEliteKills;
         settlement.participantIds = (this.petSquadSnapshot?.members || []).map(member => member.instanceId);

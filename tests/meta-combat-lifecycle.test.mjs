@@ -8,8 +8,10 @@ globalThis.Image = class ImageStub {
 
 const { CombatSystem } = await import("../js/modules/combat-system.js");
 const { ExpeditionMetaSystem } = await import("../js/modules/expedition-meta-system.js");
+const { TerritorySystem } = await import("../js/modules/territory-system.js");
+const { FIRST_EXTRACTION_BONUS } = await import("../js/modules/progression-config.js");
 
-function createCombat(metaSystem) {
+function createCombat(metaSystem, { resourceSystem = null, territorySystem = null } = {}) {
   const playerSystem = {
     player: {
       x: 0, y: 0, width: 40, height: 40,
@@ -22,8 +24,8 @@ function createCombat(metaSystem) {
   };
   const combat = new CombatSystem({ random: () => 0.5, runOptions: { minExtractionDepth: 1 } });
   combat.setPlayerSystem(playerSystem);
-  combat.setResourceSystem({ addCoins() {}, addCrystals() {}, addRubies() {} });
-  combat.setTerritorySystem({ calculateBonuses() { return {}; } });
+  combat.setResourceSystem(resourceSystem || { addCoins() {}, addCrystals() {}, addRubies() {} });
+  combat.setTerritorySystem(territorySystem || { calculateBonuses() { return {}; } });
   combat.setPetSystem({
     equippedPets: [],
     resetBattleStates() {},
@@ -32,6 +34,28 @@ function createCombat(metaSystem) {
   combat.setExpeditionMetaSystem(metaSystem);
   combat.resetBattle();
   return combat;
+}
+
+function createLowResourceWallet() {
+  return {
+    coins: 500,
+    crystals: 100,
+    hasEnoughCoins(amount) { return this.coins >= amount; },
+    hasEnoughCrystals(amount) { return this.crystals >= amount; },
+    spendCoins(amount) {
+      if (!this.hasEnoughCoins(amount)) return false;
+      this.coins -= amount;
+      return true;
+    },
+    spendCrystals(amount) {
+      if (!this.hasEnoughCrystals(amount)) return false;
+      this.crystals -= amount;
+      return true;
+    },
+    addCoins(amount) { this.coins += amount; },
+    addCrystals(amount) { this.crystals += amount; },
+    addRubies() {},
+  };
 }
 
 function loot(id) {
@@ -116,4 +140,60 @@ test("实际远征结算会推进精英击杀与仓库调查合约", () => {
   const contracts = meta.getState().contracts.active;
   assert.equal(contracts.find(contract => contract.templateId === "side-elite-hunt").status, "ready");
   assert.equal(contracts.find(contract => contract.templateId === "main-investigate-vault").status, "ready");
+});
+
+test("低资源新档首次成功撤离后可升至 R2，并立即获得新设施下一步", () => {
+  const resources = createLowResourceWallet();
+  const territory = new TerritorySystem(resources, null);
+  territory.setOnPersist(() => {});
+  assert.equal(territory.buildBuilding("main_base", 0).success, true);
+
+  // 300 金币代表首次远征前由命运、教学成就或常规活动取得的低门槛收入。
+  resources.addCoins(300);
+  assert.equal(territory.buildBuilding("training_ground", 1).success, true);
+  assert.equal(territory.buildBuilding("temple", 2).success, true);
+  assert.deepEqual(
+    { coins: resources.coins, crystals: resources.crystals, constructionScore: territory.getConstructionScore() },
+    { coins: 0, crystals: 40, constructionScore: 2 }
+  );
+
+  const beforeExtraction = territory.getProgressSummary().nextGoal;
+  assert.match(beforeExtraction.detail, /成功撤离 0\/1（差1）/);
+  assert.match(beforeExtraction.detail, /建设度 2\/2（完成）/);
+  assert.match(beforeExtraction.detail, /金币 0\/700（差700）/);
+  assert.match(beforeExtraction.detail, /水晶 40\/100（差60）/);
+
+  const meta = new ExpeditionMetaSystem({ creditSettlementCurrency: false });
+  const combat = createCombat(meta, { resourceSystem: resources, territorySystem: territory });
+  assert.equal(combat.startRun().success, true);
+  const settlement = combat.finishExpedition(true, "first-low-resource-extraction");
+  assert.deepEqual(settlement.firstExtractionBonus, FIRST_EXTRACTION_BONUS);
+  assert.equal(resources.coins, FIRST_EXTRACTION_BONUS.coins);
+  assert.equal(resources.crystals, 40 + FIRST_EXTRACTION_BONUS.crystals);
+
+  territory.setProgressContext({
+    extractions: combat.meta.extractions,
+    bestExtractedDepth: combat.meta.bestExtractedDepth,
+  });
+  assert.equal(territory.canExpand().success, true);
+  const promotion = territory.expandTerritory();
+  assert.equal(promotion.success, true);
+  assert.equal(promotion.rank, 2);
+  assert.deepEqual(promotion.promotionReward, { coins: 400, crystals: 30 });
+  assert.deepEqual(
+    { coins: resources.coins, crystals: resources.crystals },
+    { coins: 400, crystals: 50 }
+  );
+  assert.match(promotion.message, /升级闪耀训练馆或萌宠疗愈庭/);
+
+  const r2Goal = territory.getProgressSummary().nextGoal;
+  assert.equal(r2Goal.kind, "upgrade");
+  assert.equal(r2Goal.buildingType, "training_ground");
+  assert.match(r2Goal.detail, /星光特训屋蓝图解锁/);
+
+  assert.equal(combat.startRun().success, true);
+  const repeatSettlement = combat.finishExpedition(true, "repeat-extraction");
+  assert.equal(repeatSettlement.firstExtractionBonus, undefined);
+  assert.equal(resources.coins, 400, "首次撤离奖励不能重复领取");
+  assert.equal(resources.crystals, 50, "首次撤离水晶奖励不能重复领取");
 });

@@ -1,4 +1,4 @@
-import { ACHIEVEMENT_CATEGORIES } from "../modules/achievement-config.js?v=achievement-ui-v3-20260714a";
+import { ACHIEVEMENT_CATEGORIES } from "../modules/achievement-config.js?v=territory-painterly-city-20260724h";
 
 /**
  * Owns the milestone modal and HUD feedback. Achievement definitions,

@@ -8,7 +8,7 @@
 import {
   TERRITORY_BUILDING_SITES,
   TERRITORY_RANK_CONFIG,
-} from "./progression-config.js?v=territory-world-20260712a";
+} from "./progression-config.js?v=r1-r2-bridge-20260724a";
 
 export class TerritoryWorldSystem {
   constructor({ groundY = 610, interactionRadius = 132 } = {}) {
@@ -21,7 +21,7 @@ export class TerritoryWorldSystem {
     this.gate = {
       id: "expedition_gate",
       type: "expedition_gate",
-      name: "远征入口",
+      name: "次元探索门",
       icon: "⇥",
       x: 170,
       requiredRank: 1,

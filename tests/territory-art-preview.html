@@ -18,31 +18,35 @@
         display: flex;
         gap: 6px;
         padding: 6px;
-        border: 1px solid #8c7446;
-        background: rgba(5, 9, 12, 0.92);
+        border: 2px solid #f2a546;
+        border-radius: 5px;
+        background: rgba(8, 9, 13, 0.94);
+        box-shadow: 3px 4px 0 #000;
       }
       button {
-        border: 1px solid #80693e;
+        border: 1px solid #6f4a32;
         border-radius: 3px;
         padding: 5px 9px;
-        color: #e9edf0;
-        background: #182127;
+        color: #fff0cd;
+        background: #17191e;
         cursor: pointer;
       }
-      button:hover { border-color: #f0b45f; }
-      #preview-status { color: #f0b45f; padding: 5px 8px; white-space: nowrap; }
+      button:hover { border-color: #ffd167; }
+      #preview-status { color: #f7b62f; padding: 5px 8px; white-space: nowrap; }
     </style>
   </head>
   <body>
     <nav class="preview-controls" aria-label="领地美术预览分区">
-      <span id="preview-status">正在构造 R5 领地…</span>
-      <button type="button" data-preview-rank="5" data-preview-x="170">远征门</button>
-      <button type="button" data-preview-rank="5" data-preview-x="650">先攻区</button>
-      <button type="button" data-preview-rank="5" data-preview-x="1080">核心区</button>
-      <button type="button" data-preview-rank="5" data-preview-x="1600">协同区</button>
-      <button type="button" data-preview-rank="5" data-preview-x="2200">工坊/图书馆</button>
-      <button type="button" data-preview-rank="5" data-preview-x="2850">矿区</button>
-      <button type="button" data-preview-rank="4" data-preview-x="3290">边界</button>
+      <span id="preview-status">正在构造 R5 梦幻庭院…</span>
+      <button type="button" data-preview-rank="5" data-preview-x="170">探索门</button>
+      <button type="button" data-preview-rank="5" data-preview-x="650">闪耀训练区</button>
+      <button type="button" data-preview-rank="5" data-preview-x="1080">星愿广场</button>
+      <button type="button" data-preview-rank="5" data-preview-x="1600">萌宠疗愈区</button>
+      <button type="button" data-preview-rank="1" data-preview-x="2068">R2待开放路牌</button>
+      <button type="button" data-preview-rank="2" data-preview-x="2068">R2已开放路牌</button>
+      <button type="button" data-preview-rank="5" data-preview-x="2200">梦工坊街区</button>
+      <button type="button" data-preview-rank="5" data-preview-x="2850">水晶花园</button>
+      <button type="button" data-preview-rank="4" data-preview-x="3290">庭院边界</button>
     </nav>
     <iframe id="game-frame" title="R5 领地完整美术预览"></iframe>
     <script>
@@ -115,10 +119,14 @@
         controller.setSceneActive(false);
         controller.setSceneActive(true);
         controller.updateDisplay();
-        await waitFor(() => Object.values(controller.sceneImages).every((image) => image?.complete && image.naturalWidth > 0));
+        await waitFor(() => (
+          Object.keys(controller.sceneImages).length === 9
+          && Object.values(controller.sceneImages)
+            .every((image) => image?.complete && image.naturalWidth > 0)
+        ));
         jumpTo(1080);
         restoreStorage();
-        document.getElementById("preview-status").textContent = "R5 全资源已加载";
+        document.getElementById("preview-status").textContent = "R5 梦幻庭院已加载";
         document.body.dataset.ready = "true";
       }
 

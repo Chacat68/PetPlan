@@ -250,7 +250,7 @@ export const ACHIEVEMENT_DEFINITIONS = Object.freeze([
     metric: "territoryRank",
     icon: "T",
     title: "落脚之地",
-    desc: "修复主基地并达到领地 R1",
+    desc: "启用星愿屋并让庭院达到 R1",
     target: 1,
     reward: { crystals: 30 },
   }),

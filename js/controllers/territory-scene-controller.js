@@ -1,18 +1,83 @@
 import { CameraSystem } from "../modules/camera-system.js?v=expedition-simplification-20260723b";
-import { TerritoryWorldSystem } from "../modules/territory-world-system.js?v=territory-world-20260712a";
+import { TerritoryWorldSystem } from "../modules/territory-world-system.js?v=petplan-sync-20260724d";
 import {
   TERRITORY_BUILDING_ART_SOURCES,
   TERRITORY_BUILDING_RENDER_SIZES,
-  TERRITORY_DISTRICT_ART,
   TERRITORY_SCENE_ART_SOURCES,
-} from "../modules/territory-art-config.js?v=territory-ground-unified-20260713a";
+} from "../modules/territory-art-config.js?v=territory-assets-lazy-20260724a";
 
 const PATH_COLORS = Object.freeze({
-  core: "#ffd167",
-  hero: "#ff8a62",
+  core: "#f7b62f",
+  hero: "#ff7046",
   companion: "#72d7ff",
-  territory: "#8dffb5",
+  territory: "#8dca86",
   gate: "#c38cff",
+});
+
+const BUILDING_THEMES = Object.freeze({
+  main_base: Object.freeze({
+    body: "#4a3030",
+    bodyShade: "#17171d",
+    panel: "#8f3039",
+    accent: "#f7b62f",
+    glass: "#235c72",
+    glassGlow: "#83dcf5",
+    symbol: "♡",
+  }),
+  training_ground: Object.freeze({
+    body: "#523027",
+    bodyShade: "#1e191a",
+    panel: "#c44c32",
+    accent: "#ffd167",
+    glass: "#294957",
+    glassGlow: "#72d7ff",
+    symbol: "✦",
+  }),
+  temple: Object.freeze({
+    body: "#263c3d",
+    bodyShade: "#151f23",
+    panel: "#327778",
+    accent: "#72d7ff",
+    glass: "#225a68",
+    glassGlow: "#b7f5ec",
+    symbol: "♥",
+  }),
+  workshop: Object.freeze({
+    body: "#44312a",
+    bodyShade: "#1d1918",
+    panel: "#865238",
+    accent: "#f7b62f",
+    glass: "#4f3732",
+    glassGlow: "#ff8a62",
+    symbol: "✧",
+  }),
+  barracks: Object.freeze({
+    body: "#303541",
+    bodyShade: "#171a22",
+    panel: "#525f78",
+    accent: "#ff8a62",
+    glass: "#253d54",
+    glassGlow: "#72d7ff",
+    symbol: "★",
+  }),
+  library: Object.freeze({
+    body: "#332e42",
+    bodyShade: "#191722",
+    panel: "#65517e",
+    accent: "#72d7ff",
+    glass: "#302d57",
+    glassGlow: "#c38cff",
+    symbol: "✦",
+  }),
+  crystal_mine: Object.freeze({
+    body: "#293a35",
+    bodyShade: "#15221f",
+    panel: "#3f7468",
+    accent: "#8dca86",
+    glass: "#245c5d",
+    glassGlow: "#72d7ff",
+    symbol: "◆",
+  }),
 });
 
 /**
@@ -69,28 +134,63 @@ export class TerritorySceneController {
     this.lastNearbySiteId = null;
     this.lastHudUpdate = 0;
     this.lastSettlementKey = "";
-    this.sceneImages = this.loadSceneImages();
-    this.buildingImages = Object.fromEntries(
-      Object.keys(TERRITORY_BUILDING_ART_SOURCES).map((type) => [type, this.sceneImages[type]])
-    );
+    this.sceneImages = {};
+    this.buildingImages = {};
+    this.assetLoadPromises = new Map();
     this.reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
   }
 
-  loadSceneImages() {
-    if (typeof Image !== "function") return {};
-    const sources = {
-      ...TERRITORY_SCENE_ART_SOURCES,
-      ...TERRITORY_BUILDING_ART_SOURCES,
-    };
-    return Object.fromEntries(Object.entries(sources).map(([type, src]) => {
-      const image = new Image();
-      image.decoding = "async";
+  loadImageAsset(type, sourceList, { building = false } = {}) {
+    if (this.assetLoadPromises.has(type)) return this.assetLoadPromises.get(type);
+    if (typeof Image !== "function") return Promise.resolve(null);
+
+    const candidates = (Array.isArray(sourceList) ? sourceList : [sourceList]).filter(Boolean);
+    const image = new Image();
+    image.decoding = "async";
+    this.sceneImages[type] = image;
+    if (building) this.buildingImages[type] = image;
+
+    const promise = new Promise((resolve) => {
+      let candidateIndex = 0;
       image.onload = () => {
+        image.onload = null;
+        image.onerror = null;
         if (this.isSceneActive) this.render();
+        resolve(image);
       };
-      image.src = src;
-      return [type, image];
-    }));
+      image.onerror = () => {
+        const nextSource = candidates[candidateIndex];
+        candidateIndex += 1;
+        if (nextSource) {
+          image.src = nextSource;
+          return;
+        }
+        image.onload = null;
+        image.onerror = null;
+        resolve(null);
+      };
+      image.onerror();
+    });
+    this.assetLoadPromises.set(type, promise);
+    return promise;
+  }
+
+  ensureAssetsForRank(rank = this.territorySystem?.rank || 0) {
+    if (!this.isSceneActive) return Promise.resolve([]);
+    const safeRank = Math.max(0, Math.floor(Number(rank) || 0));
+    const loads = Object.entries(TERRITORY_SCENE_ART_SOURCES).map(([type, sourceList]) => (
+      this.loadImageAsset(type, sourceList)
+    ));
+
+    for (const [type, sourceList] of Object.entries(TERRITORY_BUILDING_ART_SOURCES)) {
+      const requiredRank = type === "expedition_gate"
+        ? 0
+        : this.world.getSite(type)?.requiredRank ?? 0;
+      if (requiredRank <= safeRank) {
+        loads.push(this.loadImageAsset(type, sourceList, { building: true }));
+      }
+    }
+    return Promise.all(loads);
   }
 
   bind() {
@@ -184,9 +284,9 @@ export class TerritorySceneController {
     toggle.setAttribute("aria-expanded", String(isExpanded));
     toggle.setAttribute(
       "aria-label",
-      isExpanded ? "收起领地目标详情" : "展开领地目标详情"
+      isExpanded ? "收起庭院目标详情" : "展开庭院目标详情"
     );
-    toggle.title = isExpanded ? "收起领地目标详情" : "展开领地目标详情";
+    toggle.title = isExpanded ? "收起庭院目标详情" : "展开庭院目标详情";
     const icon = toggle.querySelector("[aria-hidden='true']");
     if (icon) icon.textContent = isExpanded ? "−" : "＋";
   }
@@ -213,7 +313,7 @@ export class TerritorySceneController {
       this.lastSettlementKey = settlementKey;
       const message = settlement.extracted
         ? `远征队已返航：带回 ${this.formatNumber(settlement.coins)} 金币与 ${this.formatNumber(settlement.crystals)} 水晶。`
-        : "远征队返回基地休整，本次只保留了部分收益。";
+        : "远征队返回庭院休整，本次只保留了部分收益。";
       this.uiSystem?.showToast(message, "info");
     }
     this.world.resetPosition({ fromExpedition: returning });
@@ -258,6 +358,7 @@ export class TerritorySceneController {
     const summary = this.territorySystem.setProgressContext(this.getProgressionContext() || {});
     this.world.setRank(summary.rank);
     this.camera.setWorldSize(summary.worldWidth, this.world.height);
+    if (this.isSceneActive) this.ensureAssetsForRank(summary.rank);
     return summary;
   }
 
@@ -363,22 +464,22 @@ export class TerritorySceneController {
     const detail = document.getElementById("territory-interact-detail");
     if (!site) {
       if (interact) interact.disabled = true;
-      if (label) label.textContent = "靠近建筑后交互";
+      if (label) label.textContent = "靠近设施后互动";
       if (detail) detail.textContent = "A/D、方向键或点击地面移动";
       return;
     }
     const name = site.type === "expedition_gate"
-      ? "远征入口"
-      : this.territorySystem.buildingData[site.type]?.name || "基地设施";
+      ? "次元探索门"
+      : this.territorySystem.buildingData[site.type]?.name || "庭院设施";
     if (interact) interact.disabled = false;
-    if (label) label.textContent = `与${name}交互`;
-    if (detail) detail.textContent = "按 E 或点击此按钮";
+    if (label) label.textContent = `和${name}互动`;
+    if (detail) detail.textContent = "按 E 或点击查看";
   }
 
   openNearbyContext() {
     const site = this.world.getNearbySite();
     if (!site) {
-      this.uiSystem?.showToast("继续靠近建筑或远征入口后再进行交互。", "info");
+      this.uiSystem?.showToast("再靠近一点，就能与庭院设施互动啦。", "info");
       return;
     }
     this.clearMovementInput();
@@ -406,9 +507,9 @@ export class TerritorySceneController {
     });
 
     if (type === "expedition_gate") {
-      if (kicker) kicker.textContent = "远征入口";
-      if (title) title.textContent = "前往禁区";
-      if (detail) detail.textContent = "带上当前基地准备效果，进入可自由探索的远征世界。";
+      if (kicker) kicker.textContent = "次元探索门";
+      if (title) title.textContent = "开启宠物远征";
+      if (detail) detail.textContent = "带上庭院准备效果，和宠物伙伴一起进入可自由探索的异世界。";
       if (stats) stats.innerHTML = this.getPreparedBonusRows();
       this.showContextAction("depart", "进入远征");
       panel.hidden = false;
@@ -453,7 +554,7 @@ export class TerritorySceneController {
 
     if (!building) {
       const canBuild = this.territorySystem.canBuild(type, data.site.slotIndex);
-      const button = this.showContextAction("build", type === "main_base" ? "修复主基地" : "开始建造");
+      const button = this.showContextAction("build", type === "main_base" ? "启用星愿屋" : "开始布置");
       if (button) {
         button.disabled = !canBuild.success;
         if (!canBuild.success) button.title = canBuild.reason;
@@ -482,7 +583,7 @@ export class TerritorySceneController {
       }
       if (data.activity) {
         const activity = this.territorySystem.canPerformActivity(type);
-        const activityButton = this.showContextAction("activity", this.territorySystem.getActivityDefinition(data.activity)?.label || "基地活动");
+        const activityButton = this.showContextAction("activity", this.territorySystem.getActivityDefinition(data.activity)?.label || "庭院活动");
         if (activityButton) {
           activityButton.disabled = !activity.success;
           if (!activity.success) activityButton.title = activity.reason;
@@ -601,7 +702,7 @@ export class TerritorySceneController {
 
   getBuildingEffectText(type, level) {
     const effects = {
-      main_base: `领地 R${this.territorySystem.rank}`,
+      main_base: `庭院 R${this.territorySystem.rank}`,
       training_ground: `主角攻击 +${level * 4}`,
       temple: `远征防御 +${level * 3} · 宠物冷却 -${Math.min(20, level * 2)}%`,
       workshop: `金币储备 ${level * 45}/分钟 · 远征金币 +${level * 3}%`,
@@ -609,12 +710,12 @@ export class TerritorySceneController {
       library: `远征经验 +${Math.min(30, level * 4)}%`,
       crystal_mine: `水晶储备 ${level * 4}/2分钟`,
     };
-    return effects[type] || "基地增益";
+    return effects[type] || "庭院增益";
   }
 
   getPathLabel(path) {
-    const labels = { core: "核心区", hero: "先攻区", companion: "协同区", territory: "拓域区", gate: "远征区" };
-    return labels[path] || "基地设施";
+    const labels = { core: "星愿广场", hero: "闪耀训练区", companion: "萌宠疗愈区", territory: "梦工坊街区", gate: "次元探索区" };
+    return labels[path] || "庭院设施";
   }
 
   getWorldPlayerCenter() {
@@ -647,80 +748,435 @@ export class TerritorySceneController {
     const sky = this.sceneImages.sky;
     const camera = this.camera.getState();
     if (sky?.complete && sky.naturalWidth > 0) {
-      const scale = Math.max(height / sky.naturalHeight, (width + 180) / sky.naturalWidth);
+      const scale = Math.max(height / sky.naturalHeight, (width + 520) / sky.naturalWidth);
       const drawWidth = sky.naturalWidth * scale;
       const drawHeight = sky.naturalHeight * scale;
-      const offset = -((camera.x * 0.055) % drawWidth);
+      const maxCameraX = Math.max(1, this.world.width - width);
+      const panRange = Math.max(0, drawWidth - width);
+      const offset = -(Math.max(0, Math.min(1, camera.x / maxCameraX)) * panRange);
       const y = height - drawHeight;
-      for (let x = offset - drawWidth; x < width + drawWidth; x += drawWidth) {
-        ctx.drawImage(sky, x, y, drawWidth, drawHeight);
-      }
+      ctx.drawImage(sky, offset, y, drawWidth, drawHeight);
     } else {
       const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      gradient.addColorStop(0, "#102839");
-      gradient.addColorStop(1, "#1b3037");
+      gradient.addColorStop(0, "#111b35");
+      gradient.addColorStop(0.52, "#3f3549");
+      gradient.addColorStop(1, "#c06a48");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
     }
-    ctx.fillStyle = `rgba(12, 28, 34, ${Math.max(0, 0.18 - rank * 0.025)})`;
+    ctx.fillStyle = `rgba(8, 10, 18, ${Math.max(0, 0.08 - rank * 0.01)})`;
     ctx.fillRect(0, 0, width, height);
   }
 
   renderWorldScenery(ctx) {
     const groundY = this.world.groundY;
-    const ground = this.sceneImages.ground;
-    if (ground?.complete && ground.naturalWidth > 0) {
-      const tileWidth = 760;
-      const tileHeight = tileWidth * (ground.naturalHeight / ground.naturalWidth);
-      const y = groundY - tileHeight * 0.39;
-      for (let x = 0; x < this.world.width + tileWidth; x += tileWidth - 1) {
-        ctx.drawImage(ground, x, y, tileWidth, tileHeight);
-      }
-    } else {
-      ctx.fillStyle = "#182a2c";
-      ctx.fillRect(0, groundY - 5, this.world.width, this.world.height - groundY + 5);
-    }
+    const camera = this.camera.getState();
+    const overscan = Math.max(640, camera.width, this.canvas?.width || 0);
+    const sceneryLeft = -overscan;
+    const sceneryWidth = this.world.width + overscan * 2;
 
-    const marker = this.sceneImages.districtMarker;
-    TERRITORY_DISTRICT_ART.forEach((district) => {
-      if (district.x > this.world.width) return;
-      const color = PATH_COLORS[district.path] || "#ffd167";
-      ctx.save();
-      ctx.translate(district.markerX, groundY);
-      if (marker?.complete && marker.naturalWidth > 0) {
-        ctx.globalAlpha = 0.88;
-        ctx.drawImage(marker, -31, -112, 62, 112);
-      }
-      ctx.fillStyle = color;
-      ctx.font = "bold 11px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(district.label, 0, -54);
-      ctx.restore();
+    const terraceGradient = ctx.createLinearGradient(0, groundY - 26, 0, this.world.height);
+    terraceGradient.addColorStop(0, "rgba(111, 72, 55, 0.44)");
+    terraceGradient.addColorStop(0.18, "rgba(91, 58, 48, 0.9)");
+    terraceGradient.addColorStop(1, "#291b1b");
+    ctx.fillStyle = terraceGradient;
+    ctx.fillRect(sceneryLeft, groundY - 26, sceneryWidth, this.world.height - groundY + 30);
+
+    const routeGradient = ctx.createLinearGradient(0, groundY - 22, 0, groundY + 46);
+    routeGradient.addColorStop(0, "rgba(172, 55, 56, 0.82)");
+    routeGradient.addColorStop(1, "rgba(104, 31, 43, 0.9)");
+    ctx.fillStyle = routeGradient;
+    ctx.fillRect(sceneryLeft, groundY - 19, sceneryWidth, 60);
+
+    this.renderR2RegionSign(ctx);
+  }
+
+  renderR2RegionSign(ctx) {
+    if (this.territorySystem.rank < 1) return;
+
+    const groundY = this.world.groundY;
+    const r1Boundary = this.territorySystem.getRankConfig(1)?.worldWidth || 2180;
+    const signX = r1Boundary - 112;
+    const isOpen = this.territorySystem.rank >= 2;
+    const requirementState = this.territorySystem.getRankRequirementState(2);
+    const missing = requirementState.checks.find((check) => !check.met);
+    const status = isOpen
+      ? "已开放 · 向右探索"
+      : missing
+        ? `未开放 · ${missing.label} ${this.formatNumber(missing.value)}/${this.formatNumber(missing.target)}`
+        : "待升阶 · 返回星愿屋";
+
+    ctx.save();
+    ctx.translate(signX, groundY);
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, 1, 91, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const poleGradient = ctx.createLinearGradient(-50, -132, 50, 0);
+    poleGradient.addColorStop(0, "#694436");
+    poleGradient.addColorStop(0.52, "#d48a54");
+    poleGradient.addColorStop(1, "#4d3030");
+    ctx.strokeStyle = poleGradient;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(-60, 0);
+    ctx.lineTo(-60, -112);
+    ctx.moveTo(60, 0);
+    ctx.lineTo(60, -112);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 213, 143, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-57, -5);
+    ctx.lineTo(-57, -107);
+    ctx.moveTo(63, -5);
+    ctx.lineTo(63, -107);
+    ctx.stroke();
+
+    const panelX = -108;
+    const panelY = -152;
+    const panelWidth = 216;
+    const panelHeight = 82;
+    ctx.shadowColor = isOpen ? "rgba(247, 182, 47, 0.44)" : "rgba(0, 0, 0, 0.56)";
+    ctx.shadowBlur = isOpen ? 16 : 9;
+    ctx.fillStyle = "rgba(14, 15, 21, 0.97)";
+    this.roundRectPath(ctx, panelX, panelY, panelWidth, panelHeight, 9);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = isOpen ? "#f7b62f" : "#aa684a";
+    ctx.lineWidth = 3;
+    this.roundRectPath(ctx, panelX, panelY, panelWidth, panelHeight, 9);
+    ctx.stroke();
+
+    ctx.fillStyle = isOpen ? "#8f3039" : "#533238";
+    this.roundRectPath(ctx, panelX + 6, panelY + 6, 43, panelHeight - 12, 5);
+    ctx.fill();
+    ctx.fillStyle = "#ffd167";
+    ctx.font = "900 17px Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("R2", panelX + 28, panelY + 37);
+    ctx.font = "bold 12px Arial, sans-serif";
+    ctx.fillText("区域", panelX + 28, panelY + 56);
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#fff0cd";
+    ctx.font = "bold 16px Arial, sans-serif";
+    ctx.fillText("萌宠乐园", panelX + 60, panelY + 31);
+    ctx.fillStyle = isOpen ? "#72d7ff" : "#d9a17a";
+    ctx.font = "bold 10px Arial, sans-serif";
+    ctx.fillText(status, panelX + 60, panelY + 51);
+
+    ctx.fillStyle = isOpen ? "#ffd167" : "#9b6553";
+    ctx.beginPath();
+    ctx.moveTo(panelX + 178, panelY + 62);
+    ctx.lineTo(panelX + 199, panelY + 62);
+    ctx.lineTo(panelX + 199, panelY + 56);
+    ctx.lineTo(panelX + 207, panelY + 67);
+    ctx.lineTo(panelX + 199, panelY + 78);
+    ctx.lineTo(panelX + 199, panelY + 72);
+    ctx.lineTo(panelX + 178, panelY + 72);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  roundRectPath(ctx, x, y, width, height, radius = 12) {
+    const safeRadius = Math.max(0, Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + safeRadius, y);
+    ctx.lineTo(x + width - safeRadius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+    ctx.lineTo(x + width, y + height - safeRadius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+    ctx.lineTo(x + safeRadius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+    ctx.lineTo(x, y + safeRadius);
+    ctx.quadraticCurveTo(x, y, x + safeRadius, y);
+    ctx.closePath();
+  }
+
+  renderModernBuilding(ctx, type, width, height, level = 1) {
+    const theme = BUILDING_THEMES[type] || BUILDING_THEMES.main_base;
+    const massesByType = {
+      main_base: [
+        { x: -0.47, y: -0.53, w: 0.29, h: 0.46, rows: 3, cols: 2 },
+        { x: -0.2, y: -0.84, w: 0.41, h: 0.77, glass: true, rows: 5, cols: 4 },
+        { x: 0.21, y: -0.61, w: 0.26, h: 0.54, rows: 4, cols: 2 },
+      ],
+      training_ground: [
+        { x: -0.47, y: -0.53, w: 0.94, h: 0.46, rows: 3, cols: 7 },
+        { x: -0.3, y: -0.73, w: 0.6, h: 0.24, glass: true, rows: 1, cols: 6 },
+      ],
+      temple: [
+        { x: -0.42, y: -0.84, w: 0.4, h: 0.77, glass: true, rows: 5, cols: 3 },
+        { x: -0.02, y: -0.56, w: 0.46, h: 0.49, rows: 3, cols: 4 },
+      ],
+      workshop: [
+        { x: -0.47, y: -0.58, w: 0.58, h: 0.51, rows: 3, cols: 4 },
+        { x: 0.11, y: -0.77, w: 0.34, h: 0.7, glass: true, rows: 5, cols: 3 },
+      ],
+      barracks: [
+        { x: -0.43, y: -0.81, w: 0.32, h: 0.74, rows: 5, cols: 2 },
+        { x: -0.08, y: -0.63, w: 0.51, h: 0.56, glass: true, rows: 4, cols: 4 },
+      ],
+      library: [
+        { x: -0.47, y: -0.51, w: 0.94, h: 0.44, rows: 2, cols: 6 },
+        { x: -0.27, y: -0.84, w: 0.6, h: 0.37, glass: true, rows: 2, cols: 5 },
+      ],
+      crystal_mine: [
+        { x: -0.47, y: -0.48, w: 0.31, h: 0.41, rows: 3, cols: 2 },
+        { x: -0.16, y: -0.76, w: 0.33, h: 0.69, glass: true, rows: 5, cols: 3 },
+        { x: 0.17, y: -0.54, w: 0.3, h: 0.47, rows: 3, cols: 2 },
+      ],
+    };
+    const masses = massesByType[type] || massesByType.main_base;
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+    ctx.beginPath();
+    ctx.ellipse(0, 1, width * 0.46, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#12141a";
+    this.roundRectPath(ctx, -width * 0.49, -height * 0.1, width * 0.98, height * 0.1, 4);
+    ctx.fill();
+    ctx.fillStyle = theme.panel;
+    ctx.fillRect(-width * 0.47, -height * 0.105, width * 0.94, height * 0.025);
+    ctx.fillStyle = "rgba(247, 182, 47, 0.68)";
+    ctx.fillRect(-width * 0.47, -height * 0.075, width * 0.94, 2);
+
+    masses.forEach((mass, index) => {
+      this.renderUrbanMass(
+        ctx,
+        {
+          x: mass.x * width,
+          y: mass.y * height,
+          width: mass.w * width,
+          height: mass.h * height,
+          rows: mass.rows,
+          cols: mass.cols,
+          glass: mass.glass,
+          accentOnLeft: index % 2 === 0,
+        },
+        theme
+      );
     });
 
-    const lamp = this.sceneImages.lamp;
-    for (let x = 90; x < this.world.width; x += 260) {
-      if (lamp?.complete && lamp.naturalWidth > 0) {
-        ctx.save();
-        ctx.globalAlpha = this.territorySystem.rank >= 1 ? 0.9 : 0.45;
-        if (this.territorySystem.rank >= 1) {
-          ctx.shadowColor = "rgba(255, 186, 92, 0.8)";
-          ctx.shadowBlur = 12;
-        }
-        ctx.drawImage(lamp, x - 33, groundY - 108, 66, 108);
-        ctx.restore();
-      }
+    this.renderModernBuildingDetails(ctx, type, width, height, theme);
+
+    if (level > 1) {
+      const stars = Math.min(5, level);
+      ctx.fillStyle = "#ffd85c";
+      ctx.font = `bold ${Math.max(10, width * 0.04)}px Arial`;
+      ctx.textAlign = "center";
+      ctx.fillText("✦".repeat(stars), 0, -height - 7);
+    }
+  }
+
+  renderUrbanMass(ctx, mass, theme) {
+    const {
+      x,
+      y,
+      width,
+      height,
+      rows = 3,
+      cols = 3,
+      glass = false,
+      accentOnLeft = true,
+    } = mass;
+    const gradient = ctx.createLinearGradient(x, y, x + width, y + height);
+    gradient.addColorStop(0, glass ? theme.glass : theme.body);
+    gradient.addColorStop(0.58, glass ? theme.bodyShade : theme.bodyShade);
+    gradient.addColorStop(1, "#101217");
+    ctx.fillStyle = gradient;
+    this.roundRectPath(ctx, x, y, width, height, Math.min(7, width * 0.045));
+    ctx.fill();
+    ctx.strokeStyle = "rgba(215, 164, 95, 0.72)";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.fillStyle = theme.panel;
+    const accentWidth = Math.max(4, width * 0.045);
+    ctx.fillRect(accentOnLeft ? x : x + width - accentWidth, y + 3, accentWidth, height - 6);
+    ctx.fillStyle = theme.accent;
+    ctx.fillRect(x, y, width, Math.max(3, height * 0.025));
+
+    const insetX = x + width * 0.12;
+    const insetY = y + height * 0.14;
+    const insetWidth = width * 0.76;
+    const insetHeight = height * 0.68;
+    if (glass) {
+      const glassGradient = ctx.createLinearGradient(insetX, insetY, insetX + insetWidth, insetY + insetHeight);
+      glassGradient.addColorStop(0, "rgba(114, 215, 255, 0.58)");
+      glassGradient.addColorStop(0.45, theme.glass);
+      glassGradient.addColorStop(1, "rgba(16, 20, 31, 0.92)");
+      ctx.fillStyle = glassGradient;
+      ctx.fillRect(insetX, insetY, insetWidth, insetHeight);
     }
 
-    if (this.territorySystem.rank < 5) {
-      const barrier = this.sceneImages.frontierBarrier;
-      if (barrier?.complete && barrier.naturalWidth > 0) {
-        ctx.drawImage(barrier, this.world.width - 182, groundY - 166, 170, 166);
+    const gapX = insetWidth / Math.max(1, cols);
+    const gapY = insetHeight / Math.max(1, rows);
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < cols; column += 1) {
+        const windowX = insetX + column * gapX + gapX * 0.16;
+        const windowY = insetY + row * gapY + gapY * 0.17;
+        ctx.fillStyle = glass
+          ? "rgba(139, 225, 248, 0.24)"
+          : (row + column) % 3 === 0
+            ? theme.glassGlow
+            : theme.glass;
+        ctx.globalAlpha = glass ? 0.7 : (row + column) % 3 === 0 ? 0.88 : 0.55;
+        ctx.fillRect(windowX, windowY, gapX * 0.64, Math.max(3, gapY * 0.44));
       }
-      ctx.fillStyle = "#ffd167";
-      ctx.font = "bold 13px Arial";
-      ctx.textAlign = "right";
-      ctx.fillText(`R${this.territorySystem.rank + 1} 后开放`, this.world.width - 34, groundY - 176);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = "rgba(255, 240, 205, 0.18)";
+    ctx.lineWidth = 1;
+    for (let column = 1; column < cols; column += 1) {
+      const lineX = insetX + column * gapX;
+      ctx.beginPath();
+      ctx.moveTo(lineX, insetY);
+      ctx.lineTo(lineX, insetY + insetHeight);
+      ctx.stroke();
+    }
+  }
+
+  renderModernBuildingDetails(ctx, type, width, height, theme) {
+    const sign = (x, y, label = theme.symbol, signWidth = width * 0.16) => {
+      ctx.fillStyle = "rgba(15, 16, 22, 0.96)";
+      this.roundRectPath(ctx, x - signWidth / 2, y - height * 0.055, signWidth, height * 0.11, 4);
+      ctx.fill();
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = theme.accent;
+      ctx.font = `bold ${Math.max(14, width * 0.065)}px Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, x, y + 1);
+      ctx.textBaseline = "alphabetic";
+    };
+    const rooftopUnit = (x, y, unitWidth = width * 0.12) => {
+      ctx.fillStyle = "#20232b";
+      ctx.fillRect(x, y, unitWidth, height * 0.07);
+      ctx.fillStyle = "rgba(255, 240, 205, 0.38)";
+      ctx.fillRect(x + 3, y + 3, unitWidth - 6, 2);
+    };
+
+    if (type === "main_base") {
+      ctx.fillStyle = "rgba(18, 20, 26, 0.96)";
+      ctx.fillRect(-width * 0.42, -height * 0.34, width * 0.84, height * 0.075);
+      ctx.fillStyle = theme.accent;
+      ctx.fillRect(-width * 0.42, -height * 0.34, width * 0.84, 3);
+      sign(0, -height * 0.71, "♡", width * 0.14);
+      rooftopUnit(-width * 0.4, -height * 0.6);
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(width * 0.08, -height * 0.84);
+      ctx.lineTo(width * 0.08, -height * 0.96);
+      ctx.stroke();
+      ctx.fillStyle = theme.glassGlow;
+      ctx.beginPath();
+      ctx.arc(width * 0.08, -height * 0.98, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (type === "training_ground") {
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 5;
+      [-0.35, -0.12, 0.12, 0.35].forEach((offset) => {
+        ctx.beginPath();
+        ctx.moveTo(width * (offset - 0.07), -height * 0.1);
+        ctx.lineTo(width * (offset + 0.07), -height * 0.52);
+        ctx.stroke();
+      });
+      ctx.fillStyle = "rgba(18, 20, 26, 0.94)";
+      this.roundRectPath(ctx, -width * 0.22, -height * 0.64, width * 0.44, height * 0.11, 3);
+      ctx.fill();
+      ctx.fillStyle = theme.accent;
+      ctx.font = `bold ${Math.max(11, width * 0.05)}px Arial`;
+      ctx.textAlign = "center";
+      ctx.fillText("SPORTS / PET LAB", 0, -height * 0.57);
+    }
+
+    if (type === "temple") {
+      sign(-width * 0.21, -height * 0.69, "♥", width * 0.15);
+      ctx.fillStyle = theme.accent;
+      ctx.fillRect(width * 0.05, -height * 0.42, width * 0.34, height * 0.028);
+      ctx.fillStyle = "#456d53";
+      [0.08, 0.17, 0.27, 0.36].forEach((offset, index) => {
+        ctx.beginPath();
+        ctx.arc(width * offset, -height * (0.18 + (index % 2) * 0.04), width * 0.055, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.fillStyle = "rgba(183, 245, 236, 0.88)";
+      ctx.fillRect(width * 0.04, -height * 0.14, width * 0.36, height * 0.07);
+    }
+
+    if (type === "workshop") {
+      rooftopUnit(-width * 0.38, -height * 0.65, width * 0.16);
+      rooftopUnit(-width * 0.17, -height * 0.65, width * 0.11);
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(width * 0.28, -height * 0.77);
+      ctx.lineTo(width * 0.28, -height * 0.94);
+      ctx.lineTo(width * 0.37, -height * 0.94);
+      ctx.stroke();
+      sign(width * 0.28, -height * 0.59);
+      ctx.fillStyle = "rgba(255, 138, 98, 0.52)";
+      ctx.fillRect(-width * 0.41, -height * 0.19, width * 0.44, height * 0.1);
+    }
+
+    if (type === "barracks") {
+      sign(-width * 0.27, -height * 0.69, "★", width * 0.15);
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 5]);
+      ctx.strokeRect(-width * 0.02, -height * 0.5, width * 0.37, height * 0.26);
+      ctx.setLineDash([]);
+      rooftopUnit(width * 0.14, -height * 0.7, width * 0.15);
+    }
+
+    if (type === "library") {
+      ctx.fillStyle = "rgba(16, 18, 26, 0.92)";
+      ctx.fillRect(-width * 0.39, -height * 0.23, width * 0.78, height * 0.12);
+      ctx.fillStyle = theme.accent;
+      ctx.font = `bold ${Math.max(10, width * 0.045)}px Arial`;
+      ctx.textAlign = "center";
+      ctx.fillText("MEDIA ARCHIVE · 24H", 0, -height * 0.15);
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(width * 0.22, -height * 0.84);
+      ctx.lineTo(width * 0.31, -height * 0.96);
+      ctx.stroke();
+      ctx.fillStyle = "#151821";
+      ctx.beginPath();
+      ctx.ellipse(width * 0.34, -height * 0.97, width * 0.09, height * 0.035, -0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (type === "crystal_mine") {
+      sign(0, -height * 0.61, "◆", width * 0.14);
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-width * 0.42, -height * 0.41);
+      ctx.lineTo(-width * 0.3, -height * 0.57);
+      ctx.lineTo(-width * 0.18, -height * 0.41);
+      ctx.moveTo(width * 0.2, -height * 0.48);
+      ctx.lineTo(width * 0.32, -height * 0.64);
+      ctx.lineTo(width * 0.43, -height * 0.48);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(141, 202, 134, 0.46)";
+      ctx.fillRect(-width * 0.43, -height * 0.18, width * 0.86, height * 0.09);
     }
   }
 
@@ -742,25 +1198,43 @@ export class TerritorySceneController {
 
   renderGate(ctx, site, nearby) {
     const y = this.world.groundY;
-    const image = this.sceneImages.expeditionGate;
+    const size = TERRITORY_BUILDING_RENDER_SIZES.expedition_gate;
+    const image = this.buildingImages.expedition_gate;
     ctx.save();
     ctx.translate(site.x, y);
+    ctx.fillStyle = nearby ? `${PATH_COLORS.gate}4d` : "rgba(0, 0, 0, 0.32)";
+    ctx.beginPath();
+    ctx.ellipse(0, -3, size.width * 0.43, nearby ? 17 : 12, 0, 0, Math.PI * 2);
+    ctx.fill();
     if (nearby) {
       ctx.shadowColor = PATH_COLORS.gate;
       ctx.shadowBlur = 20;
     }
     if (image?.complete && image.naturalWidth > 0) {
-      ctx.drawImage(image, -112, -198, 224, 198);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(image, -size.width / 2, -size.height, size.width, size.height);
+    } else {
+      ctx.fillStyle = "#1b1b22";
+      this.roundRectPath(ctx, -size.width / 2, -size.height, size.width, size.height, 6);
+      ctx.fill();
+      ctx.strokeStyle = "#d7a45f";
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
     ctx.shadowBlur = 0;
-    this.renderSiteNameplate(ctx, "远征入口", "禁区通道", PATH_COLORS.gate);
+    this.renderSiteNameplate(
+      ctx,
+      "次元探索门",
+      "和宠物一起去冒险",
+      PATH_COLORS.gate,
+      -size.height - 48
+    );
     ctx.restore();
   }
 
   renderConstructionSite(ctx, site, data, unlocked, nearby) {
     const y = this.world.groundY;
     const color = PATH_COLORS[data.site.path] || "#ffd167";
-    const image = this.sceneImages.construction;
     ctx.save();
     ctx.translate(site.x, y);
     ctx.globalAlpha = unlocked ? 0.92 : 0.38;
@@ -768,36 +1242,71 @@ export class TerritorySceneController {
       ctx.shadowColor = color;
       ctx.shadowBlur = 18;
     }
-    if (image?.complete && image.naturalWidth > 0) {
-      ctx.drawImage(image, -112, -142, 224, 142);
-    }
+    ctx.fillStyle = "rgba(15, 14, 19, 0.92)";
+    ctx.beginPath();
+    ctx.ellipse(0, -4, 104, 30, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.setLineDash([8, 7]);
+    ctx.beginPath();
+    ctx.ellipse(0, -8, 73, 21, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.globalAlpha *= 0.18;
+    ctx.beginPath();
+    ctx.moveTo(-54, -18);
+    ctx.lineTo(-40, -101);
+    ctx.quadraticCurveTo(0, -132, 40, -101);
+    ctx.lineTo(54, -18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = unlocked ? 0.92 : 0.38;
+    ctx.fillStyle = "#17151b";
+    ctx.beginPath();
+    ctx.arc(0, -58, 28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.font = "bold 26px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(unlocked ? "＋" : "♡", 0, -49);
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
     this.renderSiteNameplate(
       ctx,
-      unlocked ? `建设${data.name}` : "蓝图未开放",
-      unlocked ? "施工准备就绪" : `需要 R${data.site.requiredRank}`,
-      color
+      unlocked ? `布置${data.name}` : "灵感还未解锁",
+      unlocked ? "点击开启梦幻设施" : `庭院需要 R${data.site.requiredRank}`,
+      color,
+      -178
     );
     ctx.restore();
   }
 
-  renderSiteNameplate(ctx, title, detail, color) {
-    ctx.fillStyle = "rgba(10, 16, 20, 0.9)";
-    ctx.fillRect(-70, 7, 140, 38);
+  renderSiteNameplate(ctx, title, detail, color, anchorY = 7) {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.48)";
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = "rgba(13, 13, 18, 0.94)";
+    this.roundRectPath(ctx, -78, anchorY, 156, 42, 14);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `${color}b8`;
+    ctx.lineWidth = 2;
+    this.roundRectPath(ctx, -78, anchorY, 156, 42, 14);
+    ctx.stroke();
     ctx.textAlign = "center";
-    ctx.fillStyle = "#f2f5f6";
-    ctx.font = "bold 13px Arial";
-    ctx.fillText(title, 0, 22);
+    ctx.fillStyle = "#fff0cd";
+    ctx.font = "bold 13px Arial, sans-serif";
+    ctx.fillText(title, 0, anchorY + 17);
     ctx.fillStyle = color;
-    ctx.font = "bold 10px Arial";
-    ctx.fillText(detail, 0, 38);
+    ctx.font = "bold 9px Arial, sans-serif";
+    ctx.fillText(detail, 0, anchorY + 33);
   }
 
   renderBuilding(ctx, site, data, building, nearby) {
     const y = this.world.groundY;
     const color = PATH_COLORS[data.site.path] || "#ffd167";
-    const image = this.buildingImages[site.type];
     const baseSize = TERRITORY_BUILDING_RENDER_SIZES[site.type] || { width: 180, height: 170 };
     const levelScale = site.type === "main_base"
       ? 1 + Math.min(0.08, Math.max(0, this.territorySystem.rank - 1) * 0.016)
@@ -809,40 +1318,37 @@ export class TerritorySceneController {
     ctx.translate(site.x, y);
     ctx.scale(pulse, pulse);
 
-    ctx.fillStyle = nearby ? `${color}42` : "rgba(0, 0, 0, 0.28)";
+    ctx.fillStyle = nearby ? `${color}4d` : "rgba(0, 0, 0, 0.32)";
     ctx.beginPath();
     ctx.ellipse(0, -3, width * 0.43, nearby ? 17 : 12, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    if (nearby) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 18;
+    }
+    const image = this.buildingImages[site.type];
     if (image?.complete && image.naturalWidth > 0) {
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      if (nearby) {
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 18;
-      }
       ctx.drawImage(image, -width / 2, -height, width, height);
-      ctx.shadowBlur = 0;
+      if (building.level > 1) {
+        const stars = Math.min(5, building.level);
+        ctx.fillStyle = "#ffd85c";
+        ctx.font = `bold ${Math.max(10, width * 0.04)}px Arial`;
+        ctx.textAlign = "center";
+        ctx.fillText("✦".repeat(stars), 0, -height - 7);
+      }
     } else {
-      ctx.fillStyle = "#202a33";
-      ctx.strokeStyle = color;
-      ctx.lineWidth = nearby ? 5 : 3;
-      ctx.beginPath();
-      ctx.moveTo(-width * 0.42, 0);
-      ctx.lineTo(-width * 0.38, -height * 0.64);
-      ctx.lineTo(0, -height);
-      ctx.lineTo(width * 0.38, -height * 0.64);
-      ctx.lineTo(width * 0.42, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      this.renderModernBuilding(ctx, site.type, width, height, building.level);
     }
+    ctx.shadowBlur = 0;
 
     this.renderSiteNameplate(
       ctx,
       data.name,
-      site.type === "main_base" ? `领地 R${this.territorySystem.rank}` : `设施 Lv.${building.level}`,
-      color
+      site.type === "main_base" ? `庭院 R${this.territorySystem.rank}` : `设施 Lv.${building.level}`,
+      color,
+      -height - 48
     );
 
     if (data.effects?.type === "production") {
@@ -872,15 +1378,15 @@ export class TerritorySceneController {
     const renderHeight = 88;
     ctx.save();
     ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
-    ctx.fillStyle = "rgba(4, 9, 12, 0.46)";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
     ctx.beginPath();
     ctx.ellipse(0, 25, 25, 8, 0, 0, Math.PI * 2);
     ctx.fill();
     if (player.facing < 0) ctx.scale(-1, 1);
     if (image?.complete && image.naturalWidth > 0) {
       ctx.imageSmoothingEnabled = false;
-      ctx.shadowColor = "rgba(35, 143, 154, 0.2)";
-      ctx.shadowBlur = 5;
+      ctx.shadowColor = "rgba(247, 182, 47, 0.28)";
+      ctx.shadowBlur = 6;
       ctx.drawImage(
         image,
         frameIndex * frameSize,
@@ -894,7 +1400,7 @@ export class TerritorySceneController {
       );
       ctx.shadowBlur = 0;
     } else {
-      ctx.fillStyle = "#ffd167";
+      ctx.fillStyle = "#f7b62f";
       ctx.fillRect(-20, -40, 40, 60);
     }
     ctx.restore();
@@ -913,7 +1419,7 @@ export class TerritorySceneController {
       ) % frameCount;
       ctx.save();
       ctx.translate(follower.x + follower.width / 2, follower.y + follower.height / 2);
-      ctx.fillStyle = "rgba(4, 9, 12, 0.4)";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.38)";
       ctx.beginPath();
       ctx.ellipse(0, 15, 18, 6, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -944,14 +1450,20 @@ export class TerritorySceneController {
       const width = Math.min(420, this.canvas.width * 0.46);
       const x = (this.canvas.width - width) / 2;
       const y = this.canvas.height * 0.18;
-      ctx.fillStyle = "rgba(5, 8, 12, 0.86)";
-      ctx.fillRect(x - 12, y - 30, width + 24, 58);
-      ctx.fillStyle = "#1f2935";
-      ctx.fillRect(x, y, width, 10);
-      ctx.fillStyle = "#ffd167";
-      ctx.fillRect(x, y, width * ratio, 10);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 15px Arial";
+      ctx.fillStyle = "rgba(10, 10, 14, 0.92)";
+      this.roundRectPath(ctx, x - 12, y - 30, width + 24, 62, 20);
+      ctx.fill();
+      ctx.fillStyle = "#2d2424";
+      this.roundRectPath(ctx, x, y, width, 11, 6);
+      ctx.fill();
+      const progress = ctx.createLinearGradient(x, 0, x + width, 0);
+      progress.addColorStop(0, "#bd2d32");
+      progress.addColorStop(1, "#f7b62f");
+      ctx.fillStyle = progress;
+      this.roundRectPath(ctx, x, y, width * ratio, 11, 6);
+      ctx.fill();
+      ctx.fillStyle = "#fff0cd";
+      ctx.font = "bold 15px Arial, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(`${activity.label} ${Math.ceil(activity.remainingMs / 1000)}秒`, this.canvas.width / 2, y - 9);
     }
@@ -963,29 +1475,38 @@ export class TerritorySceneController {
     const { x, y, width, height, frameX, frameY, frameWidth, frameHeight } = layout;
     const scale = width / this.world.width;
     ctx.save();
-    ctx.fillStyle = "rgba(5, 8, 12, 0.84)";
-    ctx.fillRect(frameX, frameY, frameWidth, frameHeight);
-    ctx.strokeStyle = "#ffd167";
+    ctx.fillStyle = "rgba(9, 9, 13, 0.92)";
+    this.roundRectPath(ctx, frameX, frameY, frameWidth, frameHeight, 14);
+    ctx.fill();
+    ctx.strokeStyle = "#f2a546";
     ctx.lineWidth = 2;
-    ctx.strokeRect(frameX, frameY, frameWidth, frameHeight);
-    ctx.fillStyle = "#dfe9ef";
-    ctx.font = "bold 10px Arial";
+    this.roundRectPath(ctx, frameX, frameY, frameWidth, frameHeight, 14);
+    ctx.stroke();
+    ctx.fillStyle = "#fff0cd";
+    ctx.font = "bold 10px Arial, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(`R${this.territorySystem.rank} 基地地图`, x, y - 7);
-    ctx.fillStyle = "#25322b";
-    ctx.fillRect(x, y, width, height);
+    ctx.fillText(`R${this.territorySystem.rank} 梦幻庭院`, x, y - 7);
+    const mapGradient = ctx.createLinearGradient(0, y, 0, y + height);
+    mapGradient.addColorStop(0, "#4a3029");
+    mapGradient.addColorStop(1, "#24191a");
+    ctx.fillStyle = mapGradient;
+    this.roundRectPath(ctx, x, y, width, height, 9);
+    ctx.fill();
     for (const site of this.world.getVisibleSites()) {
       const built = site.type === "expedition_gate" || this.territorySystem.getBuildingByType(site.type);
-      ctx.fillStyle = built ? (PATH_COLORS[site.path] || "#ffffff") : "#66717a";
+      ctx.fillStyle = built ? (PATH_COLORS[site.path] || "#fff0cd") : "#69636a";
       ctx.beginPath();
       ctx.arc(x + site.x * scale, y + height / 2, built ? 4 : 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
     const center = this.getWorldPlayerCenter();
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#fff0cd";
+    ctx.strokeStyle = "#111116";
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x + center.x * scale, y + height / 2, 4, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.restore();
   }
 

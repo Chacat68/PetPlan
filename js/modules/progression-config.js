@@ -58,13 +58,20 @@ export const EXPEDITION_MILESTONE_REWARD_CONFIG = Object.freeze([
   Object.freeze({ id: "value_8000", metric: "bestValue", target: 8000, title: "移动宝库", desc: "单次成功带回价值 8000 的战利品", icon: "¤", rubies: 300 }),
 ]);
 
+// 首次成功撤离承担 R1 → R2 的一次性资源桥接。它不会替代远征的常规
+// 战斗收益，只保证新档完成建设教学后不会被 R1 尚未开放的水晶生产卡住。
+export const FIRST_EXTRACTION_BONUS = Object.freeze({
+  coins: 700,
+  crystals: 80,
+});
+
 // Territory v2 promotes the base through permanent milestones. The old pulse
 // configuration remains available for growth-direction hints and old-save
 // migration, but no longer controls whether a built district can disappear.
 export const TERRITORY_RANK_CONFIG = Object.freeze([
   Object.freeze({
     rank: 0,
-    name: "未建营地",
+    name: "未启用庭院",
     slots: 1,
     worldWidth: 1680,
     storageHours: 4,
@@ -73,7 +80,7 @@ export const TERRITORY_RANK_CONFIG = Object.freeze([
   }),
   Object.freeze({
     rank: 1,
-    name: "营地",
+    name: "星愿庭院",
     slots: 4,
     worldWidth: 2180,
     storageHours: 8,
@@ -82,16 +89,17 @@ export const TERRITORY_RANK_CONFIG = Object.freeze([
   }),
   Object.freeze({
     rank: 2,
-    name: "远征前哨",
+    name: "萌宠乐园",
     slots: 6,
     worldWidth: 2660,
     storageHours: 12,
-    cost: Object.freeze({ coins: 1200, crystals: 120 }),
+    cost: Object.freeze({ coins: 700, crystals: 100 }),
+    promotionReward: Object.freeze({ coins: 400, crystals: 30 }),
     requirements: Object.freeze({ extractions: 1, constructionScore: 2 }),
   }),
   Object.freeze({
     rank: 3,
-    name: "协同聚落",
+    name: "梦幻街区",
     slots: 7,
     worldWidth: 3040,
     storageHours: 18,
@@ -100,7 +108,7 @@ export const TERRITORY_RANK_CONFIG = Object.freeze([
   }),
   Object.freeze({
     rank: 4,
-    name: "边境要塞",
+    name: "星光小镇",
     slots: 9,
     worldWidth: 3340,
     storageHours: 24,
@@ -109,7 +117,7 @@ export const TERRITORY_RANK_CONFIG = Object.freeze([
   }),
   Object.freeze({
     rank: 5,
-    name: "核心领地",
+    name: "奇迹乐园",
     slots: 12,
     worldWidth: 3660,
     storageHours: 24,
@@ -127,59 +135,6 @@ export const TERRITORY_BUILDING_SITES = Object.freeze({
   library: Object.freeze({ slotIndex: 5, x: 2390, requiredRank: 2, path: "companion" }),
   crystal_mine: Object.freeze({ slotIndex: 6, x: 2820, requiredRank: 3, path: "territory" }),
 });
-
-export const ONBOARDING_VERSION = 2;
-
-export const FIRST_SESSION_STEPS = Object.freeze([
-  {
-    id: "flip",
-    metric: "totalFlips",
-    target: 8,
-    title: "熟悉翻转",
-    detail: "累计翻转 8 次",
-    routeType: "mixed",
-  },
-  {
-    id: "table",
-    metric: "fateCoins",
-    target: 2,
-    title: "扩充桌面",
-    detail: "将桌面硬币扩充到 2 枚",
-    routeType: "heads",
-  },
-  {
-    id: "assistant",
-    metric: "assistants",
-    target: 1,
-    title: "招募助手",
-    detail: "招募第 1 个小助手",
-    routeType: "tails",
-  },
-  {
-    id: "expedition",
-    metric: "expeditionDepth",
-    target: 1,
-    title: "完成首次探索",
-    detail: "进入远征并完成第 1 个区域",
-    routeType: "combat",
-  },
-  {
-    id: "extraction",
-    metric: "extractions",
-    target: 1,
-    title: "带回首次收益",
-    detail: "探索至少 3 个区域并成功撤离 1 次",
-    routeType: "combat",
-  },
-  {
-    id: "territory",
-    metric: "buildings",
-    target: 1,
-    title: "修复主基地",
-    detail: "前往领地，在实际基地世界中修复主基地",
-    routeType: "territory",
-  },
-]);
 
 export const GROWTH_PATHS = Object.freeze({
   hero: Object.freeze({

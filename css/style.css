@@ -518,6 +518,205 @@
   }
 }
 
+/* ==================== Territory · Fate UI aligned v4 ==================== */
+body[data-scene="territory"] {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(111, 81, 62, 0.3), transparent 42%),
+    linear-gradient(180deg, #101621, #080b12);
+}
+
+.territory-world-scene {
+  background: #050505;
+}
+
+.territory-world-panel {
+  border: 6px solid #171012;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 3px #f2a546,
+    inset 0 0 0 7px #3b2421,
+    0 12px 32px rgba(0, 0, 0, 0.52);
+  background: #111318;
+}
+
+.territory-world-panel .territory-scorebar {
+  min-height: 46px;
+  color: #fff0cd;
+  text-shadow: 1px 1px 0 #000;
+  background: linear-gradient(180deg, #2a2d34, #15171d);
+  border-bottom: 3px solid #f2a546;
+}
+
+.territory-scorebar-title {
+  color: #fff0cd;
+  letter-spacing: 0.12em;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.territory-world-panel .territory-scorebar .score-dollar,
+.territory-resource-strip b {
+  color: #f7b62f;
+}
+
+.territory-world-surface,
+.territory-canvas-frame {
+  background: #171319;
+}
+
+#territoryCanvas {
+  image-rendering: auto;
+  cursor: pointer;
+}
+
+.territory-resource-strip span {
+  border: 2px solid #171012;
+  border-radius: 4px;
+  color: #fff0cd;
+  background: #111318;
+  box-shadow: 2px 2px 0 #000;
+}
+
+.territory-objective-hud {
+  border: 2px solid #72d7ff;
+  border-radius: 4px;
+  color: #f8fbff;
+  background: rgba(9, 10, 14, 0.92);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.48);
+}
+
+.territory-objective-label,
+.territory-context-kicker {
+  color: #72d7ff;
+}
+
+.territory-objective-hud strong {
+  color: #f7b62f;
+}
+
+.territory-objective-toggle {
+  border: 1px solid #4c6878;
+  border-radius: 3px;
+  color: #bcecff;
+  background: #111c23;
+}
+
+.territory-objective-toggle:hover,
+.territory-objective-toggle:focus-visible {
+  border-color: #72d7ff;
+  color: #72d7ff;
+}
+
+.territory-objective-more {
+  border-top-color: rgba(114, 215, 255, 0.28);
+}
+
+.territory-objective-more span {
+  color: #b9c7d1;
+}
+
+.territory-move-btn,
+.territory-interact-btn,
+.territory-context-actions button,
+.territory-context-close {
+  border: 3px solid #f2a546;
+  border-radius: 5px;
+  color: #fff0cd;
+  background: #15171d;
+  box-shadow:
+    inset 0 0 0 2px #3a1a18,
+    3px 4px 0 #000;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.territory-move-btn {
+  border-radius: 5px;
+}
+
+.territory-move-btn[aria-pressed="true"] {
+  color: #24120a;
+  background: #ffd167;
+  box-shadow: 0 2px 0 #000;
+}
+
+.territory-interact-btn span {
+  color: #aebdc7;
+}
+
+.territory-context-panel {
+  border: 3px solid #f2a546;
+  border-radius: 6px;
+  color: #edf5f8;
+  background: rgba(8, 9, 13, 0.97);
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.58);
+}
+
+.territory-context-panel h2 {
+  color: #f7b62f;
+}
+
+.territory-context-panel p {
+  color: #b8c6d0;
+}
+
+.territory-context-stats {
+  border: 1px solid rgba(114, 215, 255, 0.3);
+  border-radius: 3px;
+  background: rgba(114, 215, 255, 0.06);
+}
+
+.territory-context-stat {
+  color: #c8d5dd;
+}
+
+.territory-context-stat b {
+  color: #ffffff;
+}
+
+.territory-context-actions button:hover:not(:disabled),
+.territory-interact-btn:hover:not(:disabled),
+.territory-move-btn:hover {
+  border-color: #ffd167;
+  color: #ffd167;
+  filter: brightness(1.08);
+}
+
+body[data-scene="territory"] .hud-pixel-btn,
+body[data-scene="territory"] .hud-scene-btn.nav-btn {
+  border-color: #f2a546;
+  border-radius: clamp(5px, 0.5vw, 8px);
+  color: #fff7df;
+  background: #15171d;
+  box-shadow:
+    inset 0 0 0 2px #3a1a18,
+    3px 5px 0 #000;
+}
+
+body[data-scene="territory"] .hud-pixel-btn:hover,
+body[data-scene="territory"] .hud-scene-btn.nav-btn:hover {
+  border-color: #ffd167;
+  background: #262935;
+}
+
+body[data-scene="territory"] .hud-entry-icon,
+body[data-scene="territory"] .hud-entry-label,
+body[data-scene="territory"] .hud-action-cluster .hud-entry-btn .scene-label {
+  color: #fff2cf;
+  filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.72));
+  text-shadow: 2px 2px 0 #000;
+}
+
+body[data-scene="territory"] .hud-entry-icon-accent {
+  fill: #f2a546;
+}
+
+body[data-scene="territory"] .hud-scene-btn.nav-btn.active {
+  color: #1a1010;
+  background: #ffd167;
+  box-shadow:
+    inset 0 0 0 2px #fff1a7,
+    3px 5px 0 #000;
+}
+
 /* ==================== Experience optimization v1 ==================== */
 .battle-terminal-toggle {
   display: none;
@@ -6949,7 +7148,6 @@ body[data-scene="dungeon"] .game-hud-controls {
   white-space: nowrap;
 }
 
-.fate-next-goal .goal-guide,
 .fate-next-goal .goal-path {
   min-width: 0;
   padding-top: 2px;
@@ -6960,29 +7158,8 @@ body[data-scene="dungeon"] .game-hud-controls {
   white-space: nowrap;
 }
 
-.fate-next-goal .goal-guide {
-  grid-column: 1;
-  color: #bfc0ca;
-}
-
-.fate-next-goal .goal-guide[data-route="heads"] {
-  color: #ffe08a;
-}
-
-.fate-next-goal .goal-guide[data-route="tails"] {
-  color: #8de0ff;
-}
-
-.fate-next-goal .goal-guide[data-route="territory"] {
-  color: #ffb4a0;
-}
-
-.fate-next-goal .goal-guide[data-route="combat"] {
-  color: #c9a8ff;
-}
-
 .fate-next-goal .goal-path {
-  grid-column: 2;
+  grid-column: 1 / -1;
   color: #c8f28d;
   text-align: right;
 }
@@ -7025,7 +7202,6 @@ body[data-scene="dungeon"] .game-hud-controls {
   }
 
   .fate-next-goal .goal-alt,
-  .fate-next-goal .goal-guide,
   .fate-next-goal .goal-path {
     grid-column: 1;
     text-align: left;
@@ -13135,4 +13311,26 @@ body[data-scene="dungeon"] .game-hud-controls {
   .battle-context-dock {
     bottom: 10px;
   }
+/* Keep the territory shell aligned with Fate chrome after legacy scene rules. */
+body[data-scene="territory"] .game-container {
+  border-color: #2a3f5f;
+  background: #0b0d12;
+  box-shadow:
+    0 24px 72px rgba(0, 0, 0, 0.7),
+    0 0 36px rgba(242, 165, 70, 0.08);
+}
+
+body[data-scene="territory"] #territory-scene {
+  gap: clamp(8px, 0.8vw, 16px);
+  padding: clamp(8px, 0.9vw, 18px);
+  border: clamp(6px, 0.65vw, 12px) solid #111318;
+  border-radius: 0;
+  border-image: repeating-linear-gradient(
+      45deg,
+      #30343a 0 8px,
+      #17191e 8px 16px,
+      #5a3928 16px 24px
+    )
+    10;
+  background: #050505;
 }

@@ -390,3 +390,20 @@ test("BattleSceneController 结算摘要只展示实际结算收益", () => {
     globalThis.document = originalDocument;
   }
 });
+
+test("BattleSceneController 明确标注首次撤离资源桥接", () => {
+  const controller = Object.create(BattleSceneController.prototype);
+  controller.formatPetBondSummary = () => "";
+  const tip = controller.getTip({
+    settlement: {
+      extracted: true,
+      coins: 800,
+      crystals: 82,
+      exp: 50,
+      rubyReward: 0,
+      firstExtractionBonus: { coins: 700, crystals: 80 },
+      metaSettlement: null,
+    },
+  });
+  assert.match(tip, /首次撤离奖励：700 金币、80 水晶/);
+});

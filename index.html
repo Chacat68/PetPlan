@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetPlan - 宠物计划</title>
-    <link rel="stylesheet" href="css/style.css?v=duckov-continuous-20260724a" />
+    <link rel="stylesheet" href="css/style.css?v=petplan-sync-20260724e" />
   </head>
   <body>
     <div class="game-container">
@@ -284,7 +284,6 @@
                 <button type="button" class="goal-toggle" id="fate-next-goal-toggle" aria-expanded="false" aria-controls="fate-next-goal-more" aria-label="展开目标详情" title="展开目标详情"><span aria-hidden="true">＋</span></button>
                 <div class="goal-more" id="fate-next-goal-more" hidden>
                   <span class="goal-alt" id="fate-next-goal-alt">备选：金色硬币</span>
-                  <span class="goal-guide" id="fate-first-session-guide" data-route="mixed">首局 1/6 · 熟悉翻转 0/8</span>
                   <span class="goal-path" id="fate-path-summary" data-path="neutral">倾向：自由探索</span>
                 </div>
               </div>
@@ -382,15 +381,15 @@
           </aside>
         </div>
 
-        <!-- 可游走领地基地 -->
+        <!-- 可游走梦幻庭院 -->
         <div class="scene-container territory-world-scene" id="territory-scene" style="display: none">
           <section class="territory-world-panel">
             <div class="territory-scorebar">
               <div class="territory-scorebar-heading">
-                <span class="territory-scorebar-title">BASE TERRITORY</span>
-                <span class="score-dollar territory-scorebar-rank" id="territory-rank-badge">R0 · 未建营地</span>
+                <span class="territory-scorebar-title">PET SANCTUARY</span>
+                <span class="score-dollar territory-scorebar-rank" id="territory-rank-badge">R0 · 未启用庭院</span>
               </div>
-              <div class="territory-resource-strip" aria-label="领地状态">
+              <div class="territory-resource-strip" aria-label="庭院状态">
                 <span><span class="territory-resource-name" data-short="金">金币</span> <b id="territory-gold">0</b></span>
                 <span><span class="territory-resource-name" data-short="晶">水晶</span> <b id="territory-crystal">0</b></span>
                 <span><span class="territory-resource-name" data-short="建">建设度</span> <b id="territory-construction-score">0</b></span>
@@ -401,37 +400,37 @@
             <div class="territory-world-surface">
               <div class="territory-objective-hud" id="territory-objective-hud">
                 <span class="territory-objective-label">目标</span>
-                <strong id="territory-objective-title">修复主基地</strong>
-                <button type="button" class="territory-objective-toggle" id="territory-objective-toggle" aria-expanded="false" aria-controls="territory-objective-more" aria-label="展开领地目标详情" title="展开领地目标详情"><span aria-hidden="true">＋</span></button>
+                <strong id="territory-objective-title">启用星愿屋</strong>
+                <button type="button" class="territory-objective-toggle" id="territory-objective-toggle" aria-expanded="false" aria-controls="territory-objective-more" aria-label="展开庭院目标详情" title="展开庭院目标详情"><span aria-hidden="true">＋</span></button>
                 <div class="territory-objective-more" id="territory-objective-more" hidden>
-                  <span id="territory-objective-detail">前往主基地遗迹并进行交互</span>
+                  <span id="territory-objective-detail">前往庭院中央，让星愿屋重新亮起来</span>
                 </div>
               </div>
 
               <div class="territory-canvas-frame">
-                <canvas id="territoryCanvas" width="1280" height="720" aria-label="可游走领地基地"></canvas>
+                <canvas id="territoryCanvas" width="1280" height="720" aria-label="可游走梦幻庭院"></canvas>
               </div>
 
-              <div class="territory-world-controls" aria-label="基地移动与交互">
+              <div class="territory-world-controls" aria-label="庭院移动与互动">
                 <button type="button" class="territory-move-btn" data-territory-direction="left" aria-label="向左移动" aria-pressed="false">◀</button>
                 <button type="button" class="territory-interact-btn" id="territory-interact-btn" disabled>
-                  <strong id="territory-interact-label">靠近建筑后交互</strong>
-                  <span id="territory-interact-detail">按 E 打开建筑操作</span>
+                  <strong id="territory-interact-label">靠近设施后互动</strong>
+                  <span id="territory-interact-detail">按 E 查看设施功能</span>
                 </button>
                 <button type="button" class="territory-move-btn" data-territory-direction="right" aria-label="向右移动" aria-pressed="false">▶</button>
               </div>
 
               <section class="territory-context-panel" id="territory-context-panel" aria-labelledby="territory-context-title" hidden>
                 <button type="button" class="territory-context-close" data-territory-action="close" aria-label="关闭建筑操作">×</button>
-                <span class="territory-context-kicker" id="territory-context-kicker">基地设施</span>
-                <h2 id="territory-context-title">主基地</h2>
-                <p id="territory-context-detail">靠近建筑后可进行建设与活动。</p>
+                <span class="territory-context-kicker" id="territory-context-kicker">庭院设施</span>
+                <h2 id="territory-context-title">星愿屋</h2>
+                <p id="territory-context-detail">靠近设施后可以布置、升级与互动。</p>
                 <div class="territory-context-stats" id="territory-context-stats"></div>
                 <div class="territory-context-actions">
                   <button type="button" data-territory-action="build" hidden>开始建造</button>
-                  <button type="button" data-territory-action="promote" hidden>领地升阶</button>
+                  <button type="button" data-territory-action="promote" hidden>庭院升阶</button>
                   <button type="button" data-territory-action="upgrade" hidden>升级建筑</button>
-                  <button type="button" data-territory-action="activity" hidden>进行基地活动</button>
+                  <button type="button" data-territory-action="activity" hidden>进行庭院活动</button>
                   <button type="button" data-territory-action="collect" hidden>收取储备</button>
                   <button type="button" data-territory-action="depart" hidden>进入远征</button>
                 </div>
@@ -812,7 +811,7 @@
         if (requestedScene === "dungeon" || requestedScene === "territory") {
           localUrl.searchParams.set("scene", requestedScene);
         }
-        var moduleSrc = "js/main.js?v=duckov-continuous-20260724a";
+        var moduleSrc = "js/main.js?v=petplan-sync-20260724f";
 
         if (window.location.protocol === "file:") {
           document.documentElement.classList.add("file-protocol");

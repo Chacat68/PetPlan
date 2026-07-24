@@ -25,6 +25,7 @@ const { ExpeditionRunSystem } = await import(
 const { CombatSystem } = await import("../js/modules/combat-system.js");
 const { PetSystem } = await import("../js/modules/pet-system.js");
 const { PlayerSystem } = await import("../js/modules/player-system.js");
+const { FIRST_EXTRACTION_BONUS } = await import("../js/modules/progression-config.js");
 
 const fixedRandom = () => 0.5;
 
@@ -534,7 +535,13 @@ test("CombatSystem 撤离成功的资源、经验和长期记录只结算一次"
 
   const firstSettlement = combat.getBattleState().settlement;
   assert.equal(firstSettlement.extracted, true);
-  assert.equal(firstSettlement.coins, 100, "现金奖励与仓库战利品应分开结算");
+  assert.equal(
+    firstSettlement.coins,
+    100 + FIRST_EXTRACTION_BONUS.coins,
+    "首次撤离应结算常规现金和一次性资源桥接，仓库战利品仍不自动折现"
+  );
+  assert.equal(firstSettlement.crystals, 2 + FIRST_EXTRACTION_BONUS.crystals);
+  assert.deepEqual(firstSettlement.firstExtractionBonus, FIRST_EXTRACTION_BONUS);
   assert.ok(firstSettlement.lootValue > 0, "成功撤离应把背包物品作为仓库价值带回");
   assert.deepEqual(resourceTotals, {
     coins: firstSettlement.coins,

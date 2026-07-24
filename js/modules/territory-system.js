@@ -10,7 +10,7 @@ import {
   TERRITORY_BUILDING_SITES,
   TERRITORY_PROGRESSION_CONFIG,
   TERRITORY_RANK_CONFIG,
-} from "./progression-config.js?v=territory-world-20260712a";
+} from "./progression-config.js?v=r1-r2-bridge-20260724a";
 
 let instance = null;
 
@@ -32,9 +32,9 @@ export class TerritorySystem {
     this.playerSystem = playerSystem;
     this.buildingData = {
       main_base: {
-        name: "主基地",
-        icon: "🏰",
-        description: "领地核心。修复后开放三条基地建设路线。",
+        name: "星愿屋",
+        icon: "🏡",
+        description: "少女与宠物们的温馨之家，启用后开放整座梦幻庭院。",
         baseCost: { coins: 0, crystals: 0 },
         costMultiplier: 1,
         maxLevel: 1,
@@ -42,9 +42,9 @@ export class TerritorySystem {
         effects: { type: "base" },
       },
       training_ground: {
-        name: "训练场",
-        icon: "🏋️",
-        description: "进行实战训练，并永久提升主角攻击。",
+        name: "闪耀训练馆",
+        icon: "🎀",
+        description: "在星光障碍赛中练习配合，并永久提升主角攻击。",
         baseCost: { coins: 400, crystals: 30 },
         costMultiplier: 1.45,
         maxLevel: 5,
@@ -53,9 +53,9 @@ export class TerritorySystem {
         activity: "training",
       },
       temple: {
-        name: "守护神庙",
-        icon: "🏛️",
-        description: "宠物休整与守护仪式，提升远征防御。",
+        name: "萌宠疗愈庭",
+        icon: "💗",
+        description: "让宠物泡泡浴、休息和恢复元气，提升远征防御。",
         baseCost: { coins: 400, crystals: 30 },
         costMultiplier: 1.45,
         maxLevel: 5,
@@ -64,9 +64,9 @@ export class TerritorySystem {
         activity: "blessing",
       },
       workshop: {
-        name: "工坊",
-        icon: "🔨",
-        description: "处理远征材料、制作行动物资，并少量储备金币。",
+        name: "魔法工坊",
+        icon: "🪄",
+        description: "处理远征材料、制作可爱实用的行动物资，并少量储备金币。",
         baseCost: { coins: 450, crystals: 35 },
         costMultiplier: 1.5,
         maxLevel: 5,
@@ -75,9 +75,9 @@ export class TerritorySystem {
         activity: "supply",
       },
       barracks: {
-        name: "兵营",
-        icon: "⚔️",
-        description: "高阶战备设施，提供攻防与补给加成。",
+        name: "星光特训屋",
+        icon: "🌟",
+        description: "进阶默契课程与体能挑战，提供攻防与补给加成。",
         baseCost: { coins: 1200, crystals: 100 },
         costMultiplier: 1.5,
         maxLevel: 5,
@@ -86,9 +86,9 @@ export class TerritorySystem {
         activity: "drill",
       },
       library: {
-        name: "远征图书馆",
-        icon: "📚",
-        description: "研究路线情报，提高远征经验结算。",
+        name: "星图资料馆",
+        icon: "🔭",
+        description: "阅读旅行绘本、研究星图路线，提高远征经验结算。",
         baseCost: { coins: 1200, crystals: 100 },
         costMultiplier: 1.5,
         maxLevel: 5,
@@ -97,9 +97,9 @@ export class TerritorySystem {
         activity: "research",
       },
       crystal_mine: {
-        name: "水晶矿",
+        name: "水晶花园",
         icon: "💎",
-        description: "通过主动开采与仓储缓慢获得水晶。",
+        description: "悉心培育会发光的魔法水晶花，缓慢获得水晶。",
         baseCost: { coins: 1500, crystals: 150 },
         costMultiplier: 1.55,
         maxLevel: 5,
@@ -331,14 +331,14 @@ export class TerritorySystem {
     if (type === "barracks") {
       return [
         { id: "rank", label: "领地达到 R2", met: this.rank >= 2 },
-        { id: "training", label: "训练场达到 Lv.2", met: this.getBuildingLevel("training_ground") >= 2 },
+        { id: "training", label: "闪耀训练馆达到 Lv.2", met: this.getBuildingLevel("training_ground") >= 2 },
         { id: "depth", label: "从区域 3 成功撤离", met: this.progressContext.bestExtractedDepth >= 3 },
       ];
     }
     if (type === "library") {
       return [
         { id: "rank", label: "领地达到 R2", met: this.rank >= 2 },
-        { id: "temple", label: "守护神庙达到 Lv.2", met: this.getBuildingLevel("temple") >= 2 },
+        { id: "temple", label: "萌宠疗愈庭达到 Lv.2", met: this.getBuildingLevel("temple") >= 2 },
         { id: "pets", label: "至少上阵 2 只宠物", met: this.progressContext.equippedPets >= 2 },
       ];
     }
@@ -402,7 +402,7 @@ export class TerritorySystem {
       constructionScore: this.getConstructionScore(),
     };
     const labels = {
-      mainBase: "修复主基地",
+      mainBase: "启用星愿屋",
       bestExtractedDepth: "成功撤离深度",
       extractions: "成功撤离",
       constructionScore: "建设度",
@@ -428,15 +428,32 @@ export class TerritorySystem {
     };
   }
 
+  getRankRequirementOverview(targetRank = this.rank + 1) {
+    const state = this.getRankRequirementState(targetRank);
+    if (!state.config) return null;
+    const checks = state.checks.map((check) => ({
+      ...check,
+      gap: Math.max(0, check.target - check.value),
+    }));
+    return {
+      targetRank,
+      complete: state.complete,
+      checks,
+      text: checks.map((check) => (
+        `${check.label} ${check.value}/${check.target}${check.met ? "（完成）" : `（差${check.gap}）`}`
+      )).join(" · "),
+    };
+  }
+
   getDistrictLabel(path) {
     const labels = {
-      core: "核心区",
-      hero: "先攻区",
-      companion: "协同区",
-      territory: "拓域区",
-      gate: "远征区",
+      core: "星愿广场",
+      hero: "闪耀训练区",
+      companion: "萌宠疗愈区",
+      territory: "梦工坊街区",
+      gate: "次元探索区",
     };
-    return labels[path] || "基地设施";
+    return labels[path] || "庭院设施";
   }
 
   getRequirementGoal(requirement) {
@@ -457,7 +474,7 @@ export class TerritorySystem {
         title: `从区域 ${requirement.target} 成功撤离`,
         detail: `当前成功撤离最深区域 ${progress}`,
         scene: "territory",
-        ctaLabel: "前往领地入口",
+        ctaLabel: "前往次元探索门",
         route: "远征目标",
         routeType: "combat",
       },
@@ -465,13 +482,13 @@ export class TerritorySystem {
         title: `成功撤离 ${requirement.target} 次`,
         detail: `当前撤离次数 ${progress}`,
         scene: "territory",
-        ctaLabel: "前往领地入口",
+        ctaLabel: "前往次元探索门",
         route: "远征目标",
         routeType: "combat",
       },
       constructionScore: {
         title: `提升建设度至 ${requirement.target}`,
-        detail: `当前建设度 ${progress}，建造或升级基地设施`,
+        detail: `当前建设度 ${progress}，布置或升级庭院设施`,
         scene: "territory",
         ctaLabel: "前往领地",
         route: "领地目标",
@@ -487,7 +504,9 @@ export class TerritorySystem {
       },
       crystals: {
         title: `积累 ${requirement.target} 水晶`,
-        detail: `当前水晶 ${progress}，远征或收取矿区储备`,
+        detail: this.rank < 3
+          ? `当前水晶 ${progress}；首次成功撤离、远征战斗、合约与成就均可获得`
+          : `当前水晶 ${progress}；远征、合约、成就或收取水晶花园储备`,
         scene: "territory",
         ctaLabel: "返回领地",
         route: "资源目标",
@@ -563,12 +582,19 @@ export class TerritorySystem {
     if (!option) return null;
     const costText = `${option.cost.coins || 0} 金币 / ${option.cost.crystals || 0} 水晶`;
     const gapText = option.blockers.map((item) => `还差 ${item.gap} ${item.label}`).join("、");
+    const r2UnlockPayoff = this.rank === 2 && option.kind === "upgrade"
+      ? {
+          training_ground: "完成后推进星光特训屋蓝图解锁",
+          temple: "完成后推进星图资料馆蓝图解锁",
+        }[option.buildingType] || ""
+      : "";
+    const payoffText = r2UnlockPayoff ? ` · ${r2UnlockPayoff}` : "";
     return {
       ...option,
       status,
       detail: status === "ready"
-        ? `${option.detail} · 费用 ${costText}`
-        : `费用 ${costText}；${gapText || "当前条件不足"}`,
+        ? `${option.detail}${payoffText} · 费用 ${costText}`
+        : `费用 ${costText}；${gapText || "当前条件不足"}${payoffText}`,
       scene: "territory",
       ctaLabel: "前往领地",
       route: "领地目标",
@@ -594,7 +620,7 @@ export class TerritorySystem {
       action: "collect",
       status: "ready",
       blockers: [],
-      title: "收取基地储备",
+      title: "收取庭院储备",
       detail: `工坊与矿区共储备 ${production.coins || 0} 金币、${production.crystals || 0} 水晶`,
       scene: "territory",
       ctaLabel: "前往领地",
@@ -611,8 +637,8 @@ export class TerritorySystem {
         status: "ready",
         blockers: [],
         buildingType: "main_base",
-        title: "修复主基地",
-        detail: "前往中央主基地遗迹并进行交互",
+        title: "点亮星愿屋",
+        detail: "前往庭院中央，与星愿屋互动并启用它",
         scene: "territory",
         ctaLabel: "前往领地",
         route: "领地目标",
@@ -627,8 +653,8 @@ export class TerritorySystem {
         action: "promote",
         status: "ready",
         blockers: [],
-        title: `领地升阶为 R${promotion.next.rank}`,
-        detail: "返回主基地完成升阶，开放新的基地区域",
+        title: `庭院升阶为 R${promotion.next.rank}`,
+        detail: "返回星愿屋完成升阶，开放新的庭院区域",
         scene: "territory",
         ctaLabel: "前往领地",
         route: "领地目标",
@@ -645,6 +671,18 @@ export class TerritorySystem {
     const readyConstruction = constructionOptions.find((option) => option.ready);
     if (missingConstruction && readyConstruction) {
       return this.createConstructionGoal(readyConstruction);
+    }
+    if (this.rank === 2 && missingConstruction) {
+      const r2FacilityStep = constructionOptions.find((option) => (
+        option.kind === "upgrade"
+        && (option.buildingType === "training_ground" || option.buildingType === "temple")
+      ));
+      if (r2FacilityStep) {
+        return this.createConstructionGoal(
+          r2FacilityStep,
+          r2FacilityStep.ready ? "ready" : "blocked"
+        );
+      }
     }
 
     const expeditionRequirement = missingProgress.find((check) => (
@@ -680,10 +718,10 @@ export class TerritorySystem {
       action: "depart",
       status: "optional",
       blockers: [],
-      title: "完成基地准备后进入远征",
-      detail: "训练、祈福或制作补给，再前往西侧远征入口",
+      title: "完成庭院准备后进入远征",
+      detail: "训练、疗愈或制作补给，再前往次元探索门",
       scene: "territory",
-      ctaLabel: "前往西侧入口",
+      ctaLabel: "前往次元探索门",
       route: "远征目标",
       routeType: "combat",
     };
@@ -694,6 +732,15 @@ export class TerritorySystem {
     const nextBuilding = this.getNextBuildingUnlock();
     const nextRankState = this.getRankRequirementState();
     const production = this.getProductionSnapshot();
+    const rankRequirementOverview = this.getRankRequirementOverview();
+    const baseNextGoal = this.getNextProgressionGoal(production);
+    const nextGoal = this.rank === 1 && rankRequirementOverview
+      ? {
+          ...baseNextGoal,
+          detail: `${baseNextGoal.detail}｜R2总进度：${rankRequirementOverview.text}`,
+          rankRequirementOverview,
+        }
+      : baseNextGoal;
     return {
       pulse,
       pulseBreakdown: this.getLoopPulseBreakdown(),
@@ -708,7 +755,7 @@ export class TerritorySystem {
       nextSlot: this.getNextSlotUnlock(),
       nextRank: nextRankState.config,
       rankRequirements: nextRankState.checks,
-      nextGoal: this.getNextProgressionGoal(production),
+      nextGoal,
       nextTargetPulse: pulse,
       progress: nextRankState.progress,
       worldWidth: this.getWorldWidth(),
@@ -810,7 +857,7 @@ export class TerritorySystem {
   canUpgrade(slotIndex) {
     const building = this.getBuildingAt(slotIndex);
     if (!building) return { success: false, reason: "该位置没有建筑" };
-    if (building.type === "main_base") return { success: false, reason: "主基地通过领地升阶强化" };
+    if (building.type === "main_base") return { success: false, reason: "星愿屋会随庭院升阶一同成长" };
     const cap = this.getBuildingLevelCap(building.type);
     if (building.level >= cap) return { success: false, reason: `当前领地等级上限为 Lv.${cap}` };
     const cost = this.calculateUpgradeCost(building.type, building.level);
@@ -836,7 +883,7 @@ export class TerritorySystem {
   demolishBuilding(slotIndex) {
     const building = this.getBuildingAt(slotIndex);
     if (!building) return { success: false, reason: "该位置没有建筑" };
-    if (building.type === "main_base") return { success: false, reason: "主基地不能拆除" };
+    if (building.type === "main_base") return { success: false, reason: "星愿屋不能移除" };
     const refund = {
       coins: Math.floor((building.investedCoins || 0) * 0.7),
       crystals: Math.floor((building.investedCrystals || 0) * 0.7),
@@ -857,7 +904,7 @@ export class TerritorySystem {
   canExpand() {
     const next = this.getNextRankConfig();
     if (!next) return { success: false, reason: "领地已达到最高等级" };
-    if (!this.getBuildingByType("main_base")) return { success: false, reason: "先修复主基地" };
+    if (!this.getBuildingByType("main_base")) return { success: false, reason: "请先启用星愿屋" };
     const state = this.getRankRequirementState(next.rank);
     if (!state.complete) {
       const missing = state.checks.find((check) => !check.met);
@@ -872,6 +919,12 @@ export class TerritorySystem {
     this.resourceSystem.spendCoins(result.cost.coins);
     this.resourceSystem.spendCrystals(result.cost.crystals);
     this.rank = result.next.rank;
+    const promotionReward = {
+      coins: Math.max(0, Number(result.next.promotionReward?.coins) || 0),
+      crystals: Math.max(0, Number(result.next.promotionReward?.crystals) || 0),
+    };
+    if (promotionReward.coins > 0) this.resourceSystem?.addCoins(promotionReward.coins);
+    if (promotionReward.crystals > 0) this.resourceSystem?.addCrystals(promotionReward.crystals);
     this.expansionCount = Math.max(0, this.rank - 1);
     this.unlockedSlots = this.getEffectiveUnlockedSlots();
     this.setProgressContext(this.progressContext);
@@ -881,7 +934,11 @@ export class TerritorySystem {
       rank: this.rank,
       rankName: result.next.name,
       unlockedSlots: this.unlockedSlots,
-      message: `领地升阶为 R${this.rank} · ${result.next.name}`,
+      promotionReward,
+      message: `领地升阶为 R${this.rank} · ${result.next.name}`
+        + (promotionReward.coins || promotionReward.crystals
+          ? `；获赠 ${promotionReward.coins} 金币 / ${promotionReward.crystals} 水晶。下一步：升级闪耀训练馆或萌宠疗愈庭，解锁 R2 新设施`
+          : ""),
     };
   }
 

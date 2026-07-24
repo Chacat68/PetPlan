@@ -31,7 +31,7 @@ index.html
 | `SceneRouter` | 命运/战斗/领地显示状态、HUD 状态、`?scene=` URL |
 | `ModalFocusManager` | 模态初始焦点、Tab 限制、关闭后的焦点恢复 |
 | `TerritorySystem` | 地块、建筑、循环脉冲、长期资源产出 |
-| `ProgressionSystem` | 首局目标与成长倾向；保留旧领取 ID 仅用于存档迁移 |
+| `ProgressionSystem` | 成长倾向与推荐权重；保留旧领取 ID 仅用于成就存档迁移 |
 | `AchievementSystem` | 长期里程碑目录、历史最高指标、完成锁存、领取与奖励 |
 | `progression-config.js` | 成本、脉冲权重、目标与倾向映射的唯一数值来源 |
 | `SaveSystem` | 槽位存档、导入导出、系统数据汇总 |
@@ -70,7 +70,7 @@ Game 初始化
   -> LocalStorage
 ```
 
-场景路由只管理表现状态，不复制游戏数据。命运、远征、领地共享同一批系统实例和槽位存档。旧版独立领地键只在没有可用槽位时作为一次性迁移回退。首局步骤和成长倾向始终从当前玩法状态派生；`AchievementSystem` 单独保存里程碑完成时间、历史最高值和领取状态，并迁移旧版 `ProgressionSystem` 领取 ID。
+场景路由只管理表现状态，不复制游戏数据。命运、远征、领地共享同一批系统实例和槽位存档。旧版独立领地键只在没有可用槽位时作为一次性迁移回退。成长倾向始终从当前玩法状态派生；`AchievementSystem` 单独保存里程碑完成时间、历史最高值和领取状态，并迁移旧版 `ProgressionSystem` 领取 ID。
 
 ### 大地图远征数据流
 

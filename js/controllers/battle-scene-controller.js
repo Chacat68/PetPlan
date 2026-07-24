@@ -1419,12 +1419,15 @@ export class BattleSceneController {
       const rubySuffix = state.settlement.rubyReward > 0
         ? `、${state.settlement.rubyReward} 红宝石`
         : "";
+      const firstExtractionSuffix = state.settlement.firstExtractionBonus
+        ? `；首次撤离奖励：${state.settlement.firstExtractionBonus.coins} 金币、${state.settlement.firstExtractionBonus.crystals} 水晶`
+        : "";
       const loadoutLost = state.settlement.metaSettlement?.loadoutLost || [];
       const loadoutSuffix = loadoutLost.length > 0
         ? `；遗失配装：${loadoutLost.map((item) => item.name || "未命名装备").join("、")}`
         : "";
       return state.settlement.extracted
-        ? `撤离成功：获得 ${state.settlement.coins} 金币、${state.settlement.crystals} 水晶、${state.settlement.exp} 经验${rubySuffix}${bondSuffix}。`
+        ? `撤离成功：获得 ${state.settlement.coins} 金币、${state.settlement.crystals} 水晶、${state.settlement.exp} 经验${rubySuffix}${bondSuffix}${firstExtractionSuffix}。`
         : `本局结束：安全袋带回 ${state.settlement.insuredLootRecovered || 0} 件，未保护战利品遗失 ${state.settlement.lootLost} 件${loadoutSuffix}${bondSuffix}。`;
     }
     const tips = {
@@ -1461,9 +1464,12 @@ export class BattleSceneController {
     const bondMessage = bondSummary
       ? `，${bondSummary}`
       : "";
+    const firstExtractionMessage = settlement.firstExtractionBonus
+      ? `；首次撤离额外获得 ${settlement.firstExtractionBonus.coins} 金币 / ${settlement.firstExtractionBonus.crystals} 水晶，可返回星愿屋升阶`
+      : "";
     this.uiSystem?.showToast(
       settlement.extracted
-        ? `撤离成功，背包奖励已入库${bondMessage}`
+        ? `撤离成功，背包奖励已入库${bondMessage}${firstExtractionMessage}`
         : `远征结束，已结算安全袋与战败结果${bondMessage}`,
       settlement.extracted ? "success" : "info"
     );

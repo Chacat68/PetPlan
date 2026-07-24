@@ -17,7 +17,7 @@
 | `combat-system.js` | 玩家移动/射击/换弹、持续巡逻与视听感知、世界弹药拾取、宠物技能与奖励结算协调 |
 | `territory-system.js` | 永久领地等级、固定建筑、生产、活动与远征加成 |
 | `territory-world-system.js` | 基地世界移动、宠物跟随、邻近设施和活动过程 |
-| `territory-art-config.js` | 领地天空、地表、环境道具、边界和七类建筑的统一资源清单与渲染尺寸 |
+| `territory-art-config.js` | 梦幻庭院远景资源、街区标识和七类设施的统一渲染尺寸 |
 | `resource-system.js` | 金币、红宝石、水晶 |
 | `achievement-config.js` | 长期里程碑分类、指标、阈值与奖励目录 |
 | `achievement-system.js` | 里程碑历史最高值、完成锁存、领取与存档 |
@@ -61,7 +61,7 @@ main.js 获取唯一系统实例
 
 领地同样是实际游戏场景：`TerritoryWorldSystem` 只保存当前页面会话里的位置、跟随宠物和短时活动，`TerritorySystem` 保存领地等级、建筑、生产与战备。控制器把两者组合到独立 Canvas 中，角色必须走近固定设施后才能操作；位置不写入存档，基地建设会立即写入槽位。
 
-领地专属美术统一放在 `images/territory-v2/`，由 `territory-art-config.js` 提供唯一清单。天空、道路、路标、灯具、施工台、远征门、边界障碍和建筑不能再回退为代码矩形或引用旧 `images/territory/` 资源；`tests/territory-art-preview.html` 用于构造隔离存档的 R5 全地图进行视觉验收。
+庭院的绘制入口统一由 `territory-art-config.js` 和 `TerritorySceneController` 管理：`images/territory-v4/` 保存与命运桌同色系的黄昏城市远景（AVIF 优先、WebP 回退），`images/territory-v5/` 保存以该远景为风格参考生成的大型次元探索门和七类透明 WebP 现代都市建筑。控制器初始化时不请求领地图片，只有进入领地才加载天空、探索门和主基地，随后按设施所需的庭院等级增量加载建筑；R2/R3 资源不会在 R0/R1 提前下载。场景道路不再绘制星标、信标、分区牌和网格分割，地面使用越过世界边界的连续渐变，避免镜头移动时出现断层。旧中世纪资源和生产 PNG 已清理。`tests/territory-art-preview.html` 用于构造隔离存档的 R5 全地图进行视觉验收。
 
 ## 扩展规则
 

@@ -458,75 +458,8 @@ test("主角与设置控制台会同步新的概览状态", () => {
   }
 });
 
-test("首局目标严格按顺序推进并能识别成长倾向", () => {
+test("成长倾向按实际投入派生并影响常规推荐权重", () => {
   const progression = new ProgressionSystem();
-
-  assert.deepEqual(
-    (({ id, current, value, progress }) => ({ id, current, value, progress }))(
-      progression.getFirstSessionGuide({})
-    ),
-    { id: "flip", current: 1, value: 0, progress: 0 }
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({ totalFlips: 7 }).progress,
-    0.875
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({ totalFlips: 8 }).id,
-    "table"
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({ totalFlips: 8, fateCoins: 2 }).id,
-    "assistant"
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({
-      totalFlips: 8,
-      fateCoins: 2,
-      assistants: 1,
-    }).id,
-    "expedition"
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({
-      totalFlips: 8,
-      fateCoins: 2,
-      assistants: 1,
-      expeditionDepth: 1,
-    }).id,
-    "extraction"
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({
-      totalFlips: 8,
-      fateCoins: 2,
-      assistants: 1,
-      expeditionDepth: 1,
-      extractions: 1,
-    }).id,
-    "territory"
-  );
-  assert.equal(
-    progression.getFirstSessionGuide({
-      totalFlips: 8,
-      fateCoins: 2,
-      assistants: 1,
-      expeditionDepth: 1,
-      extractions: 1,
-      buildings: 1,
-    }).complete,
-    true
-  );
-
-  const outOfOrder = progression.getFirstSessionGuide({
-    fateCoins: 2,
-    assistants: 1,
-    expeditionDepth: 1,
-    extractions: 1,
-    buildings: 1,
-  });
-  assert.equal(outOfOrder.id, "flip");
-  assert.equal(outOfOrder.completedCount, 5);
 
   assert.equal(progression.getPathSummary({}).leadingPath, null);
   const companion = progression.getPathSummary({
@@ -539,16 +472,7 @@ test("首局目标严格按顺序推进并能识别成长倾向", () => {
   assert.equal(companion.highestScore, 11);
   assert.equal(progression.getRecommendationBoost("assistant", companion), 14);
   assert.equal(progression.getRecommendationBoost("gold", companion), 0);
-
-  assert.equal(progression.getOnboardingState().status, "new");
-  progression.startOnboarding();
-  assert.equal(progression.getOnboardingState().active, true);
-  const onboardingSave = progression.getSaveData();
-  const restoredProgression = new ProgressionSystem();
-  restoredProgression.loadSaveData(onboardingSave);
-  assert.equal(restoredProgression.getOnboardingState().status, "active");
-  restoredProgression.dismissOnboarding();
-  assert.equal(restoredProgression.getOnboardingState().status, "dismissed");
+  assert.deepEqual(progression.getSaveData(), { claimedAchievementIds: [] });
 });
 
 test("命运商店评分、主次推荐和分类顺序可独立回归", () => {
@@ -633,15 +557,6 @@ test("命运商店评分、主次推荐和分类顺序可独立回归", () => {
   assert.equal(initialRecommendation.primary?.action, "assistant");
   assert.equal(initialRecommendation.secondary?.action, "gold");
 
-  const flipGuide = progressionSystem.getFirstSessionGuide({});
-  const flipGoal = shop.getFirstSessionGoal(
-    flipGuide,
-    fateCoinSystem.getDisplayData(),
-    initialRecommendation
-  );
-  assert.equal(flipGoal.title, "熟悉命运翻转");
-  assert.match(flipGoal.detail, /每个面值周期可结算一次/);
-
   const territoryGoal = shop.getFateNextGoal(
     fateCoinSystem.getDisplayData(),
     {
@@ -654,11 +569,10 @@ test("命运商店评分、主次推荐和分类顺序可独立回归", () => {
         action: "progress",
         status: "in_progress",
         blockers: [{ metric: "extractions", gap: 1 }],
-        ctaLabel: "前往领地入口",
+        ctaLabel: "前往次元探索门",
       },
     },
-    initialRecommendation,
-    { complete: true }
+    initialRecommendation
   );
   assert.deepEqual(territoryGoal, {
     title: "成功撤离 1 次",
@@ -669,27 +583,20 @@ test("命运商店评分、主次推荐和分类顺序可独立回归", () => {
     action: "progress",
     status: "in_progress",
     blockers: [{ metric: "extractions", gap: 1 }],
-    ctaLabel: "前往领地入口",
+    ctaLabel: "前往次元探索门",
     alt: "购买第 1 个助手",
   });
   assert.doesNotMatch(territoryGoal.detail, /循环脉冲/);
 
-  const tableGuide = progressionSystem.getFirstSessionGuide({ totalFlips: 8 });
-  const guidedRecommendation = shop.applyFirstSessionRecommendation(
-    initialRecommendation,
-    tableGuide
-  );
-  assert.equal(guidedRecommendation.primary?.action, "gold");
-
-  shop.commitRecommendation(guidedRecommendation);
+  shop.commitRecommendation(initialRecommendation);
   const changedScores = {
-    ...guidedRecommendation,
-    primary: guidedRecommendation.secondary,
-    secondary: guidedRecommendation.primary,
+    ...initialRecommendation,
+    primary: initialRecommendation.secondary,
+    secondary: initialRecommendation.primary,
   };
   const stableRecommendation = shop.getCommittedRecommendation(changedScores);
-  assert.equal(stableRecommendation.primary?.action, "gold");
-  assert.equal(stableRecommendation.secondary?.action, "assistant");
+  assert.equal(stableRecommendation.primary?.action, "assistant");
+  assert.equal(stableRecommendation.secondary?.action, "gold");
 
   shop.playerSystem.player.attack = 999;
   assert.deepEqual(shop.getFateHeroTrainingCost(), { heads: 14, tails: 6 });
@@ -745,8 +652,8 @@ test("领地主建筑唯一、使用固定施工点并受蓝图条件保护", ()
   assert.equal(territory.buildBuilding("main_base", 0).success, true);
   assert.equal(territory.canBuild("training_ground", 1).success, true);
   assert.equal(territory.buildBuilding("training_ground", 1).success, true);
-  assert.equal(territory.canBuild("training_ground", 1).reason, "训练场只能建造一座");
-  assert.equal(territory.canBuild("main_base", 0).reason, "主基地只能建造一座");
+  assert.equal(territory.canBuild("training_ground", 1).reason, "闪耀训练馆只能建造一座");
+  assert.equal(territory.canBuild("main_base", 0).reason, "星愿屋只能建造一座");
   assert.equal(territory.canUpgrade(1).success, true);
   assert.equal(territory.upgradeBuilding(1).success, true);
   assert.equal(territory.getBuildingLevel("training_ground"), 2);

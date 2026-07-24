@@ -12,6 +12,22 @@ const battleControllerJs = readFileSync(
   new URL("../js/controllers/battle-scene-controller.js", import.meta.url),
   "utf8",
 );
+const territorySceneControllerJs = readFileSync(
+  new URL("../js/controllers/territory-scene-controller.js", import.meta.url),
+  "utf8",
+);
+const progressionSystemJs = readFileSync(
+  new URL("../js/modules/progression-system.js", import.meta.url),
+  "utf8",
+);
+const progressionConfigJs = readFileSync(
+  new URL("../js/modules/progression-config.js", import.meta.url),
+  "utf8",
+);
+const shopRecommendationControllerJs = readFileSync(
+  new URL("../js/controllers/shop-recommendation-controller.js", import.meta.url),
+  "utf8",
+);
 
 test("窄竖屏使用可恢复的横屏引导而不是压缩玩法舞台", () => {
   assert.match(indexHtml, /id="orientation-guide"[^>]*role="dialog"[^>]*aria-modal="true"/);
@@ -19,14 +35,14 @@ test("窄竖屏使用可恢复的横屏引导而不是压缩玩法舞台", () =>
   assert.match(indexHtml, /旋转设备后会保留当前场景、远征进度与操作位置/);
   assert.match(styleCss, /\.orientation-guide\[hidden\]/);
   assert.match(mainJs, /OrientationController/);
-  assert.match(indexHtml, /style\.css\?v=duckov-continuous-20260724a/);
+  assert.match(indexHtml, /style\.css\?v=petplan-sync-20260724e/);
 });
 
 test("命运桌不再显示累计次数和银色点击快捷提示", () => {
   assert.doesNotMatch(indexHtml, /fate-total-flips-display/);
   assert.doesNotMatch(indexHtml, /fate-skill-tree-btn/);
   assert.doesNotMatch(indexHtml, /查看银色点击/);
-  assert.match(indexHtml, /main\.js\?v=duckov-continuous-20260724a/);
+  assert.match(indexHtml, /main\.js\?v=petplan-sync-20260724f/);
 });
 
 test("远征使用沉浸模式并通过 Esc 确认退出", () => {
@@ -43,15 +59,19 @@ test("远征使用沉浸模式并通过 Esc 确认退出", () => {
   assert.match(mainJs, /this\.handleNavigation\("territory"\)/);
 });
 
-test("远征从全局导航收拢到领地入口", () => {
+test("远征从全局导航收拢到领地次元探索门", () => {
   assert.doesNotMatch(indexHtml, /class="[^"]*nav-btn[^"]*"[^>]*data-tab="dungeon"/);
   assert.match(indexHtml, /data-territory-action="depart"[^>]*>进入远征<\/button>/);
-  assert.match(mainJs, /territory-system\.js\?v=duckov-continuous-20260724a/);
-  assert.match(mainJs, /shop-recommendation-controller\.js\?v=territory-expedition-entry-20260723a/);
+  assert.match(mainJs, /territory-system\.js\?v=petplan-sync-20260724d/);
+  assert.match(mainJs, /shop-recommendation-controller\.js\?v=petplan-sync-20260724e/);
+  assert.match(
+    mainJs,
+    /territory-scene-controller\.js\?v=territory-assets-lazy-20260724a/,
+  );
 });
 
 test("发布入口使用新缓存键且成功撤离深度继续透传", () => {
-  assert.match(mainJs, /combat-system\.js\?v=duckov-continuous-20260724a/);
+  assert.match(mainJs, /combat-system\.js\?v=petplan-sync-20260724d/);
   for (const modulePath of ["player-system.js"]) {
     assert.match(
       mainJs,
@@ -66,10 +86,10 @@ test("发布入口使用新缓存键且成功撤离深度继续透传", () => {
   }
   assert.match(
     mainJs,
-    /battle-scene-controller\.js\?v=duckov-continuous-20260724a/,
+    /battle-scene-controller\.js\?v=petplan-sync-20260724d/,
   );
   assert.match(mainJs, /save-system\.js\?v=review-fixes-20260722a/);
-  assert.match(mainJs, /expedition-meta-system\.js\?v=duckov-continuous-20260724a/);
+  assert.match(mainJs, /expedition-meta-system\.js\?v=petplan-sync-20260724c/);
   assert.match(
     mainJs,
     /bestExtractedDepth:\s*this\.combatSystem\?\.meta\?\.bestExtractedDepth\s*\|\|\s*0/,
@@ -88,6 +108,13 @@ test("领地不再显示靠近建筑时的浮动标签", () => {
 test("领地不再显示常驻操作提示栏", () => {
   assert.doesNotMatch(indexHtml, /territory-event-feed/);
   assert.doesNotMatch(styleCss, /\.territory-event-feed/);
+});
+
+test("R2 扩展区域使用随升阶状态变化的都市路牌提示", () => {
+  assert.match(territorySceneControllerJs, /renderR2RegionSign\(ctx\)/);
+  assert.match(territorySceneControllerJs, /getRankRequirementState\(2\)/);
+  assert.match(territorySceneControllerJs, /萌宠乐园/);
+  assert.match(territorySceneControllerJs, /已开放 · 向右探索/);
 });
 
 test("领地资源信息位于标题栏而不是场景画布", () => {
@@ -114,9 +141,20 @@ test("领地移动与交互控件使用紧凑但可触控的尺寸", () => {
   assert.match(styleCss, /\.territory-interact-btn strong \{[\s\S]*?font-size: clamp\(11px, 1\.1vw, 14px\);/);
 });
 
-test("首轮成长引导入口和浮层已从当前版本移除", () => {
+test("显式新手教程的入口、步骤、状态和推荐覆盖均已移除", () => {
   assert.doesNotMatch(indexHtml, /id="onboarding-|class="[^"]*onboarding-/);
   assert.doesNotMatch(styleCss, /\.onboarding-/);
+  assert.doesNotMatch(indexHtml, /fate-first-session-guide|goal-guide/);
+  assert.doesNotMatch(styleCss, /\.goal-guide/);
+  assert.doesNotMatch(progressionConfigJs, /FIRST_SESSION_STEPS|ONBOARDING_VERSION/);
+  assert.doesNotMatch(
+    progressionSystemJs,
+    /getFirstSessionGuide|getOnboardingState|startOnboarding|dismissOnboarding|completeOnboarding|onboardingStatus|onboardingVersion/,
+  );
+  assert.doesNotMatch(
+    shopRecommendationControllerJs,
+    /FirstSession|firstSession|首局教学|fate-first-session-guide/,
+  );
 });
 
 test("远征使用全屏战场和按情境出现的轻量交互", () => {

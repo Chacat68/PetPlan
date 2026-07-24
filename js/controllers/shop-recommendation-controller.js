@@ -18,7 +18,7 @@ const FATE_SHOP_FILTER_LABELS = {
 };
 
 /**
- * Owns fate-shop recommendations, filters, next-goal copy, and progression hints.
+ * Owns fate-shop recommendations, filters, next-goal copy, and growth-path hints.
  * Purchase execution and fate-table animation remain with FateSceneController.
  */
 export class ShopRecommendationController {
@@ -44,7 +44,6 @@ export class ShopRecommendationController {
     this.latestGoal = null;
     this.committedPrimaryAction = "";
     this.committedSecondaryAction = "";
-    this.committedGuideId = "";
     this.pendingRecommendationCommit = false;
   }
 
@@ -135,28 +134,25 @@ export class ShopRecommendationController {
     const context = progressionContext || this.getProgressionContext(data) || {};
     const activePathSummary =
       pathSummary || this.progressionSystem?.getPathSummary?.(context) || null;
-    const guide = this.progressionSystem?.getFirstSessionGuide?.(context) || null;
-    const recommendation = this.applyFirstSessionRecommendation(
-      this.getFateUpgradeRecommendation(data, territorySummary, activePathSummary),
-      guide
+    const recommendation = this.getFateUpgradeRecommendation(
+      data,
+      territorySummary,
+      activePathSummary
     );
     this.latestRecommendation = recommendation;
-    const guideId = guide?.complete ? "complete" : guide?.id || "";
     const shouldCommitRecommendation =
       commitRecommendation ||
       this.pendingRecommendationCommit ||
-      !this.committedPrimaryAction ||
-      guideId !== this.committedGuideId;
+      !this.committedPrimaryAction;
     this.pendingRecommendationCommit = false;
     if (shouldCommitRecommendation) {
       this.commitRecommendation(recommendation);
-      this.committedGuideId = guideId;
     }
     const activeRecommendation = this.getCommittedRecommendation(recommendation);
 
     this.updateFateShopRecommendation(activeRecommendation);
-    this.updateFateNextGoal(data, territorySummary, activeRecommendation, guide);
-    this.updateFateProgressionGuide(context, activePathSummary, guide);
+    this.updateFateNextGoal(data, territorySummary, activeRecommendation);
+    this.updateFatePathSummary(activePathSummary);
 
     return activeRecommendation;
   }
@@ -166,7 +162,6 @@ export class ShopRecommendationController {
     this.latestGoal = null;
     this.committedPrimaryAction = "";
     this.committedSecondaryAction = "";
-    this.committedGuideId = "";
     this.pendingRecommendationCommit = false;
     this.updateFateMilestoneVisibility();
   }
@@ -177,30 +172,6 @@ export class ShopRecommendationController {
 
   cancelRecommendationCommit() {
     this.pendingRecommendationCommit = false;
-  }
-
-  applyFirstSessionRecommendation(recommendation, guide) {
-    if (!recommendation || !guide || guide.complete) return recommendation;
-    const actionByStep = {
-      table: "gold",
-      assistant: "assistant",
-    };
-    const action = actionByStep[guide.id];
-    if (!action) return recommendation;
-
-    const guidedCandidate = recommendation.candidates?.find(
-      (candidate) => candidate.action === action
-    );
-    if (!guidedCandidate) return recommendation;
-
-    const secondary = recommendation.candidates.find(
-      (candidate) => candidate.action !== action
-    );
-    return {
-      ...recommendation,
-      primary: guidedCandidate,
-      secondary: secondary || null,
-    };
   }
 
   commitRecommendation(recommendation) {
@@ -226,22 +197,8 @@ export class ShopRecommendationController {
     return { ...recommendation, primary, secondary };
   }
 
-  updateFateProgressionGuide(context, pathSummary, guideOverride = null) {
-    const guideEl = document.getElementById("fate-first-session-guide");
+  updateFatePathSummary(pathSummary) {
     const pathEl = document.getElementById("fate-path-summary");
-    const guide =
-      guideOverride || this.progressionSystem?.getFirstSessionGuide?.(context);
-
-    if (guideEl && guide) {
-      guideEl.hidden = guide.complete;
-      if (!guide.complete) {
-        guideEl.textContent = `首局 ${guide.current}/${guide.total} · ${guide.title} ${this.formatNumber(
-            guide.value
-          )}/${this.formatNumber(guide.target)}`;
-      }
-      guideEl.dataset.route = guide.routeType || "mixed";
-      guideEl.title = guide.detail || guide.title;
-    }
 
     if (pathEl) {
       const leadingPath = pathSummary?.leadingPath;
@@ -710,8 +667,7 @@ export class ShopRecommendationController {
   updateFateNextGoal(
     data,
     territorySummary,
-    recommendation = null,
-    guide = null
+    recommendation = null
   ) {
     const goalEl = document.getElementById("fate-next-goal-text");
     const goalTitleEl = document.getElementById("fate-next-goal-title");
@@ -723,8 +679,7 @@ export class ShopRecommendationController {
     const goal = this.getFateNextGoal(
       data,
       territorySummary,
-      recommendation,
-      guide
+      recommendation
     );
     if (goalTitleEl && goalDetailEl) {
       goalTitleEl.textContent = goal.title;
@@ -753,8 +708,7 @@ export class ShopRecommendationController {
   getFateNextGoal(
     data,
     territorySummary,
-    recommendation = null,
-    guide = null
+    recommendation = null
   ) {
     const activeRecommendation =
       recommendation ||
@@ -762,13 +716,6 @@ export class ShopRecommendationController {
     const primary = activeRecommendation?.primary;
     const secondary = activeRecommendation?.secondary;
     const territoryGoal = territorySummary?.nextGoal;
-
-    const firstSessionGoal = this.getFirstSessionGoal(
-      guide,
-      data,
-      activeRecommendation
-    );
-    if (firstSessionGoal) return firstSessionGoal;
 
     if (territoryGoal?.title) {
       return {
@@ -803,98 +750,6 @@ export class ShopRecommendationController {
       routeType: "neutral",
       alt: "",
     };
-  }
-
-  getFirstSessionGoal(guide, data, recommendation) {
-    if (!guide || guide.complete) return null;
-    const candidates = recommendation?.candidates || [];
-    const getCandidate = (action) =>
-      candidates.find((candidate) => candidate.action === action);
-
-    if (guide.id === "flip") {
-      return {
-        title: "熟悉命运翻转",
-        detail: `翻转 ${this.formatFateNumber(guide.value)}/${this.formatFateNumber(
-          guide.target
-        )} · 每个面值周期可结算一次`,
-        route: "首局教学",
-        routeType: "mixed",
-        alt: "扩充桌面硬币",
-      };
-    }
-
-    if (guide.id === "table") {
-      const candidate = getCandidate("gold");
-      return {
-        title: "扩充桌面硬币",
-        detail: candidate
-          ? `${this.formatFateGoalCost(candidate.cost, data)} · ${candidate.preview}`
-          : guide.detail,
-        route: "首局教学",
-        routeType: "heads",
-        alt: recommendation?.secondary?.title || "购买第 1 个助手",
-      };
-    }
-
-    if (guide.id === "assistant") {
-      const candidate = getCandidate("assistant");
-      return {
-        title: "购买第 1 个助手",
-        detail: candidate
-          ? `${this.formatFateGoalCost(candidate.cost, data)} · ${candidate.preview}`
-          : guide.detail,
-        route: "首局教学",
-        routeType: "tails",
-        alt: recommendation?.secondary?.title || "继续扩充桌面",
-      };
-    }
-
-    if (guide.id === "expedition") {
-      return {
-        title: "从领地进入第一次远征",
-        detail: "进入领地，前往西侧远征入口并完成第 1 个区域",
-        route: "首局教学",
-        routeType: "combat",
-        scene: "territory",
-        action: "progress",
-        status: "ready",
-        blockers: [],
-        ctaLabel: "前往领地入口",
-        alt: "继续积累命运资源",
-      };
-    }
-
-    if (guide.id === "extraction") {
-      return {
-        title: "成功撤离 1 次",
-        detail: "从领地西侧远征入口继续行动，探索至少 3 个区域并守住撤离信标",
-        route: "首局教学",
-        routeType: "combat",
-        scene: "territory",
-        action: "progress",
-        status: "in_progress",
-        blockers: [{ metric: "extractions", gap: 1 }],
-        ctaLabel: "前往领地入口",
-        alt: "撤离后前往领地",
-      };
-    }
-
-    if (guide.id === "territory") {
-      return {
-        title: "修复领地主基地",
-        detail: "前往领地，控制角色走到主基地遗迹并完成修复",
-        route: "首局教学",
-        routeType: "territory",
-        scene: "territory",
-        action: "build",
-        status: "ready",
-        blockers: [],
-        ctaLabel: "前往领地",
-        alt: "继续积累正面与反面",
-      };
-    }
-
-    return null;
   }
 
   formatFateGoalCost(cost = {}, data = {}) {

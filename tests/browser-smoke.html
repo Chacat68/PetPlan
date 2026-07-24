@@ -354,7 +354,7 @@
             await step("同源 iframe 加载并初始化游戏", async () => {
               frame = document.createElement("iframe");
               frame.title = "PetPlan 被测游戏";
-              frame.src = "../index.html?browser-smoke=territory-hint-cleanup-20260715a";
+              frame.src = "../index.html?browser-smoke=petplan-sync-20260724f";
               frameHost.appendChild(frame);
 
               const game = await waitFor(
@@ -372,6 +372,16 @@
               );
               assert(game.currentScene === "fate", "新存档未从命运场景启动");
               return `${frame.contentWindow.location.pathname} · scene=${game.currentScene}`;
+            });
+
+            await step("领地图片不会在其他场景提前加载", () => {
+              const controller = frame.contentWindow.game.territorySceneController;
+              const territoryRequests = frame.contentWindow.performance
+                .getEntriesByType("resource")
+                .filter(({ name }) => name.includes("/images/territory-v4/") || name.includes("/images/territory-v5/"));
+              assert(Object.keys(controller.sceneImages).length === 0, "命运场景已创建领地图片对象");
+              assert(territoryRequests.length === 0, "命运场景已提前请求领地图片");
+              return "scene=fate · territory requests=0";
             });
 
             await step("横竖屏限制已关闭且游戏保持可见可操作", () => {
@@ -522,13 +532,16 @@
               return controllerNames.join(" · ");
             });
 
-            await step("当前版本不再挂载成长引导入口或控制器", () => {
+            await step("当前版本不再挂载显式新手教程流程", () => {
               const doc = frame.contentDocument;
               const game = frame.contentWindow.game;
               assert(!doc.getElementById("onboarding-layer"), "成长引导浮层仍在页面中");
               assert(!doc.getElementById("onboarding-replay-btn"), "成长引导入口仍在 HUD 中");
+              assert(!doc.getElementById("fate-first-session-guide"), "首局步骤提示仍在命运目标中");
               assert(!game.onboardingController, "成长引导控制器仍在运行时挂载");
-              return "entry=none · layer=none · controller=none";
+              assert(typeof game.progressionSystem?.getFirstSessionGuide === "undefined", "首局步骤状态机仍可调用");
+              assert(typeof game.progressionSystem?.getOnboardingState === "undefined", "教程存档状态仍可调用");
+              return "entry=none · layer=none · steps=none · state=none";
             });
 
             await step("玩家按钮可打开并关闭玩家弹窗", async () => {
@@ -954,12 +967,12 @@
               return `助手 ${beforeCount} → ${fate.assistants}，花费 ${cost.tails} 反面`;
             });
 
-            await step("通过领地西侧入口进入远征", async () => {
+            await step("通过领地次元探索门进入远征", async () => {
               const game = frame.contentWindow.game;
               const doc = frame.contentDocument;
               assert(
                 !doc.querySelector('.nav-btn[data-tab="dungeon"]'),
-                "全局导航仍保留远征入口",
+                "全局导航仍保留次元探索门直达入口",
               );
 
               const territoryButton = doc.querySelector(
@@ -974,25 +987,25 @@
 
               const controller = game.territorySceneController;
               const gate = controller.world.getSite("expedition_gate");
-              assert(gate, "领地未配置远征入口");
+              assert(gate, "领地未配置次元探索门");
               controller.world.player.x = gate.x - controller.world.player.width / 2;
               controller.world.updateNearbySite();
               controller.updateDisplay();
 
               const interact = doc.getElementById("territory-interact-btn");
-              assert(interact && !interact.disabled, "靠近远征入口后无法交互");
+              assert(interact && !interact.disabled, "靠近次元探索门后无法交互");
               assert(
-                doc.getElementById("territory-interact-label")?.textContent.includes("远征入口"),
-                "领地交互按钮未识别远征入口",
+                doc.getElementById("territory-interact-label")?.textContent.includes("次元探索门"),
+                "领地交互按钮未识别次元探索门",
               );
               interact.click();
 
               const depart = await waitFor(() => {
                 const candidate = doc.querySelector('[data-territory-action="depart"]');
                 return candidate && !candidate.hidden ? candidate : null;
-              }, "远征入口面板打开");
+              }, "次元探索门面板打开");
               assert(!depart.disabled, "进入远征按钮不可用");
-              assert(depart.textContent.includes("进入远征"), "远征入口动作标签错误");
+              assert(depart.textContent.includes("进入远征"), "次元探索门动作标签错误");
               depart.click();
               await waitFor(
                 () => game.currentScene === "dungeon",
@@ -1059,7 +1072,10 @@
                 const state = game.combatSystem.getBattleState();
                 return state.phase === "route" ? state : null;
               }, "远征路线生成");
-              assert(routeState.routeChoices.length === 8, "开局没有生成完整的 8 个地图热点");
+              assert(
+                routeState.routeChoices.length === 8,
+                `开局没有生成完整的 8 个地图热点：routeChoices=${routeState.routeChoices.length}，hotspotCount=${routeState.hotspotCount}`,
+              );
               assert(
                 routeState.world.width > game.gameCore.config.width,
                 "远征世界宽度没有与 Canvas 视口解耦",
@@ -1272,9 +1288,12 @@
               const after = game.combatSystem.getBattleState();
               assert(after.depth === 1, `搜索地点完成后深度异常：${after.depth}`);
               assert(after.exploredCount === 1 && after.hotspotCount === 8, "已探索计数没有按完整热点更新");
+              const expectedThreatText =
+                `${game.battleSceneController.getThreatTierLabel(after)} · ${after.threat}`
+                + (after.raidThreatActive ? " · 暴露" : "");
               assert(
                 frame.contentDocument.getElementById("battle-threat-display")?.textContent ===
-                  `${game.battleSceneController.getThreatTierLabel(after)} · ${after.threat}`,
+                  expectedThreatText,
                 "威胁 HUD 未更新",
               );
               assert(
@@ -1291,12 +1310,14 @@
               return `world=${routeState.world.width}x${routeState.world.height} · moved=${Math.round(movedState.world.player.x - playerXBefore)} · depth=${after.depth} · bag=${after.backpackCount}`;
             });
 
-            await step("Esc 确认放弃本局并返回领地", async () => {
+            await step("Esc 按当前风险确认退出并返回领地", async () => {
               const game = frame.contentWindow.game;
               const doc = frame.contentDocument;
               const gameWindow = frame.contentWindow;
               const beforeLosses = game.combatSystem.meta.losses;
               assert(game.combatSystem.runSystem.active, "确认退出前远征并未进行");
+              const dangerousExit = game.combatSystem.isCombatActive();
+              const expectedExitRisk = dangerousExit ? "defeated" : "abandoned";
 
               doc.dispatchEvent(new gameWindow.KeyboardEvent("keydown", {
                 key: "Escape",
@@ -1309,13 +1330,23 @@
                 return candidate && !candidate.hidden ? candidate : null;
               }, "行动中退出确认打开");
               assert(overlay.dataset.runActive === "true", "行动中退出确认缺少风险状态");
-              assert(overlay.dataset.exitRisk === "abandoned", "安全行进阶段退出风险分类错误");
-              assert(
-                doc.getElementById("expedition-exit-message")?.textContent.includes("主动放弃")
-                  && doc.getElementById("expedition-exit-message")?.textContent.includes("全部战斗收益")
-                  && doc.getElementById("expedition-exit-message")?.textContent.includes("仅回收安全袋物品"),
-                "安全行进阶段退出确认未说明准确损失规则",
-              );
+              assert(overlay.dataset.exitRisk === expectedExitRisk, "行动中退出风险分类错误");
+              const exitMessage = doc.getElementById("expedition-exit-message")?.textContent || "";
+              if (dangerousExit) {
+                assert(
+                  exitMessage.includes("战败结算")
+                    && exitMessage.includes("10% 金币与 20% 经验")
+                    && exitMessage.includes("不获得水晶"),
+                  "危险阶段退出确认未说明准确战败规则",
+                );
+              } else {
+                assert(
+                  exitMessage.includes("主动放弃")
+                    && exitMessage.includes("全部战斗收益")
+                    && exitMessage.includes("仅回收安全袋物品"),
+                  "安全阶段退出确认未说明准确放弃规则",
+                );
+              }
               assert(game.combatSystem.isPaused, "确认退出界面没有暂停战斗");
 
               doc.getElementById("expedition-exit-confirm")?.click();
@@ -1330,14 +1361,37 @@
               assert(url.searchParams.get("scene") === "territory", "领地场景未写入 URL");
               assert(scene?.style.display === "flex", "领地场景容器未显示");
               assert(!game.combatSystem.runSystem.active, "确认退出后远征仍在进行");
-              assert(game.combatSystem.lastSettlement?.reason === "abandoned", "退出未按主动放弃结算");
-              assert(game.combatSystem.meta.losses === beforeLosses + 1, "主动放弃未记录本局失败");
+              assert(game.combatSystem.lastSettlement?.reason === expectedExitRisk, "退出未按提示风险结算");
+              assert(game.combatSystem.meta.losses === beforeLosses + 1, "退出未记录本局失败");
               assert(!globalHud.hidden, "返回领地后全局 HUD 未恢复");
               assert(!globalHud.hasAttribute("inert"), "返回领地后全局 HUD 仍不可交互");
               assert(globalHud.getAttribute("aria-hidden") === "false", "返回领地后全局 HUD 仍对读屏隐藏");
               assert(gameWindow.getComputedStyle(globalHud).display !== "none", "领地全局 HUD 仍不可见");
               savedScene = "territory";
               return `${url.search} · losses ${beforeLosses} → ${game.combatSystem.meta.losses}`;
+            });
+
+            await step("R0 只加载当前等级的 AVIF/WebP 场景资产", async () => {
+              const controller = frame.contentWindow.game.territorySceneController;
+              await waitFor(
+                () => ["sky", "expedition_gate", "main_base"].every((type) => {
+                  const image = controller.sceneImages[type];
+                  return image?.complete && image.naturalWidth > 0;
+                }),
+                "R0 领地压缩资产加载",
+              );
+              assert(
+                Object.keys(controller.sceneImages).sort().join(",") ===
+                  "expedition_gate,main_base,sky",
+                "R0 提前加载了高等级建筑",
+              );
+              assert(
+                Object.values(controller.sceneImages).every((image) => /\.(avif|webp)(\?|$)/.test(image.src)),
+                "领地仍请求 PNG 旧资产",
+              );
+              return Object.values(controller.sceneImages)
+                .map((image) => image.src.split("/").at(-1).split("?")[0])
+                .join(" · ");
             });
 
             await step("领地等级紧邻标题右侧且资源信息保持独立", () => {
@@ -1418,7 +1472,7 @@
               return `${Math.round(compactHeight)}px → ${Math.round(expandedHeight)}px → 收起`;
             });
 
-            await step("在实际基地世界中靠近遗迹并修复主基地", async () => {
+            await step("在梦幻庭院中靠近并启用星愿屋", async () => {
               const game = frame.contentWindow.game;
               const doc = frame.contentDocument;
               const territory = game.territorySystem;
@@ -1445,7 +1499,7 @@
               assert(canvas.width > 0 && canvas.height > 0, "领地 Canvas 尚未完成适配");
               await waitFor(
                 () => game.territorySceneController.world.getNearbySite()?.type === "main_base",
-                "角色抵达主基地遗迹",
+                "角色抵达星愿屋",
               );
               assert(
                 !doc.getElementById("territory-nearby-prompt"),
@@ -1456,9 +1510,9 @@
                 "领地仍显示常驻操作提示栏",
               );
               const interact = doc.getElementById("territory-interact-btn");
-              assert(interact && !interact.disabled, "主基地遗迹附近没有可用交互");
+              assert(interact && !interact.disabled, "星愿屋附近没有可用交互");
               assert(
-                doc.getElementById("territory-interact-label")?.textContent.includes("主基地"),
+                doc.getElementById("territory-interact-label")?.textContent.includes("星愿屋"),
                 "右下角交互按钮没有保留建筑名称",
               );
               assert(
@@ -1473,7 +1527,7 @@
               }, "基地操作面板打开");
               const buildButton = panel.querySelector('[data-territory-action="build"]');
               assert(buildButton && !buildButton.hidden, "基地操作面板未显示修复动作");
-              assert(!buildButton.disabled, "免费主基地不可修复");
+              assert(!buildButton.disabled, "免费星愿屋不可启用");
               buildButton.click();
 
               const building = await waitFor(
@@ -1481,20 +1535,33 @@
                   territory.buildings.length === 1
                     ? territory.buildings[0]
                     : null,
-                "主基地建造结算",
+                "星愿屋启用结算",
               );
               await waitFor(
                 () =>
                   territory.rank === 1 &&
                   doc.getElementById("territory-rank-badge")?.textContent?.startsWith("R1"),
-                "主基地世界状态与 HUD 渲染",
+                "星愿屋世界状态与 HUD 渲染",
               );
               await waitFor(
                 () => {
-                  const image = game.territorySceneController.buildingImages.main_base;
+                  const image = game.territorySceneController.sceneImages.sky;
                   return image?.complete && image.naturalWidth > 0;
                 },
-                "主基地图片资产加载",
+                "梦幻庭院远景资产加载",
+              );
+              await waitFor(
+                () => ["training_ground", "temple", "workshop"].every((type) => {
+                  const image = game.territorySceneController.sceneImages[type];
+                  return image?.complete && image.naturalWidth > 0;
+                }),
+                "R1 建筑资产按等级加载",
+              );
+              assert(
+                ["barracks", "library", "crystal_mine"].every(
+                  (type) => !game.territorySceneController.sceneImages[type]
+                ),
+                "R1 提前加载了 R2/R3 建筑资产",
               );
               assert(building.type === "main_base", `建筑类型异常：${building.type}`);
               assert(building.slotIndex === 0, `建筑地块异常：${building.slotIndex}`);

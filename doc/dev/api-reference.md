@@ -11,7 +11,7 @@
 | `init()` | 初始化系统和控制器、加载槽位 1、启动主循环 |
 | `handleNavigation(tab, silent)` | 切换命运、战斗或领地；宠物和成就打开模态 |
 | `updateUI()` | 协调资源、玩家、命运和战斗控制器的全局刷新 |
-| `getProgressionContext()` | 汇总首局目标、成长倾向和领地脉冲所需上下文 |
+| `getProgressionContext()` | 汇总成长倾向、领地目标和长期指标所需上下文 |
 | `getAchievementContext()` | 汇总命运、远征、宠物羁绊与领地的长期指标 |
 | `destroy()` | 解绑控制器、系统回调、路由和主循环 |
 
